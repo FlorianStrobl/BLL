@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<meta charset="UTF-8" />
+
+<html lang="en">
+  <title>Lambda Calculus Playground</title>
+  <link rel="stylesheet" href="styles.css" />
+
+  <body></body>
+
+  <script>
+    const code = [
+      'assert',
+      `<f style="color: #0000FF">`,
+      '(',
+      '</f>',
+      `<f style="color: #FF00FF">`,
+      '(',
+      '</f>',
+      'λx.x',
+      `<f style="color: #FF00FF">`,
+      ')',
+      '</f>',
+      '<f style="color: #FF0000">',
+      '(',
+      '</f>',
+      '5',
+      '<f style="color: #FF0000">',
+      ')',
+      '</f>',
+      ', 5',
+      '<f style="color: #0000FF">',
+      ')',
+      '</f>'
+    ];
+    document.body.innerHTML = code.join('');
+  </script>
+</html>

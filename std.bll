@@ -1,0 +1,151 @@
+// datatypes: u32, f32, undetermined
+
+// keywords: func, let, pub, namespace, import (for different files), f32, u32, Infinity, NaN, undetermined, type
+
+// symbols:
+// +, - (unary and binary), *, /, **, ***, %
+// &, |, ^, ~, <<, >>
+// ==, !=, <=, >=, <, >
+// =, :, ->, () (grouping and argument list), ;, ,, . (for accessing public values from namespaces), {} (for namespaces), [] (for type templating)
+
+// global functions: IO.out[T](x: T): T, IO.in[T](defaultOnError: T): T
+// IO.timestamp(): u32, IO.random(): f32
+// IO.exit[T](value: T): never
+
+// TODO how to do IO in LC?, Monads
+
+// example code
+let a: u32 = IO.in[u32](0); // gets an u32 from the console
+let b: u32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[u32] is called and not Math.sq[f32]
+let c: u32 = IO.out(b); // prints b and assigneds b to c
+
+namespace IO {
+  pub let out = func [T](value: T): T -> __INTERNAL_CODE_OUTPUT;
+  pub let in = func [T](defaultOnError: T): T -> __INTERNAL_CODE_INPUT;
+
+  pub let random = func (): f32 -> __INTERNAL_CODE_RANDOM;
+  pub let timestamp = func (): u32 -> __INTERNAL_CODE_TIMESTAMP;
+
+  pub let exit = func [T](value: T): undetermined /* : never */-> __INTERNAL_CODE_EXIT;
+}
+
+namespace LambdaCalculus {
+  pub let id = func [T](x: T): T -> x;
+
+  pub let application = func [T: (undetermined) -> G, U](a: T, b: U): G -> a(b);
+  pub let selfApp = func [T: (undetermined) -> U](x): U -> x(x); // TODO types
+
+  pub let if = func [T](bool: u32, a: T, b: T): T -> bool ? true(a)(b) : false(a)(b); // TODO HERE, need for an external "is0" or TRUE keyword??
+  pub let true = func [T](a: T): (T)->T -> func (b: T): T -> a;
+  pub let false = func [T](a: T): (T)->T -> func (b:  T): T -> b;
+
+  // type: https://rosettacode.org/wiki/Y_combinator
+  pub let const = func [T, U](a: T): (U)->T -> func (any: U): T -> a;
+  // not:
+  //pub let const = func [T](a: T): (undetermined)->T -> func [U](any: U): T -> a;
+
+  pub let yCombinator = func [T](f: T): TODO ->
+    (func [U](x: U): TODO -> f(x(x)))
+    (func [G](x: G): TODO -> f(x(x)));
+  // or:
+  // pub let yCombinator = func (f) -> self(func (x) -> f(x(x)));
+}
+
+namespace Bin {
+  pub let and = func (a: u32, b: u32): u32 -> a & b;
+  pub let or = func (a: u32, b: u32): u32 -> a | b;
+  pub let xor = func (a: u32, b: u32): u32 -> a ^ b;
+  pub let not = func (a: u32): u32 -> ~a;
+
+  pub let lshift = func (a: u32, b: u32): u32 -> a << b;
+  pub let rshift = func (a: u32, b: u32): u32 -> a >> b;
+}
+
+namespace Tuple {
+  pub type A[T, T2] = (T)->(T2)->T|T2; // TODO
+
+  pub let tuple = func [T, T2, U: A[T, T2]](a: T): (T)->(U)->T|T2 -> (b: T2): (U)->T|T2 -> (f: U): T|T2 -> f(a)(b); // TODO
+
+  pub let first = LambdaCalculus.True;
+  pub let second = LambdaCalculus.False;
+}
+
+namespace Math {
+  // constants
+  pub let NAN = func (): f32 -> NaN;
+  pub let INFINITY = func (): f32 -> Infinity;
+  pub let NEGATIVE_INFINITY = func (): f32 -> -Infinity;
+  pub let PI = func (): f32 -> 3.141592653589793;
+  pub let E = func (): f32 -> 2.718281828459045;
+  pub let SQRT2 = func (): f32 -> 1.4142135623730951;
+
+  pub let MAX_SAFE_INTEGER = func (): f32 -> 16777215;
+
+  // float functions
+  pub let isInteger = func (x: f32): u32 -> x > MAX_SAFE_INTEGER() | trunc(x) == x; // TODO, precision
+  pub let decimals = func (x: f32): f32 -> x - trunc(x); // TODO, precision
+
+  // basic arithmetic
+  pub let add = func [T](x: T, y: T): T -> x + y;
+  pub let sub = func [T](x: T, y: T): T -> x - y;
+  pub let mult = func [T](x: T, y: T): T -> x * y;
+  pub let div = func [T](x: T, y: T): T -> x / y; // truncs for u32
+  pub let mod = func (a: u32, b: u32): u32 -> a % b;
+
+  // more complex arithmetic
+  pub let exp = func [T](b: T, e: T): T -> b ** e;
+  pub let log = func [T](x: T, b: T): T -> x *** b; // truncs for u32
+
+  // trigonometric functions
+  //pub let sin;
+  //pub let cos;
+  //pub let tan;
+  //pub let asin;
+  //pub let acos;
+  //pub let atan;
+
+  // popular operations
+  pub let sq = func [T](x: T): T -> exp[T](x, 2);
+  pub let diff = func [T](x: T, y: T) -> abs(x - y); // TODO, abs[u32] is not defined
+  pub let neg = func (x: f32): f32 -> - x;
+  pub let inv = func (x: f32): f32 -> 1 / x;
+  pub let root = func (x: f32, r: f32): f32 -> exp(x, 1/r);
+  pub let sqrt = func (x: f32): f32 -> exp(x, 0.5);
+  pub let eexp = func (x: f32): f32 -> exp(E, x);
+  pub let hypot = func (x: f32, y: f32) -> sqrt(sq(x) + sq(y));
+
+  // comparisons
+  pub let equal = func [T](x: T, y: T): u32 -> x == y;
+  pub let notEqual = func [T](x: T, y: T): u32 -> x != y;
+  pub let greaterThan = func [T](x: T, y: T): u32 -> x > y;
+  pub let lessThan = func [T](x: T, y: T): u32 -> x < y;
+  pub let greaterThanOrEqual = func [T](x: T, y: T): u32 -> x >= y;
+  pub let lessThanOrEqual = func [T](x: T, y: T): u32 -> x <= y;
+
+  // sign functions
+  pub let abs = func (x: f32): f32 -> LambdaCalculus.if(x >= 0, x, -x);
+  pub let sign = func (x: f32): u32 -> LambdaCalculus.if(x == 0, 0, LambdaCalculus.if(x > 0, 1, -1)); // TODO, what about x==NaN
+
+  // minimum and maximum functions
+  pub let min = func [T](x: T, y: T): T -> LambdaCalculus.if(x < y, x, y); // TODO, what about x or y being NaN
+  pub let max = func [T](x: T, y: T): T -> LambdaCalculus.if(min(x, y) == x, y, x); // TODO, NaN
+  pub let clamp = func [T](x: T, min: T, max: T): T => min(max(num, min), max);
+
+  // rounding functions
+  pub let trunc = func (x: f32): f32 -> uToF(fToU(x)); // Toward 0, TODO NaN
+  pub let floor = func (x: f32): f32 -> LambdaCalculus.if(x >= 0, trunc(x), LambdaCalculus(isInteger(x), x, trunc(x) - 1)); // Toward -Infinity
+  pub let ceil = func (x: f32): f32 -> LambdaCalculus.if(isInteger(x), x, floor(x) + 1); // Towards +Infinity
+  pub let round = func (x: f32): f32 -> floor(x + 0.5);
+
+  // converting numbers from one type to another
+  pub let fToU = func (x: f32): u32 -> __INTERNAL_CODE_F32_TO_U32;
+  pub let uToF = func (x: u32): f32 -> __INTERNAL_CODE_U32_TO_F32;
+}
+
+namespace List {
+  pub let createStack = func [T, _](value: T): _ -> Tuple.tuple(value)(NaN);
+
+  pub let push = func [T, _](value: T) -> (stack: _) -> Tuple.tuple(value)(stack); // TODO
+  pub let pop = func (): undetermined -> stack(second);
+  pub let top = func [T](): T -> stack(first);
+}
