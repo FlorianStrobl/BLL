@@ -6,7 +6,10 @@ import { Lexer } from './LCLexer';
 /*
   STATEMENT:
     "import" identifier;
-    "pub" STATEMENT // not "pub import ..." tho
+    "pub" PUB_STATEMENTS // not "pub import ..." tho
+    PUB_STATEMENTS
+
+  PUB_STATEMENTS:
     "let" identifier = EXPRESSION;
     "let" identifier: TYPE = EXPRESSION;
     "type" identifier = TYPE_EXPRESSION;
