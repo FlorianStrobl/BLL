@@ -27,7 +27,7 @@ export namespace Lexer {
   // +, - (unary and binary), *, /, **, ***, %
   // &, |, ^, ~, <<, >>
   // ==, !=, <=, >=, <, >
-  // =, :, ->, () (grouping and argument list), ;, ,, ., {}, []
+  // =, :, ->, () (grouping and argument list), ;, ,, . (for accessing public values from namespaces), {} (for namespaces), [] (for type templating)
   const symbols: string[] = [
     '+', // add
     '-', // sub
@@ -396,5 +396,6 @@ console.log(
   let c: u32 = IO.out(b); // prints b and assigneds b to c
 
   let d = func (a: u32) -> 5_4.1e-3;
-/`)
+  // 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
+`)
 );
