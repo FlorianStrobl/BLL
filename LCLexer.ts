@@ -389,6 +389,7 @@ export namespace Lexer {
 console.log(
   Lexer.lexe(`
   import std;
+  import .my_libs.wrong_lib..math_lib.my_math_lib;
 
   // example code
   let a: u32 = IO.in[u32](0); // gets an u32 from the console

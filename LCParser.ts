@@ -5,6 +5,7 @@ import { Lexer } from './LCLexer';
 
 /*
   STATEMENT:
+    ;
     "import" identifier;
     "pub" PUB_STATEMENTS // not "pub import ..." tho
     PUB_STATEMENTS
@@ -31,9 +32,24 @@ import { Lexer } from './LCLexer';
     BINARY_EXPRESSION
     NUMERIC_EXPRESSION
     "func" idenfitier(PARAM_LIST) -> EXPRESSION
+    "func" idenfitier[identifier](PARAM_LIST) -> EXPRESSION
+    "func" idenfitier(PARAM_LIST , ) -> EXPRESSION
+    "func" idenfitier[identifier](PARAM_LIST , ) -> EXPRESSION
     identifier(ARG_LIST)
+    identifier(ARG_LIST , )
     identifier[TYPE_INFER](ARG_LIST)
     identifier
+
+  ARG_LIST:
+
+    EXPRESSION
+    ARG_LIST, ARG_LIST
+
+  PARAM_LIST:
+
+    identifier
+    identifier: TYPE
+    PARAM_LIST, PARAM_LIST
 
   UNARY_EXPRESSION:
     - EXPRESSION
