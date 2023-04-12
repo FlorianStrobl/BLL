@@ -8,6 +8,8 @@
  *
  * TypeSystem: ...
  */
+import { printMessage, ErrorID } from './FErrorMsgs';
+
 export namespace Lexer {
   // #region constants
   const keywords: string[] = [
@@ -32,7 +34,7 @@ export namespace Lexer {
     '+', // add
     '-', // sub
     '*', // multiplication
-    '/', // divide (for integers rounding down)
+    '/', // divide (for integers: rounding down)
     '**', // exponentiation
     '***', // root
     '%', // remainder
@@ -45,7 +47,7 @@ export namespace Lexer {
     '>>', // right shift
 
     '==', // equal
-    '!=', // unequal
+    '!=', // not equal
     '<=', // greater than or equal
     '>=', // less than or equal
     '>', // less than
@@ -57,7 +59,8 @@ export namespace Lexer {
     ';', // end of a statement
     ',', // seperator for arguments
     '.', // accessing public functions from namespaces
-    '(',
+
+    '(', // grouping
     ')',
     '{',
     '}',
@@ -300,7 +303,9 @@ export namespace Lexer {
   }
   // #endregion
 
-  export function lexe(code: string): lexeme[] | never {
+  export function lexe(code: string, file: string): lexeme[] | never {
+    let hadError: boolean = false;
+
     code += ' '; // add space at the end
 
     const lexedCode: lexeme[] = [];
@@ -373,30 +378,49 @@ export namespace Lexer {
         charIdx = literalData.lastIdx;
         continue;
       } else {
-        throw Error(
-          // TODO
-          `Error in \`lexer\`: unkown character \`${code[charIdx]}\` at position ${charIdx}`
-        );
+        hadError = true;
+
+        printMessage('error', {
+          id: ErrorID.invalidCharacter,
+          code: code,
+          idx: charIdx,
+          endIdx: charIdx,
+          file: file
+        } as any);
+
+        // throw Error(
+        //   // TODO
+        //   `Error in \`lexer\`: unkown character \`${code[charIdx]}\` at position ${charIdx}`
+        // );
       }
     }
 
-    return lexedCode;
+    if (!hadError) return lexedCode;
+    // else
+    console.error('code could not compile');
+    return [];
   }
 }
 
 // test: 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 // test: /* You can /* nest comments *\/ by escaping slashes */
 console.log(
-  Lexer.lexe(`
+  Lexer.lexe(
+    `
+  ä
   import std;
   import .my_libs.wrong_lib..math_lib.my_math_lib;
+ü
+  /* You can /* nest comments *\\/ by escaping slashes */
 
   // example code
   let a: u32 = IO.in[u32](0); // gets an u32 from the console
   let b: u32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[u32] is called and not Math.sq[f32]
   let c: u32 = IO.out(b); // prints b and assigneds b to c
 
-  let d = func (a: u32) -> 5_4.1e-3;
+  let d = func (´: u32) -> 5_4.1e-3;
   // 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
-`)
+`,
+    'src'
+  )
 );
