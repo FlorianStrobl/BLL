@@ -76,12 +76,12 @@ export namespace Lexer {
   }
 
   // #region interfaces
-  export const enum lexemeType {
-    comment = 'comment', // "//...", "/*...*/"
-    literal = 'literal', // 5.3e-4
-    keyword = 'keyword', // let
-    identifier = 'identifier', // identifier
-    operator = 'operator' // +
+  export enum lexemeType {
+    comment = '#comment', // "//...", "/*...*/"
+    literal = '#literal', // 5.3e-4
+    keyword = '#keyword', // let
+    identifier = '#identifier', // identifier
+    operator = '#operator' // +
   }
 
   export interface lexeme {
@@ -230,7 +230,6 @@ export namespace Lexer {
     return operatorData;
   }
 
-  // TODO 0b, 0x, 0o
   function consumeNumericLiteral(
     code: string, // assert: last char is space
     startIdx: number
@@ -274,8 +273,48 @@ export namespace Lexer {
         );
     }
 
+    function consumeHex() {
+      literalData.literal += code[i++]; // 0
+      literalData.literal += code[i++]; // x
+      while (matches(code[i], /[0-9a-fA-F]/g)) literalData.literal += code[i++];
+      // TODO, what if matches different numeric literal now, ERROR
+    }
+
+    function consumeBinary() {
+      literalData.literal += code[i++]; // 0
+      literalData.literal += code[i++]; // b
+      while (matches(code[i], /[01]/g)) literalData.literal += code[i++];
+      // TODO, what if matches different numeric literal now, ERROR
+    }
+
+    function consumeOctal() {
+      literalData.literal += code[i++]; // 0
+      literalData.literal += code[i++]; // o
+      while (matches(code[i], /[0-7]/g)) literalData.literal += code[i++];
+      // TODO, what if matches different numeric literal now, ERROR
+    }
+
     const literalData: literalData = { literal: '', lastIdx: -1 };
     let i = startIdx;
+
+    if (code[startIdx] === '0') {
+      switch (code[startIdx + 1]) {
+        case 'x':
+          consumeHex();
+          literalData.lastIdx = i - 1;
+          return literalData;
+        case 'b':
+          consumeBinary();
+          literalData.lastIdx = i - 1;
+          return literalData;
+        case 'o':
+          consumeOctal();
+          literalData.lastIdx = i - 1;
+          return literalData;
+        default:
+          break;
+      }
+    }
 
     // first digits
     consumeDigits();
@@ -404,23 +443,27 @@ export namespace Lexer {
 
 // test: 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 // test: /* You can /* nest comments *\/ by escaping slashes */
-console.log(
-  Lexer.lexe(
-    `
-  ä
-  import std;
-  import .my_libs.wrong_lib..math_lib.my_math_lib;
-ü
-  /* You can /* nest comments *\\/ by escaping slashes */
+// console.log(
+//   Lexer.lexe(
+//     `
+//   // import std;
+//   // import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
 
-  // example code
-  let a: u32 = IO.in[u32](0); // gets an u32 from the console
-  let b: u32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[u32] is called and not Math.sq[f32]
-  let c: u32 = IO.out(b); // prints b and assigneds b to c
+//   let num1 = 5;
+//   let num2 = 0x5;
+//   let num3 = 0b1;
+//   let num4 = 0o7;
 
-  let d = func (´: u32) -> 5_4.1e-3;
-  // 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
-`,
-    'src'
-  )
-);
+//   /* You can /* nest comments *\\/ by escaping slashes */
+
+//   // example code
+//   let a: u32 = IO.in[u32](0); // gets an u32 from the console
+//   let b: u32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[u32] is called and not Math.sq[f32]
+//   let c: u32 = IO.out(b); // prints b and assigneds b to c
+
+//   let d = func (x: u32) -> 5_4.1e-3;
+//   // 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
+// `,
+//     'src'
+//   )
+// );
