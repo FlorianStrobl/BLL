@@ -41,15 +41,15 @@ import { inspect } from 'util';
     TYPE_INFER , TYPE_INFER
 
   EXPRESSION:
-    ( EXPRESSION )
-    identifier
-    identifier(ARG_LIST)
-    identifier[TYPE_INFER](ARG_LIST)
+    ( EXPRESSION )                   (0, n/a)
+    identifier                       (0, n/a)
+    NUMERIC_EXPRESSION               (0, n/a)
+    identifier(ARG_LIST)             (0, n/a)
+    identifier[TYPE_INFER](ARG_LIST) (0, n/a)
     "func" identifier(PARAM_LIST) -> EXPRESSION
     "func" identifier[GENERIC_TYPE_LIST](PARAM_LIST) -> EXPRESSION
     UNARY_EXPRESSION
     BINARY_EXPRESSION
-    NUMERIC_EXPRESSION
 
   ARG_LIST:
 
@@ -67,29 +67,29 @@ import { inspect } from 'util';
     GENERIC_TYPE_LIST, GENERIC_TYPE_LIST
 
   UNARY_EXPRESSION:
-    ~ EXPRESSION
-    - EXPRESSION
-    + EXPRESSION
+    ~ EXPRESSION  (1, n/a)
+    - EXPRESSION  (1, n/a)
+    + EXPRESSION  (2, n/a)
 
   BINARY_EXPRESSION:
-    EXPRESSION *** EXPRESSION
-    EXPRESSION ** EXPRESSION
-    EXPRESSION * EXPRESSION
-    EXPRESSION / EXPRESSION
-    EXPRESSION % EXPRESSION
-    EXPRESSION + EXPRESSION
-    EXPRESSION - EXPRESSION
-    EXPRESSION << EXPRESSION
-    EXPRESSION >> EXPRESSION
-    EXPRESSION < EXPRESSION
-    EXPRESSION > EXPRESSION
-    EXPRESSION <= EXPRESSION
-    EXPRESSION >= EXPRESSION
-    EXPRESSION != EXPRESSION
-    EXPRESSION == EXPRESSION
-    EXPRESSION & EXPRESSION
-    EXPRESSION ^ EXPRESSION
-    EXPRESSION | EXPRESSION
+    EXPRESSION *** EXPRESSION (3, right to left)
+    EXPRESSION ** EXPRESSION (3, right to left)
+    EXPRESSION * EXPRESSION (4, left to right)
+    EXPRESSION / EXPRESSION (4, left to right)
+    EXPRESSION % EXPRESSION (4, left to right)
+    EXPRESSION + EXPRESSION (5, left to right)
+    EXPRESSION - EXPRESSION (5, left to right)
+    EXPRESSION << EXPRESSION (6, left to right)
+    EXPRESSION >> EXPRESSION (6, left to right)
+    EXPRESSION < EXPRESSION (7, left to right)
+    EXPRESSION > EXPRESSION (7, left to right)
+    EXPRESSION <= EXPRESSION (7, left to right)
+    EXPRESSION >= EXPRESSION (7, left to right)
+    EXPRESSION != EXPRESSION (8, left to right)
+    EXPRESSION == EXPRESSION (8, left to right)
+    EXPRESSION & EXPRESSION (9, left to right)
+    EXPRESSION ^ EXPRESSION (10, left to right)
+    EXPRESSION | EXPRESSION (11, left to right)
 
   NUMERIC_EXPRESSION:
     "NaN"
@@ -146,10 +146,9 @@ export namespace Parser {
     return peek()?.value === value; // peek() only undefined if isAtEnd() === false
   }
 
-  function match(...tokens: string[]): boolean {
-    for (const token of tokens) if (check(token)) return advance(), true;
-
-    return false;
+  function match(...tokens: string[]): Lexer.lexeme | undefined {
+    for (const token of tokens) if (check(token)) return advance();
+    return undefined;
   }
   // #endregion
 
@@ -179,9 +178,26 @@ export namespace Parser {
 
   // TODO, parse * and /
   function factor() {
-    let left: any = primary(); // call next function
+    let left: any = exp(); // call next function
 
     while (match('*', '/')) {
+      let operator = previous();
+      left = {
+        type: 'binary',
+        operator,
+        left,
+        right: exp()
+      };
+    }
+
+    return left;
+  }
+
+  // TODO, parse ** and ***
+  function exp() {
+    let left: any = primary(); // call next function
+
+    while (match('**', '***')) {
       let operator = previous();
       left = {
         type: 'binary',
@@ -200,7 +216,16 @@ export namespace Parser {
       return { type: 'literal', value: advance() };
     else if (peek()!.type === Lexer.lexemeType.identifier)
       return { type: 'identifier', value: advance() };
-    else throw Error('could not match anything!'); // TODO
+    else if (match('(')) {
+      console.log('HERE', peek());
+      let expression: any = {
+        type: '()',
+        value: parseExpression(),
+        endBracket: undefined
+      };
+      if (!match(')')) throw Error('Expression wasnt closed'); // TODO
+      return expression;
+    } else throw Error('could not match anything!'); // TODO
   }
 
   function parseFuncExpression() {}
@@ -270,7 +295,7 @@ export namespace Parser {
 }
 
 const code = `
-let x = 5 + 3 * y;
+let x = ((5 + 3) * y ** 3 * 3 + 3 * 2 + 7 *** 4 + 4 ** 4 *** 3 * 1);
 let y = 2;
 `;
 console.log(
