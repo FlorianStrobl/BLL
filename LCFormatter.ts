@@ -1,3 +1,6 @@
+// prettier with syntax highlighting and bracket matching (see VSCode)
+// + code region folding
+
 export namespace prettier {
   function printExpression(expression: {}): string {
     // if two identifiers or operators are following one each other, put a space in between!!

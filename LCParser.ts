@@ -5,6 +5,8 @@ import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
 
+// see: https://www.wikiwand.com/en/Extended_Backus-Naur_form
+
 /*
   ?: 0 or 1
   *: 0 or more
@@ -43,6 +45,7 @@ import { inspect } from 'util';
   EXPRESSION:
     ( EXPRESSION )                   (0, n/a)
     identifier                       (0, n/a)
+    identifier.identifier??? TODO    (0, n/a)
     NUMERIC_EXPRESSION               (0, n/a)
     identifier(ARG_LIST)             (0, n/a)
     identifier[TYPE_INFER](ARG_LIST) (0, n/a)
