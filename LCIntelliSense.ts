@@ -1,2 +1,3 @@
 // auto-completion, code navigation (goto definition), syntax checking, ...
 // https://code.visualstudio.com/api/language-extensions/programmatic-language-features
+// https://code.visualstudio.com/api/language-extensions/language-server-extension-guide
