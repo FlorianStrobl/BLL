@@ -2,6 +2,8 @@
 // let ...
 
 import { Lexer } from './LCLexer';
+// @ts-ignore
+import { inspect } from 'util';
 
 /*
   ?: 0 or 1
@@ -112,6 +114,7 @@ for_sure_float: true|false
 */
 
 export namespace Parser {
+  // Recursive Descent Parsing
   interface letStatement {}
 
   let idx: number = 0;
@@ -150,28 +153,7 @@ export namespace Parser {
   }
   // #endregion
 
-  // function consume(
-  //   token: string | Lexer.lexemeType
-  // ): { worked: true; token: Lexer.lexeme } | { worked: false } {
-  //   if (token in Lexer.lexemeType) {
-  //     if (_lexemes[idx].type === token)
-  //       return { worked: true, token: _lexemes[idx++] };
-  //   } else if (_lexemes[idx].value === token)
-  //     return { worked: true, token: _lexemes[idx++] };
-
-  //   return { worked: false };
-  // }
-
-  // function peek(): Lexer.lexeme;
-  // function peek(token: string): { token: Lexer.lexeme; matches: boolean };
-  // function peek(
-  //   token?: string
-  // ): Lexer.lexeme | { token: Lexer.lexeme; matches: boolean } {
-  //   if (token === undefined) return _lexemes[idx];
-  //   else
-  //     return { token: _lexemes[idx], matches: _lexemes[idx].value === token };
-  // }
-
+  // #region expressions
   function parseExpression(): any {
     if (match('func')) return parseFuncExpression();
     else return termExp();
@@ -222,7 +204,9 @@ export namespace Parser {
   }
 
   function parseFuncExpression() {}
+  // #endregion
 
+  // #region statements
   function parseLetStatement(): any {
     // matched "let" lastly
 
@@ -230,8 +214,7 @@ export namespace Parser {
     if (identifierToken.type !== Lexer.lexemeType.identifier)
       throw Error('invalid token type in parse let statement'); // TODO
 
-    const identifier = identifierToken.value;
-    advance();
+    const identifier = advance()!;
 
     if (!match('=')) throw Error("Expected '=' in let statement");
 
@@ -274,6 +257,7 @@ export namespace Parser {
     else if (match('import')) return parseImportStatement();
     else return parsePubStatement(false);
   }
+  // #endregion
 
   export function parse(lexemes: Lexer.lexeme[], originalCode: string) {
     _lexemes = lexemes;
@@ -286,7 +270,31 @@ export namespace Parser {
 }
 
 const code = `
-let x = 5 + 3 * 2;
+let x = 5 + 3 * y;
 let y = 2;
 `;
-console.log(Parser.parse(Lexer.lexe(code, 'code'), code));
+console.log(
+  inspect(Parser.parse(Lexer.lexe(code, 'code'), code), { depth: 999 })
+);
+
+// function consume(
+//   token: string | Lexer.lexemeType
+// ): { worked: true; token: Lexer.lexeme } | { worked: false } {
+//   if (token in Lexer.lexemeType) {
+//     if (_lexemes[idx].type === token)
+//       return { worked: true, token: _lexemes[idx++] };
+//   } else if (_lexemes[idx].value === token)
+//     return { worked: true, token: _lexemes[idx++] };
+
+//   return { worked: false };
+// }
+
+// function peek(): Lexer.lexeme;
+// function peek(token: string): { token: Lexer.lexeme; matches: boolean };
+// function peek(
+//   token?: string
+// ): Lexer.lexeme | { token: Lexer.lexeme; matches: boolean } {
+//   if (token === undefined) return _lexemes[idx];
+//   else
+//     return { token: _lexemes[idx], matches: _lexemes[idx].value === token };
+// }
