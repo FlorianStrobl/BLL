@@ -65,29 +65,29 @@ import { Lexer } from './LCLexer';
     GENERIC_TYPE_LIST, GENERIC_TYPE_LIST
 
   UNARY_EXPRESSION:
+    ~ EXPRESSION
     - EXPRESSION
     + EXPRESSION
-    ~ EXPRESSION
 
   BINARY_EXPRESSION:
-    EXPRESSION + EXPRESSION
-    EXPRESSION - EXPRESSION
+    EXPRESSION *** EXPRESSION
+    EXPRESSION ** EXPRESSION
     EXPRESSION * EXPRESSION
     EXPRESSION / EXPRESSION
-    EXPRESSION ** EXPRESSION
-    EXPRESSION *** EXPRESSION
     EXPRESSION % EXPRESSION
-    EXPRESSION & EXPRESSION
-    EXPRESSION | EXPRESSION
-    EXPRESSION ^ EXPRESSION
+    EXPRESSION + EXPRESSION
+    EXPRESSION - EXPRESSION
     EXPRESSION << EXPRESSION
     EXPRESSION >> EXPRESSION
-    EXPRESSION == EXPRESSION
-    EXPRESSION != EXPRESSION
-    EXPRESSION <= EXPRESSION
-    EXPRESSION >= EXPRESSION
     EXPRESSION < EXPRESSION
     EXPRESSION > EXPRESSION
+    EXPRESSION <= EXPRESSION
+    EXPRESSION >= EXPRESSION
+    EXPRESSION != EXPRESSION
+    EXPRESSION == EXPRESSION
+    EXPRESSION & EXPRESSION
+    EXPRESSION ^ EXPRESSION
+    EXPRESSION | EXPRESSION
 
   NUMERIC_EXPRESSION:
     "NaN"
@@ -143,7 +143,7 @@ export namespace Parser {
     return peek()?.value === value; // peek() only undefined if isAtEnd() === false
   }
 
-  function match(...tokens: [string]): boolean {
+  function match(...tokens: string[]): boolean {
     for (const token of tokens) if (check(token)) return advance(), true;
 
     return false;
@@ -177,8 +177,48 @@ export namespace Parser {
     else return termExp();
   }
 
+  // parse + and -
   function termExp() {
     // TODO
+    let left: any = factor();
+
+    while (match('+', '-')) {
+      let operator = previous();
+      left = {
+        type: 'binary',
+        operator,
+        left,
+        right: factor()
+      };
+    }
+
+    return left;
+  }
+
+  // TODO, parse * and /
+  function factor() {
+    let left: any = primary(); // call next function
+
+    while (match('*', '/')) {
+      let operator = previous();
+      left = {
+        type: 'binary',
+        operator,
+        left,
+        right: primary()
+      };
+    }
+
+    return left;
+  }
+
+  // TODO, parse literals, highest precedence level
+  function primary() {
+    if (peek()!.type === Lexer.lexemeType.literal)
+      return { type: 'literal', value: advance() };
+    else if (peek()!.type === Lexer.lexemeType.identifier)
+      return { type: 'identifier', value: advance() };
+    else throw Error('could not match anything!'); // TODO
   }
 
   function parseFuncExpression() {}
@@ -246,7 +286,7 @@ export namespace Parser {
 }
 
 const code = `
-let x = 5;
+let x = 5 + 3 * 2;
 let y = 2;
 `;
 console.log(Parser.parse(Lexer.lexe(code, 'code'), code));
