@@ -322,7 +322,22 @@ export namespace Parser {
     } else if (peek()!.type === lexemeTypes.literal) return { type: advance() };
     else if (peek()!.type === lexemeTypes.identifier) {
       // TODO, x, x(), x.y, x.y() but not x.y().z
-      return { type: advance() };
+      let identifier = advance()!;
+      const path: any = [];
+      let dot;
+      if ((dot = match('.'))) {
+        path.push(identifier);
+        path.push(dot);
+        // TODO
+        while (peek()?.type === lexemeTypes.identifier) {
+          path.push(advance());
+          // TODO TODO TODO HERE, "id1 id2" does work rn
+          if (dot = match("."))path.push(dot);
+          //else throw Error(""); // TODO wrong
+        }
+      }
+      if (path.length === 0) return { type: identifier };
+      else return { type: 'identifier path', path };
     } else if (match('func'))
       return { type: previous(), value: parseFuncExpression() };
     else throw Error('could not match anything in parsing expressions!'); // TODO
@@ -490,12 +505,12 @@ export namespace Parser {
   }
   // #endregion
 
-  export function parse(lexemes: Lexer.lexeme[], originalCode: string) {
+  export function parse(lexemes: Lexer.lexeme[], originalCode: string): any[] {
     _lexemes = lexemes.filter((l) => l.type !== lexemeTypes.comment);
     _code = originalCode;
 
     // TODO, ast must have comments in it, in order to print them with the formatter
-    let program: any = [];
+    let program: any[] = [];
     while (!isAtEnd()) program.push(parseStatement());
 
     return program;
