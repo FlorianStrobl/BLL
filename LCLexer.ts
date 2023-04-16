@@ -8,7 +8,8 @@
  *
  * TypeSystem: ...
  */
-import { printMessage, ErrorID } from './FErrorMsgs';
+import { printMessage, ErrorID } from './FErrorMsgs'; // @ts-ignore
+import { inspect } from 'util';
 
 export namespace Lexer {
   // #region constants
@@ -31,6 +32,11 @@ export namespace Lexer {
   // ==, !=, <=, >=, <, >
   // =, :, ->, () (grouping and argument list), ;, ,, . (for accessing public values from namespaces), {} (for namespaces), [] (for type templating)
   const symbols: string[] = [
+    "'" /*to delete*/,
+    '!' /*to delete*/,
+    '#' /*to delete*/,
+    '?' /*to delete*/,
+    '"' /*to delete*/,
     '+', // add
     '-', // sub
     '*', // multiplication

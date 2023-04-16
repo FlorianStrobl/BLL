@@ -122,7 +122,9 @@ export namespace Parser {
 
   let idx: number = 0;
   let _lexemes: Lexer.lexeme[] = [];
+  let _code: string = '';
   let ast: {}[] = [];
+  const lexemeTypes = Lexer.lexemeType;
 
   // #region
   function isAtEnd(): boolean {
@@ -133,6 +135,11 @@ export namespace Parser {
     if (isAtEnd()) return undefined;
     return _lexemes[idx];
   }
+
+  // function peek_next(): Lexer.lexeme | undefined {
+  //   if (idx + 1 < _lexemes.length) return undefined;
+  //   return _lexemes[idx + 1];
+  // }
 
   function previous(): undefined | Lexer.lexeme {
     if (idx === 0) return undefined;
@@ -157,8 +164,8 @@ export namespace Parser {
 
   // #region expressions
   function parseExpression(): any {
-    if (match('func')) return parseFuncExpression();
-    else return termExp();
+    //if (match('func')) return parseFuncExpression();
+    return termExp();
   }
 
   // parse + and -
@@ -215,12 +222,10 @@ export namespace Parser {
 
   // TODO, parse literals, highest precedence level
   function primary() {
-    if (peek()!.type === Lexer.lexemeType.literal)
-      return { type: 'literal', value: advance() };
-    else if (peek()!.type === Lexer.lexemeType.identifier)
-      return { type: 'identifier', value: advance() };
+    if (peek()!.type === lexemeTypes.literal) return { type: advance() };
+    else if (peek()!.type === lexemeTypes.identifier)
+      return { type: advance() };
     else if (match('(')) {
-      console.log('HERE', peek());
       let expression: any = {
         type: '()',
         value: parseExpression(),
@@ -228,68 +233,178 @@ export namespace Parser {
       };
       if (!match(')')) throw Error('Expression wasnt closed'); // TODO
       return expression;
-    } else throw Error('could not match anything!'); // TODO
+    } else if (match('func'))
+      return { type: previous(), value: parseFuncExpression() };
+    else throw Error('could not match anything!'); // TODO
   }
 
-  function parseFuncExpression() {}
+  function parseFuncExpression() {
+    let openingBracket;
+    if (!(openingBracket = match('(')))
+      throw Error('functions must be opend with ('); // TODO
+
+    let params = parseFuncExprArgs();
+
+    let closingBracket;
+    if (!(closingBracket = match(')')))
+      throw Error('functions must be closed with )'); // TODO
+
+    let arrow;
+    if (!(arrow = match('->'))) throw Error('functions must have a ->'); // TODO
+
+    let body = parseExpression();
+    return { openingBracket, closingBracket, params, arrow, body };
+  }
+
+  function parseFuncArgExprType() {}
+
+  // TODO
+  function parseFuncExprArgs(): any {
+    const args: any = [];
+    const commas: any = [];
+
+    while (peek()?.value !== ')') {
+      if (args.length > 0) {
+        let lastComma = match(',');
+        if (lastComma === undefined)
+          throw Error('argument list must have commas in between'); // TODO
+        commas.push(lastComma);
+
+        // TODO: warning for trailing commas
+        if (peek()?.value === ')') break; // had trailing comma
+      }
+
+      let identifier = advance();
+      if (
+        identifier === undefined ||
+        identifier.type !== lexemeTypes.identifier
+      )
+        throw Error('must have identifier between two commas'); // TODO
+
+      args.push(identifier);
+
+      let doublePoint;
+      if ((doublePoint = match(':'))) {
+        let typeAnnotation = parseFuncArgExprType();
+        args[args.length - 1].type = typeAnnotation;
+        args[args.length - 1].doublePoint = doublePoint;
+      }
+    }
+
+    return { args, commas };
+  }
   // #endregion
 
   // #region statements
   function parseLetStatement(): any {
     // matched "let" lastly
 
-    const identifierToken = peek()!;
-    if (identifierToken.type !== Lexer.lexemeType.identifier)
+    const identifier = advance()!;
+    if (identifier.type !== lexemeTypes.identifier)
       throw Error('invalid token type in parse let statement'); // TODO
 
-    const identifier = advance()!;
-
-    if (!match('=')) throw Error("Expected '=' in let statement");
+    let assigment;
+    if (!(assigment = match('='))) throw Error("Expected '=' in let statement");
 
     const body = parseExpression();
 
-    if (!match(';')) throw Error("Expected ';' in let statement");
+    let semicolon;
+    if (!(semicolon = match(';'))) throw Error("Expected ';' in let statement");
 
-    return { type: 'let statement', identifier, body };
+    return { identifier, body, assigment, semicolon };
   }
 
-  function parseNamespaceStatement(): undefined {
-    return undefined;
+  function parseNamespaceStatement(): any {
+    const identifier = advance();
+    if (identifier?.type !== lexemeTypes.identifier)
+      throw Error('namespaces must have a name'); // TODO
+
+    let openingBracket;
+    if (!(openingBracket = match('{')))
+      throw Error('namespaces must be opend by a bracket'); // TODO
+
+    const body: any = [];
+    let closingBracket;
+    while (!(closingBracket = match('}'))) body.push(parseStatement());
+
+    return {
+      identifier,
+      body,
+      openingBracket,
+      closingBracket
+    };
   }
 
   // TODO, gotPub
-  function parsePubStatement(gotPub: boolean): any {
-    if (match('let'))
-      if (gotPub)
-        return {
-          type: 'public',
-          value: parseLetStatement()
-        };
-      // TODO, stuff like that
-      else return parseLetStatement();
-    else if (match('namespace')) return parseNamespaceStatement();
-    return undefined;
+  function parsePubStatement(): any {
+    if (match('let')) return { type: previous(), ...parseLetStatement() };
+    else if (match('namespace'))
+      return { type: previous(), ...parseNamespaceStatement() };
+    else throw Error('Couldnt match any statement'); // TODO
   }
 
-  function parseEmptyStatement(): undefined {
-    return undefined;
+  function parseImportStatement(): any {
+    function parseDots() {
+      // assert, current character is a dot
+      let dot = match('.');
+
+      if (dot === undefined) throw Error('INTERNAL ERROR, assertion wasnt met');
+
+      path.push(dot);
+      if ((dot = match('.'))) path.push(dot);
+
+      let slash;
+      if (!(slash = match('/')))
+        throw Error(
+          'error in import statement, starting dots must be followed by a /'
+        ); // tODO
+      path.push(slash);
+    }
+
+    let path: any = [];
+
+    if (peek()?.value === '.') parseDots();
+
+    let semicolon;
+    while (!(semicolon = match(';'))) {
+      let identifier = advance();
+      if (
+        identifier !== undefined &&
+        identifier.type === lexemeTypes.identifier
+      ) {
+        path.push(identifier);
+
+        let slash;
+        if ((slash = match('/'))) {
+          path.push(slash);
+          // its /./ or /../
+          while (peek()?.value === '.') parseDots();
+          //else: its folder/value
+        }
+      } else throw Error('import statement must have identifiers in it');
+    }
+
+    return { semicolon, path };
   }
 
-  function parseImportStatement(): undefined {
-    return undefined;
-  }
-
-  function parseStatement(): undefined {
-    if (match(';')) return parseEmptyStatement();
-    else if (match('pub')) return parsePubStatement(true);
-    else if (match('import')) return parseImportStatement();
-    else return parsePubStatement(false);
+  function parseStatement(): any {
+    if (match(';')) return { type: previous() }; // empty statement
+    else if (match('pub'))
+      return {
+        type: previous(),
+        value: parsePubStatement()
+      };
+    else if (match('import'))
+      return { type: previous(), ...parseImportStatement() };
+    else return parsePubStatement();
   }
   // #endregion
 
   export function parse(lexemes: Lexer.lexeme[], originalCode: string) {
-    _lexemes = lexemes;
+    _lexemes = lexemes.filter((l) => l.type !== lexemeTypes.comment);
+    _code = originalCode;
 
+    // TODO, ast must have comments in it, in order to print them with the formatter
     let program: any = [];
     while (!isAtEnd()) program.push(parseStatement());
 
@@ -298,12 +413,20 @@ export namespace Parser {
 }
 
 const code = `
-let x = ((5 + 3) * y ** 3 * 3 + 3 * 2 + 7 *** 4 + 4 ** 4 *** 3 * 1);
-let y = 2;
+//let x = ((5 + 3) * y ** 3 * 3 + 3 * 2 + 7 *** 4 + 4 ** 4 *** 3 * 1);
+
+/*
+import SameFolderButDiffFile;
+import ./SameFolderButDiffFile;
+import ../HigherFolderFile;
+import folder/file;
+import folder2/../../pastFile;
+*/
+
+let f = func (x,y:,) -> x + y;
 `;
-console.log(
-  inspect(Parser.parse(Lexer.lexe(code, 'code'), code), { depth: 999 })
-);
+const lexedCode = Lexer.lexe(code, 'code');
+console.log(inspect(Parser.parse(lexedCode, code), { depth: 9999 }));
 
 // function consume(
 //   token: string | Lexer.lexemeType
