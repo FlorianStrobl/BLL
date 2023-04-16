@@ -323,21 +323,47 @@ export namespace Parser {
     else if (peek()!.type === lexemeTypes.identifier) {
       // TODO, x, x(), x.y, x.y() but not x.y().z
       let identifier = advance()!;
-      const path: any = [];
-      let dot;
-      if ((dot = match('.'))) {
-        path.push(identifier);
-        path.push(dot);
-        // TODO
-        while (peek()?.type === lexemeTypes.identifier) {
-          path.push(advance());
-          // TODO TODO TODO HERE, "id1 id2" does work rn
-          if (dot = match("."))path.push(dot);
-          //else throw Error(""); // TODO wrong
+
+      if (peek()!.value !== '.') {
+        let openBrace;
+        if ((openBrace = match('('))) {
+          let parseBody = parseExpression(); // TODO TODO because there can be "," in between!
+          let closingBrace = match(')');
+          return {
+            type: identifier,
+            body: parseBody,
+            openBrace,
+            closingBrace
+          };
         }
+        // TODO x()
+        return { type: identifier };
       }
-      if (path.length === 0) return { type: identifier };
-      else return { type: 'identifier path', path };
+
+      // is id1.id2
+
+      const path: any = [identifier];
+      let dot;
+      while ((dot = match('.'))) {
+        path.push(dot);
+        if (peek()!.type === lexemeTypes.identifier) path.push(advance());
+        else throw Error('`identifier . not an identifier` is not ok'); // TODO
+      }
+
+      let openBrace;
+      if ((openBrace = match('('))) {
+        let parseBody = parseExpression(); // TODO TODO because there can be "," in between!
+        let closingBrace = match(')');
+        return {
+          type: 'identifier path',
+          path,
+          body: parseBody,
+          openBrace,
+          closingBrace
+        };
+      }
+
+      return { type: 'identifier path', path };
     } else if (match('func'))
       return { type: previous(), value: parseFuncExpression() };
     else throw Error('could not match anything in parsing expressions!'); // TODO
@@ -533,7 +559,8 @@ import folder2/../../pastFile;
 
 //let f = func (x) -> 2 * x;
 
-let f = func (x) -> func (y) -> x + y;
+//let f = func (x) -> func (y) -> x + y;
+let g = func (x) -> func (y) -> std.h(x + y);
 `;
 const lexedCode = Lexer.lexe(code, 'code');
 console.log(inspect(Parser.parse(lexedCode, code), { depth: 9999 }));
