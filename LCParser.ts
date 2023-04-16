@@ -11,6 +11,7 @@ import { inspect } from 'util';
   ?: 0 or 1
   *: 0 or more
   +: 1 or more
+  in () is the order of evaluation for expressions: precedence and associativity
 
   STATEMENT:
     ;
@@ -43,12 +44,12 @@ import { inspect } from 'util';
     TYPE_INFER , TYPE_INFER
 
   EXPRESSION:
-    ( EXPRESSION )                   (0, n/a)
-    identifier                       (0, n/a)
-    identifier.identifier??? TODO    (0, n/a)
-    NUMERIC_EXPRESSION               (0, n/a)
-    identifier(ARG_LIST)             (0, n/a)
-    identifier[TYPE_INFER](ARG_LIST) (0, n/a)
+    ( EXPRESSION )                   (10, n/a)
+    identifier                       (10, n/a)
+    identifier.identifier??? TODO    (10, n/a)
+    NUMERIC_EXPRESSION               (10, n/a)
+    identifier(ARG_LIST)             (10, n/a)
+    identifier[TYPE_INFER](ARG_LIST) (10, n/a)
     "func" identifier(PARAM_LIST) -> EXPRESSION
     "func" identifier[GENERIC_TYPE_LIST](PARAM_LIST) -> EXPRESSION
     UNARY_EXPRESSION
@@ -70,29 +71,29 @@ import { inspect } from 'util';
     GENERIC_TYPE_LIST, GENERIC_TYPE_LIST
 
   UNARY_EXPRESSION:
-    ~ EXPRESSION  (1, n/a)
-    - EXPRESSION  (1, n/a)
-    + EXPRESSION  (2, n/a)
+    ~ EXPRESSION  (9, right to left TODO)
+    - EXPRESSION  (9, right to left)
+    + EXPRESSION  (9, right to left)
 
   BINARY_EXPRESSION:
-    EXPRESSION *** EXPRESSION (3, right to left)
-    EXPRESSION ** EXPRESSION (3, right to left)
-    EXPRESSION * EXPRESSION (4, left to right)
-    EXPRESSION / EXPRESSION (4, left to right)
-    EXPRESSION % EXPRESSION (4, left to right)
-    EXPRESSION + EXPRESSION (5, left to right)
-    EXPRESSION - EXPRESSION (5, left to right)
-    EXPRESSION << EXPRESSION (6, left to right)
-    EXPRESSION >> EXPRESSION (6, left to right)
-    EXPRESSION < EXPRESSION (7, left to right)
-    EXPRESSION > EXPRESSION (7, left to right)
-    EXPRESSION <= EXPRESSION (7, left to right)
-    EXPRESSION >= EXPRESSION (7, left to right)
-    EXPRESSION != EXPRESSION (8, left to right)
-    EXPRESSION == EXPRESSION (8, left to right)
-    EXPRESSION & EXPRESSION (9, left to right)
-    EXPRESSION ^ EXPRESSION (10, left to right)
-    EXPRESSION | EXPRESSION (11, left to right)
+    EXPRESSION *** EXPRESSION (8, right to left)
+    EXPRESSION ** EXPRESSION (8, right to left)
+    EXPRESSION * EXPRESSION (7, left to right)
+    EXPRESSION / EXPRESSION (7, left to right)
+    EXPRESSION % EXPRESSION (7, left to right)
+    EXPRESSION + EXPRESSION (6, left to right)
+    EXPRESSION - EXPRESSION (6, left to right)
+    EXPRESSION << EXPRESSION (5, left to right)
+    EXPRESSION >> EXPRESSION (5, left to right)
+    EXPRESSION < EXPRESSION (4, left to right)
+    EXPRESSION > EXPRESSION (4, left to right)
+    EXPRESSION <= EXPRESSION (4, left to right)
+    EXPRESSION >= EXPRESSION (4, left to right)
+    EXPRESSION != EXPRESSION (3, left to right)
+    EXPRESSION == EXPRESSION (3, left to right)
+    EXPRESSION & EXPRESSION (2, left to right)
+    EXPRESSION ^ EXPRESSION (1, left to right)
+    EXPRESSION | EXPRESSION (0, left to right)
 
   NUMERIC_EXPRESSION:
     "NaN"
@@ -123,7 +124,6 @@ export namespace Parser {
   let idx: number = 0;
   let _lexemes: Lexer.lexeme[] = [];
   let _code: string = '';
-  let ast: {}[] = [];
   const lexemeTypes = Lexer.lexemeType;
 
   // #region
@@ -165,77 +165,167 @@ export namespace Parser {
   // #region expressions
   function parseExpression(): any {
     //if (match('func')) return parseFuncExpression();
-    return termExp();
+    return parseExprLvl0();
   }
 
-  // parse + and -
-  function termExp() {
-    // TODO
-    let left: any = factor();
+  function parseExprLvl0() {
+    let left: any = parseExprLvl1();
+
+    while (match('|')) {
+      left = {
+        type: previous(),
+        left,
+        right: parseExprLvl1()
+      };
+    }
+
+    return left;
+  }
+
+  function parseExprLvl1() {
+    let left: any = parseExprLvl2();
+
+    while (match('^')) {
+      left = {
+        type: previous(),
+        left,
+        right: parseExprLvl2()
+      };
+    }
+
+    return left;
+  }
+
+  function parseExprLvl2() {
+    let left: any = parseExprLvl3();
+
+    while (match('&')) {
+      left = {
+        type: previous(),
+        left,
+        right: parseExprLvl3()
+      };
+    }
+
+    return left;
+  }
+
+  function parseExprLvl3() {
+    let left: any = parseExprLvl4();
+
+    while (match('==', '!=')) {
+      left = {
+        type: previous(),
+        left,
+        right: parseExprLvl4()
+      };
+    }
+
+    return left;
+  }
+
+  function parseExprLvl4() {
+    let left: any = parseExprLvl5();
+
+    while (match('<', '>', '<=', '>=')) {
+      left = {
+        type: previous(),
+        left,
+        right: parseExprLvl5()
+      };
+    }
+
+    return left;
+  }
+
+  function parseExprLvl5() {
+    let left: any = parseExprLvl6();
+
+    while (match('<<', '>>')) {
+      left = {
+        type: previous(),
+        left,
+        right: parseExprLvl6()
+      };
+    }
+
+    return left;
+  }
+
+  function parseExprLvl6() {
+    let left: any = parseExprLvl7();
 
     while (match('+', '-')) {
-      let operator = previous();
       left = {
-        type: 'binary',
-        operator,
+        type: previous(),
         left,
-        right: factor()
+        right: parseExprLvl7()
       };
     }
 
     return left;
   }
 
-  // TODO, parse * and /
-  function factor() {
-    let left: any = exp(); // call next function
+  function parseExprLvl7() {
+    let left: any = parseExprLvl8();
 
-    while (match('*', '/')) {
-      let operator = previous();
+    while (match('*', '/', '%')) {
       left = {
-        type: 'binary',
-        operator,
+        type: previous(),
         left,
-        right: exp()
+        right: parseExprLvl8()
       };
     }
 
     return left;
   }
 
-  // TODO, parse ** and ***
-  function exp() {
-    let left: any = primary(); // call next function
+  function parseExprLvl8(): any {
+    let left: any = parseExprLvl9();
 
-    while (match('**', '***')) {
-      let operator = previous();
+    // right to left precedence:
+    // if because precedence order
+    if (match('**', '***')) {
       left = {
-        type: 'binary',
-        operator,
+        type: previous(),
         left,
-        right: primary()
+        right: parseExprLvl8() // same level because precedence order
       };
     }
 
     return left;
+  }
+
+  function parseExprLvl9(): any {
+    // unary:
+    if (match('-', '+', '~')) {
+      return {
+        type: { type: 'unary', value: previous() },
+        body: parseExprLvl9()
+      };
+    }
+
+    return primary();
   }
 
   // TODO, parse literals, highest precedence level
   function primary() {
-    if (peek()!.type === lexemeTypes.literal) return { type: advance() };
-    else if (peek()!.type === lexemeTypes.identifier)
-      return { type: advance() };
-    else if (match('(')) {
-      let expression: any = {
+    if (match('(')) {
+      // TODO
+      const expression: any = {
         type: '()',
         value: parseExpression(),
         endBracket: undefined
       };
       if (!match(')')) throw Error('Expression wasnt closed'); // TODO
       return expression;
+    } else if (peek()!.type === lexemeTypes.literal) return { type: advance() };
+    else if (peek()!.type === lexemeTypes.identifier) {
+      // TODO, x, x(), x.y, x.y() but not x.y().z
+      return { type: advance() };
     } else if (match('func'))
       return { type: previous(), value: parseFuncExpression() };
-    else throw Error('could not match anything!'); // TODO
+    else throw Error('could not match anything in parsing expressions!'); // TODO
   }
 
   function parseFuncExpression() {
@@ -422,8 +512,13 @@ import ../HigherFolderFile;
 import folder/file;
 import folder2/../../pastFile;
 */
+//let f = func (x,y,) -> x + y;
+//let rightToLeft = a ** b ** c;
+//let leftToRight = a + b + c;
 
-let f = func (x,y:,) -> x + y;
+//let f = func (x) -> 2 * x;
+
+let f = func (x) -> func (y) -> x + y;
 `;
 const lexedCode = Lexer.lexe(code, 'code');
 console.log(inspect(Parser.parse(lexedCode, code), { depth: 9999 }));
