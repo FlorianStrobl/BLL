@@ -1,0 +1,1 @@
+// ASM generation from the AST, can be in an ascii format or in a binary object file
