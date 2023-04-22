@@ -4,7 +4,10 @@ import { Compiler } from './LCCompiler';
 import { prettier } from './LCFormatter';
 
 const file = 'src';
-const code = `pub let f = func (x, y) -> /*test*/ x + y * x - (x / x);`;
+const code = `
+let f = func (x, y) -> x + y * x - (x / x);
+let g = func (x, y) -> x / y;
+`;
 
 const lexemes = Lexer.lexe(code, file);
 let ast = Parser.parse(lexemes, code, file);
