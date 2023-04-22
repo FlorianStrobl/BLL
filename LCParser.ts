@@ -6,6 +6,7 @@ import { Lexer } from './LCLexer';
 import { inspect } from 'util';
 
 // see: https://www.wikiwand.com/en/Extended_Backus-Naur_form
+// https://www.geeksforgeeks.org/types-of-parsers-in-compiler-design/
 
 /*
   ?: 0 or 1
@@ -120,11 +121,18 @@ for_sure_float: true|false
 export namespace Parser {
   // Recursive Descent Parsing
 
+  // #region types
   type lexemT = Lexer.lexeme;
 
   type importBodyT = { path: lexemT[]; semicolon: lexemT };
 
-  type funcExpressionT = any;
+  type funcExpressionT = {
+    openingBracket: lexemT;
+    closingBracket: lexemT;
+    params: { args: lexemT[]; commas: lexemT[] };
+    arrow: lexemT;
+    body: expressionT;
+  };
 
   export type expressionT =
     | {
@@ -174,11 +182,10 @@ export namespace Parser {
         openBrace: lexemT;
         closingBrace: lexemT;
       }
-    | {
+    | ({
         type: 'func';
         typeLex: lexemT;
-        value: funcExpressionT;
-      };
+      } & funcExpressionT);
 
   type letStatementT = {
     identifier: lexemT;
@@ -210,14 +217,15 @@ export namespace Parser {
         publicLex?: lexemT;
       } & pubStatementT)
     | ({ type: 'import'; typeLex: lexemT } & importBodyT);
+  // #endregion
 
-  let idx: number = 0;
-  let _lexemes: Lexer.lexeme[] = [];
+  let idx: number = 0; // larser
+  let _lexemes: Lexer.lexeme[] = []; // TODO, real time adding of lexems (larser)
   let _code: string = '';
   let _fileName: string = '';
   const lexemeTypes = Lexer.lexemeType;
 
-  // #region
+  // #region helper
   function isAtEnd(): boolean {
     return idx >= _lexemes.length;
   }
@@ -459,14 +467,14 @@ export namespace Parser {
       // is id1.id2
 
       const path: any = [identifier];
-      let dot;
+      let dot: Lexer.lexeme | undefined;
       while ((dot = match('.'))) {
         path.push(dot);
         if (peek()!.type === lexemeTypes.identifier) path.push(advance());
         else throw Error('`identifier . not an identifier` is not ok'); // TODO
       }
 
-      let openBrace;
+      let openBrace: Lexer.lexeme | undefined;
       if ((openBrace = match('('))) {
         let parseBody = parseExpression(); // TODO TODO because there can be "," in between!
         let closingBrace = match(')');
@@ -485,26 +493,30 @@ export namespace Parser {
       return {
         type: 'func',
         typeLex: previous(),
-        value: parseFuncExpression()
+        ...parseFuncExpression()
       };
     else throw Error('could not match anything in parsing expressions!'); // TODO
   }
 
   function parseFuncExpression(): funcExpressionT {
-    let openingBracket;
+    let openingBracket: Lexer.lexeme | undefined;
     if (!(openingBracket = match('(')))
       throw Error('functions must be opend with ('); // TODO
 
-    let params = parseFuncExprArgs();
+    let params: {
+      args: Lexer.lexeme[];
+      commas: Lexer.lexeme[];
+    } = parseFuncExprArgs();
 
-    let closingBracket;
+    let closingBracket: Lexer.lexeme | undefined;
     if (!(closingBracket = match(')')))
       throw Error('functions must be closed with )'); // TODO
 
-    let arrow;
+    let arrow: Lexer.lexeme | undefined;
     if (!(arrow = match('->'))) throw Error('functions must have a ->'); // TODO
 
-    let body = parseExpression();
+    const body: expressionT = parseExpression();
+
     return { openingBracket, closingBracket, params, arrow, body };
   }
 
@@ -513,9 +525,9 @@ export namespace Parser {
   }
 
   // TODO
-  function parseFuncExprArgs(): any {
-    const args: any = [];
-    const commas: any = [];
+  function parseFuncExprArgs(): { args: lexemT[]; commas: lexemT[] } {
+    const args: lexemT[] = [];
+    const commas: lexemT[] = [];
 
     while (peek()?.value !== ')') {
       if (args.length > 0) {
@@ -528,7 +540,7 @@ export namespace Parser {
         if (peek()?.value === ')') break; // had trailing comma
       }
 
-      let identifier = advance();
+      let identifier: Lexer.lexeme | undefined = advance();
       if (
         identifier === undefined ||
         identifier.type !== lexemeTypes.identifier
@@ -537,10 +549,12 @@ export namespace Parser {
 
       args.push(identifier);
 
-      let doublePoint;
+      let doublePoint: Lexer.lexeme | undefined;
       if ((doublePoint = match(':'))) {
         let typeAnnotation = parseFuncArgExprType();
+        // @ts-expect-error
         args[args.length - 1].type = typeAnnotation;
+        // @ts-expect-error
         args[args.length - 1].doublePoint = doublePoint;
       }
     }
@@ -679,29 +693,29 @@ export namespace Parser {
   }
 }
 
-const code = `
-//let x = ((5 + 3) * y ** 3 * 3 + 3 * 2 + 7 *** 4 + 4 ** 4 *** 3 * 1);
+// const code = `
+// //let x = ((5 + 3) * y ** 3 * 3 + 3 * 2 + 7 *** 4 + 4 ** 4 *** 3 * 1);
 
-/*
-import SameFolderButDiffFile;
-import ./SameFolderButDiffFile;
-import ../HigherFolderFile;
-import folder/file;
-import folder2/../../pastFile;
-*/
-//let f = func (x,y,) -> x + y;
-//let rightToLeft = a ** b ** c;
-//let leftToRight = a + b + c;
+// /*
+// import SameFolderButDiffFile;
+// import ./SameFolderButDiffFile;
+// import ../HigherFolderFile;
+// import folder/file;
+// import folder2/../../pastFile;
+// */
+// //let f = func (x,y,) -> x + y;
+// //let rightToLeft = a ** b ** c;
+// //let leftToRight = a + b + c;
 
-//let f = func (x) -> 2 * x;
+// //let f = func (x) -> 2 * x;
 
-//let f = func (x) -> func (y) -> x + y;
-//let g = func (x) -> func (y) -> std.h(x + y);
+// //let f = func (x) -> func (y) -> x + y;
+// //let g = func (x) -> func (y) -> std.h(x + y);
 
-let a = func (x, y) -> x + y * x - (x / x);
-`;
-const lexedCode = Lexer.lexe(code, 'code');
-console.log(inspect(Parser.parse(lexedCode, code, 'src'), { depth: 9999 }));
+// let a = func (x, y) -> x + y * x - (x / x);
+// `;
+// const lexedCode = Lexer.lexe(code, 'code');
+// console.log(inspect(Parser.parse(lexedCode, code, 'src'), { depth: 9999 }));
 
 // function consume(
 //   token: string | Lexer.lexemeType

@@ -1,5 +1,6 @@
 // ASM generation from the AST, can be in an ascii format or in a binary object file
 
+import { Lexer } from './LCLexer';
 import { Parser } from './LCParser';
 
 export namespace Compiler {
@@ -19,45 +20,82 @@ export namespace Compiler {
             return bodyNot;
         }
       case 'binary':
+        let leftSide;
+        let rightSide;
         switch (exp.operator) {
           case '|':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( |, ${leftSide}, ${rightSide})`;
           case '^':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( ^, ${leftSide}, ${rightSide})`;
           case '&':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( &, ${leftSide}, ${rightSide})`;
           case '==':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( ==, ${leftSide}, ${rightSide})`;
           case '!=':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( !=, ${leftSide}, ${rightSide})`;
           case '<':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( <, ${leftSide}, ${rightSide})`;
           case '>':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( >, ${leftSide}, ${rightSide})`;
           case '<=':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( <=, ${leftSide}, ${rightSide})`;
           case '>=':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( >=, ${leftSide}, ${rightSide})`;
           case '<<':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( <<, ${leftSide}, ${rightSide})`;
           case '>>':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( >>, ${leftSide}, ${rightSide})`;
           case '+':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( +, ${leftSide}, ${rightSide})`;
           case '-':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( -, ${leftSide}, ${rightSide})`;
           case '*':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( *, ${leftSide}, ${rightSide})`;
           case '/':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( /, ${leftSide}, ${rightSide})`;
           case '%':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( %, ${leftSide}, ${rightSide})`;
           case '**':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( **, ${leftSide}, ${rightSide})`;
           case '***':
-            break;
+            leftSide = todoCompileSimpleExpression(exp.left);
+            rightSide = todoCompileSimpleExpression(exp.right);
+            return `( ***, ${leftSide}, ${rightSide})`;
         }
-        break;
       case 'grouping':
         return todoCompileSimpleExpression(exp.value);
       case 'literal':
@@ -75,21 +113,21 @@ export namespace Compiler {
     return '';
   }
 
-  function todoCompileSimpleFunction(func: any): string {
-    let funcReturnType = func.returnType;
+  function todoCompileSimpleFunction(func: Parser.statementT): string {
+    if (func.type !== 'let') return 'ERROR';
+    if (func.body.type !== 'func') return 'ERROR';
 
-    let funcIdentifier = func.identifier;
+    const funcReturnType = 'i32';
+
+    const funcIdentifier = func.identifier.value;
 
     let funcParameters = '';
-    for (const [key, param] of Object.entries(
-      func.params.args as { type: string; value: string }[]
-    ))
-      if (Number(key) === func.params.args.length - 1)
-        funcParameters += `${param.type} %${param.value}`;
-      else funcParameters += `${param.type} %${param.value},`;
-    funcParameters.slice(0, -1);
+    for (const [key, param] of Object.entries(func.body.params.args))
+      if (Number(key) === func.body.params.args.length - 1)
+        funcParameters += `${'i32'} %${param.value}`;
+      else funcParameters += `${'i32'} %${param.value}, `;
 
-    let funcBody = todoCompileSimpleExpression(func.body);
+    const funcBody = todoCompileSimpleExpression(func.body.body);
 
     return `define ${funcReturnType} @${funcIdentifier}(${funcParameters}) {
   ${funcBody}
@@ -97,7 +135,14 @@ export namespace Compiler {
   }
 
   // compiles down to llvm ir
-  export function compile(ast: any, code: string, fileName: string): string {
-    return todoCompileSimpleFunction(ast);
+  export function compile(
+    ast: Parser.statementT[],
+    code: string,
+    fileName: string
+  ): string {
+    if (ast[0].type === 'let' && ast[0].body.type === 'func')
+      return todoCompileSimpleFunction(ast[0]);
+
+    return '';
   }
 }

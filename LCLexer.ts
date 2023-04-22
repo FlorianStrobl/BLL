@@ -355,11 +355,12 @@ export namespace Lexer {
 
     const lexedCode: lexeme[] = [];
     for (let charIdx: number = 0; charIdx < code.length; ++charIdx) {
-      if (matches(code[charIdx], /[ \n\t\r]/g)) {
+      if (matches(code[charIdx], /[ \n\t\r]/g))
         // is whitespace
         continue; // go to next character
-      } else if (code[charIdx] === '/') {
-        // could be `//` or `/*` for comment:
+
+      // could be `//` or `/*` for comment:
+      if (code[charIdx] === '/') {
         if (code[charIdx + 1] === '/' || code[charIdx + 1] === '*') {
           // consume comment
           const commentData: commentData = consumeComment(code, charIdx);

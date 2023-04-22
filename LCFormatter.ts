@@ -1,19 +1,70 @@
 // prettier with syntax highlighting and bracket matching (see VSCode)
 // + code region folding
 
+import { Parser } from './LCParser';
+import { Lexer } from './LCLexer';
+
 export namespace prettier {
-  function printExpression(expression: {}): string {
+  type lexemT = Lexer.lexeme;
+
+  function printExpression(expression: Parser.expressionT): string {
     // if two identifiers or operators are following one each other, put a space in between!!
-
+    switch (expression.type) {
+      case 'unary':
+        return `${expression.operator} ${printExpression(expression.body)}`;
+      case 'binary':
+        return `${printExpression(expression.left)} ${
+          expression.operator
+        } ${printExpression(expression.right)}`;
+      case 'func':
+        return `func (TODO) -> ${printExpression(expression.body)}`;
+      case 'grouping':
+        return `(${printExpression(expression.value)})`;
+      case 'literal':
+        return expression.literal.value;
+      case 'identifier':
+        return expression.identifier.value;
+      case 'identifier-path':
+        return 'TODO';
+      case 'functionCall':
+        return 'TODO';
+    }
     return '';
   }
 
-  function printStatement(statement: {}): string {
+  function printStatement(statement: Parser.statementT): string {
+    function printImportStatement(path: lexemT[]): string {
+      let str = '';
+      for (const p of path) str += p.value;
+      return str;
+    }
+
     // will have expressions in it
-    return '';
+    switch (statement.type) {
+      case ';':
+        return ';';
+      case 'import':
+        return printImportStatement(statement.path) + ';';
+      case 'namespace':
+        const namespaceBody: string[] = [];
+        for (const s of statement.body) {
+          namespaceBody.push(printStatement(s));
+        }
+        return `${statement.public ? 'pub ' : ''}namespace ${
+          statement.identifier.value
+        } {\n${namespaceBody.join('\n')}\n}`;
+      case 'let':
+        const expression = printExpression(statement.body);
+        return `${statement.public ? 'pub ' : ''}let ${
+          statement.identifier.value
+        } = ${expression};`;
+    }
   }
 
-  export function prettier(ast: {}[], withColor: boolean = false): string {
+  export function prettier(
+    ast: Parser.statementT[],
+    withColor: boolean = false
+  ): string {
     let code = '';
 
     for (const [i, statement] of Object.entries(ast)) {
