@@ -531,9 +531,9 @@ export namespace Parser {
   }
   // #endregion
 
-  export function parse(lexemes: Lexer.lexeme[], originalCode: string): any[] {
+  export function parse(lexemes: Lexer.lexeme[], code: string, fileName: string): any[] {
     _lexemes = lexemes.filter((l) => l.type !== lexemeTypes.comment);
-    _code = originalCode;
+    _code = code;
 
     // TODO, ast must have comments in it, in order to print them with the formatter
     let program: any[] = [];
@@ -560,10 +560,12 @@ import folder2/../../pastFile;
 //let f = func (x) -> 2 * x;
 
 //let f = func (x) -> func (y) -> x + y;
-let g = func (x) -> func (y) -> std.h(x + y);
+//let g = func (x) -> func (y) -> std.h(x + y);
+
+let a = func (x, y) -> x + y * x - (x / x);
 `;
 const lexedCode = Lexer.lexe(code, 'code');
-console.log(inspect(Parser.parse(lexedCode, code), { depth: 9999 }));
+console.log(inspect(Parser.parse(lexedCode, code, "src"), { depth: 9999 }));
 
 // function consume(
 //   token: string | Lexer.lexemeType

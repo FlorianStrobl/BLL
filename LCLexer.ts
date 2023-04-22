@@ -348,7 +348,7 @@ export namespace Lexer {
   }
   // #endregion
 
-  export function lexe(code: string, file: string): lexeme[] | never {
+  export function lexe(code: string, fileName: string): lexeme[] | never {
     let hadError: boolean = false;
 
     code += ' '; // add space at the end
@@ -430,7 +430,7 @@ export namespace Lexer {
           code: code,
           idx: charIdx,
           endIdx: charIdx,
-          file: file
+          file: fileName
         } as any);
 
         // throw Error(
