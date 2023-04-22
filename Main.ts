@@ -5,7 +5,7 @@ import { prettier } from './LCFormatter';
 
 const file = 'src';
 const code = `
-let f = func (x, y) -> x + y * x - (x / x);
+let f = func (x, y) -> 68+0;
 let g = func (x, y) -> x / y;
 `;
 
