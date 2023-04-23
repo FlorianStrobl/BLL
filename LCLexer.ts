@@ -14,17 +14,21 @@ import { inspect } from 'util';
 export namespace Lexer {
   // #region constants
   const keywords: string[] = [
-    'let', // bind a function to an identifier
-    'func', // create a function
-    'pub', // make function public from a namespace
-    'namespace', // wrapper around functions
-    'type', // create an identifier bound to a type
+    'import', // imports all public identifiers from other files
+
+    'let', // binds a lambda term to an identifier
+    'type', // binds a type to an identifier
+    'namespace', // identifier as wrapper around identifiers
+    'pub', // make an identifier public to the outside (files or namespaces)
+
+    'func', // introduces a function
+
     'NaN', // NaN::f32
     'Infinity', // Infinity::f32
+
+    'i32', // type: unsigned 32 bit integer
     'f32', // type: single precision 32 bit float after the IEEE754-2008 standard
-    'u32', // type: unsigned 32 bit integer
-    'undetermined', // type: cannot be determined at compile time but must be done at compile time
-    'import' // import namespace from other file
+    'undetermined' // type: cannot be determined at compile time but must be done at compile time
   ];
 
   // +, - (unary and binary), *, /, **, ***, %
@@ -32,11 +36,9 @@ export namespace Lexer {
   // ==, !=, <=, >=, <, >
   // =, :, ->, () (grouping and argument list), ;, ,, . (for accessing public values from namespaces), {} (for namespaces), [] (for type templating)
   const symbols: string[] = [
-    "'" /*to delete*/,
-    '!' /*to delete*/,
-    '#' /*to delete*/,
-    '?' /*to delete*/,
-    '"' /*to delete*/,
+    // ` \\ \` ' " ! ? @ # $     _  ~ & | ^  + - * / %  =  ( ) [ ] { }  : ; . ,  > < `
+    //   ^^^^^^^^^^^^^^^^^^^ invalid
+    // must lex this: `* ** *** + - % / < > = == != <= >= << >> ~ & | ^ : ; . , () [] {} -> //`
     '+', // add
     '-', // sub
     '*', // multiplication
@@ -54,23 +56,23 @@ export namespace Lexer {
 
     '==', // equal
     '!=', // not equal
-    '<=', // greater than or equal
-    '>=', // less than or equal
-    '>', // less than
-    '<', // greater than
+    '<=', // less than or equal
+    '>=', // greater than or equal
+    '>', // greater than
+    '<', // less than
 
-    '=', // assigment (also for default values)
+    '=', // assigments
+    '->', // functions
     ':', // type annotation
-    '->', // function
     ';', // end of a statement
     ',', // seperator for arguments
     '.', // accessing public functions from namespaces
 
-    '(', // grouping
+    '(', // grouping, function calls, function arguments/parameters
     ')',
-    '{',
+    '{', // namespaces
     '}',
-    '[',
+    '[', // generic type annotations
     ']'
   ]
     .sort(/*sort for length*/ (a, b) => b.length - a.length)
@@ -152,8 +154,9 @@ export namespace Lexer {
         commentData.comment += code[i++];
 
       // TODO
-      if (i >= code.length)
-        throw Error('Error in `consumeComment`: reached end of file');
+      // not necessary since last characters could be the comment
+      // if (i >= code.length)
+      //   throw Error('Error in `consumeComment`: reached end of file');
     } else if (code[i] === '*') {
       // comment type 2: "/*"
       commentData.comment += code[i++]; // "*"
@@ -216,12 +219,22 @@ export namespace Lexer {
     if one of those two splited up chars is invalid, Error gets thrown
     */
     while (!symbols.includes(operatorData.operator)) {
-      if (operatorData.operator === '')
+      if (operatorData.operator === '') {
         // invalid operator to begin with
-        throw Error(
-          // TODO
-          `\`Lexer\` Error: Invalid character \`${code[startIdx]}\` found at position ${startIdx}`
-        );
+        printMessage('error', {
+          id: ErrorID.invalidCharacter,
+          code: code,
+          idx: startIdx,
+          endIdx: startIdx,
+          file: 'TODO'
+        } as any);
+        i++; // skip the next character
+        break;
+        // throw Error(
+        //   // TODO
+        //   `\`Lexer\` Error: Invalid character \`${code[startIdx]}\` found at position ${startIdx}`
+        // );
+      }
 
       // maybe just the last char was part of another symbol with more chars, so cut that off
       operatorData.operator = operatorData.operator.slice(
@@ -464,11 +477,11 @@ export namespace Lexer {
 //   /* You can /* nest comments *\\/ by escaping slashes */
 
 //   // example code
-//   let a: u32 = IO.in[u32](0); // gets an u32 from the console
-//   let b: u32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[u32] is called and not Math.sq[f32]
-//   let c: u32 = IO.out(b); // prints b and assigneds b to c
+//   let a: i32 = IO.in[i32](0); // gets an i32 from the console
+//   let b: i32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
+//   let c: i32 = IO.out(b); // prints b and assigneds b to c
 
-//   let d = func (x: u32) -> 5_4.1e-3;
+//   let d = func (x: i32) -> 5_4.1e-3;
 //   // 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 // `,
 //     'src'

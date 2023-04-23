@@ -33,7 +33,7 @@ import { inspect } from 'util';
   TYPE:
     ( TYPE )
     "f32"
-    "u32"
+    "i32"
     "undetermined"
     TYPE -> TYPE
 
