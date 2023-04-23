@@ -26,7 +26,7 @@ export namespace Lexer {
     'NaN', // NaN::f32
     'Infinity', // Infinity::f32
 
-    'i32', // type: unsigned 32 bit integer
+    'i32', // type: 32 bit integer
     'f32', // type: single precision 32 bit float after the IEEE754-2008 standard
     'undetermined' // type: cannot be determined at compile time but must be done at compile time
   ];

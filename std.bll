@@ -1,6 +1,6 @@
-// datatypes: u32, f32, undetermined
+// datatypes: i32, f32, undetermined
 
-// keywords: func, let, pub, namespace, import (for different files), f32, u32, Infinity, NaN, undetermined, type
+// keywords: func, let, pub, namespace, import (for different files), f32, i32, Infinity, NaN, undetermined, type
 
 // symbols:
 // +, - (unary and binary), *, /, **, ***, %
@@ -9,22 +9,22 @@
 // =, :, ->, () (grouping and argument list), ;, ,, . (for accessing public values from namespaces), {} (for namespaces), [] (for type templating)
 
 // global functions: IO.out[T](x: T): T, IO.in[T](defaultOnError: T): T
-// IO.timestamp(): u32, IO.random(): f32
+// IO.timestamp(): i32, IO.random(): f32
 // IO.exit[T](value: T): never
 
 // TODO how to do IO in LC?, Monads
 
 // example code
-let a: u32 = IO.in[u32](0); // gets an u32 from the console
-let b: u32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[u32] is called and not Math.sq[f32]
-let c: u32 = IO.out(b); // prints b and assigneds b to c
+let a: i32 = IO.in[i32](0); // gets an i32 from the console
+let b: i32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
+let c: i32 = IO.out(b); // prints b and assigneds b to c
 
 namespace IO {
   pub let out = func [T](value: T): T -> __INTERNAL_CODE_OUTPUT;
   pub let in = func [T](defaultOnError: T): T -> __INTERNAL_CODE_INPUT;
 
   pub let random = func (): f32 -> __INTERNAL_CODE_RANDOM;
-  pub let timestamp = func (): u32 -> __INTERNAL_CODE_TIMESTAMP;
+  pub let timestamp = func (): i32 -> __INTERNAL_CODE_TIMESTAMP;
 
   pub let exit = func [T](value: T): undetermined /* : never */-> __INTERNAL_CODE_EXIT;
 }
@@ -35,7 +35,7 @@ namespace LambdaCalculus {
   pub let application = func [T: (undetermined) -> G, U](a: T, b: U): G -> a(b);
   pub let selfApp = func [T: (undetermined) -> U](x): U -> x(x); // TODO types
 
-  pub let if = func [T](bool: u32, a: T, b: T): T -> bool ? true(a)(b) : false(a)(b); // TODO HERE, need for an external "is0" or TRUE keyword??
+  pub let if = func [T](bool: i32, a: T, b: T): T -> bool ? true(a)(b) : false(a)(b); // TODO HERE, need for an external "is0" or TRUE keyword??
   pub let true = func [T](a: T): (T)->T -> func (b: T): T -> a;
   pub let false = func [T](a: T): (T)->T -> func (b:  T): T -> b;
 
@@ -52,13 +52,13 @@ namespace LambdaCalculus {
 }
 
 namespace Bin {
-  pub let and = func (a: u32, b: u32): u32 -> a & b;
-  pub let or = func (a: u32, b: u32): u32 -> a | b;
-  pub let xor = func (a: u32, b: u32): u32 -> a ^ b;
-  pub let not = func (a: u32): u32 -> ~a;
+  pub let and = func (a: i32, b: i32): i32 -> a & b;
+  pub let or = func (a: i32, b: i32): i32 -> a | b;
+  pub let xor = func (a: i32, b: i32): i32 -> a ^ b;
+  pub let not = func (a: i32): i32 -> ~a;
 
-  pub let lshift = func (a: u32, b: u32): u32 -> a << b;
-  pub let rshift = func (a: u32, b: u32): u32 -> a >> b;
+  pub let lshift = func (a: i32, b: i32): i32 -> a << b;
+  pub let rshift = func (a: i32, b: i32): i32 -> a >> b;
 }
 
 namespace Tuple {
@@ -82,19 +82,19 @@ namespace Math {
   pub let MAX_SAFE_INTEGER = func (): f32 -> 16777215;
 
   // float functions
-  pub let isInteger = func (x: f32): u32 -> x > MAX_SAFE_INTEGER() | trunc(x) == x; // TODO, precision
+  pub let isInteger = func (x: f32): i32 -> x > MAX_SAFE_INTEGER() | trunc(x) == x; // TODO, precision
   pub let decimals = func (x: f32): f32 -> x - trunc(x); // TODO, precision
 
   // basic arithmetic
   pub let add = func [T](x: T, y: T): T -> x + y;
   pub let sub = func [T](x: T, y: T): T -> x - y;
   pub let mult = func [T](x: T, y: T): T -> x * y;
-  pub let div = func [T](x: T, y: T): T -> x / y; // truncs for u32
-  pub let mod = func (a: u32, b: u32): u32 -> a % b;
+  pub let div = func [T](x: T, y: T): T -> x / y; // truncs for i32
+  pub let mod = func (a: i32, b: i32): i32 -> a % b;
 
   // more complex arithmetic
   pub let exp = func [T](b: T, e: T): T -> b ** e;
-  pub let log = func [T](x: T, b: T): T -> x *** b; // truncs for u32
+  pub let log = func [T](x: T, b: T): T -> x *** b; // truncs for i32
 
   // trigonometric functions
   //pub let sin;
@@ -106,7 +106,7 @@ namespace Math {
 
   // popular operations
   pub let sq = func [T](x: T): T -> exp[T](x, 2);
-  pub let diff = func [T](x: T, y: T) -> abs(x - y); // TODO, abs[u32] is not defined
+  pub let diff = func [T](x: T, y: T) -> abs(x - y); // TODO, abs[i32] is not defined
   pub let neg = func (x: f32): f32 -> - x;
   pub let inv = func (x: f32): f32 -> 1 / x;
   pub let root = func (x: f32, r: f32): f32 -> exp(x, 1/r);
@@ -115,16 +115,16 @@ namespace Math {
   pub let hypot = func (x: f32, y: f32) -> sqrt(sq(x) + sq(y));
 
   // comparisons
-  pub let equal = func [T](x: T, y: T): u32 -> x == y;
-  pub let notEqual = func [T](x: T, y: T): u32 -> x != y;
-  pub let greaterThan = func [T](x: T, y: T): u32 -> x > y;
-  pub let lessThan = func [T](x: T, y: T): u32 -> x < y;
-  pub let greaterThanOrEqual = func [T](x: T, y: T): u32 -> x >= y;
-  pub let lessThanOrEqual = func [T](x: T, y: T): u32 -> x <= y;
+  pub let equal = func [T](x: T, y: T): i32 -> x == y;
+  pub let notEqual = func [T](x: T, y: T): i32 -> x != y;
+  pub let greaterThan = func [T](x: T, y: T): i32 -> x > y;
+  pub let lessThan = func [T](x: T, y: T): i32 -> x < y;
+  pub let greaterThanOrEqual = func [T](x: T, y: T): i32 -> x >= y;
+  pub let lessThanOrEqual = func [T](x: T, y: T): i32 -> x <= y;
 
   // sign functions
   pub let abs = func (x: f32): f32 -> LambdaCalculus.if(x >= 0, x, -x);
-  pub let sign = func (x: f32): u32 -> LambdaCalculus.if(x == 0, 0, LambdaCalculus.if(x > 0, 1, -1)); // TODO, what about x==NaN
+  pub let sign = func (x: f32): i32 -> LambdaCalculus.if(x == 0, 0, LambdaCalculus.if(x > 0, 1, -1)); // TODO, what about x==NaN
 
   // minimum and maximum functions
   pub let min = func [T](x: T, y: T): T -> LambdaCalculus.if(x < y, x, y); // TODO, what about x or y being NaN
@@ -138,8 +138,8 @@ namespace Math {
   pub let round = func (x: f32): f32 -> floor(x + 0.5);
 
   // converting numbers from one type to another
-  pub let fToU = func (x: f32): u32 -> __INTERNAL_CODE_F32_TO_U32;
-  pub let uToF = func (x: u32): f32 -> __INTERNAL_CODE_U32_TO_F32;
+  pub let fToU = func (x: f32): i32 -> __INTERNAL_CODE_F32_TO_i32;
+  pub let uToF = func (x: i32): f32 -> __INTERNAL_CODE_i32_TO_F32;
 }
 
 namespace List {
