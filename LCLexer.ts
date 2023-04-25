@@ -38,7 +38,7 @@ export namespace Lexer {
   const symbols: string[] = [
     // ` \\ \` ' " ! ? @ # $     _  ~ & | ^  + - * / %  =  ( ) [ ] { }  : ; . ,  > < `
     //   ^^^^^^^^^^^^^^^^^^^ invalid
-    // must lex this: `* ** *** + - % / < > = == != <= >= << >> ~ & | ^ : ; . , () [] {} -> //`
+    // must lex this: `* ** *** + - % / < > = == != <= >= << >> -> ~ & | ^ : ; . , () [] {} -> //`
     '+', // add
     '-', // sub
     '*', // multiplication
