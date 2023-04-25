@@ -39,6 +39,8 @@ export namespace Lexer {
     // ` \\ \` ' " ! ? @ # $     _  ~ & | ^  + - * / %  =  ( ) [ ] { }  : ; . ,  > < `
     //   ^^^^^^^^^^^^^^^^^^^ invalid
     // must lex this: `* ** *** + - % / < > = == != <= >= << >> -> ~ & | ^ : ; . , () [] {} -> //`
+
+    // only for same primitive types
     '+', // add
     '-', // sub
     '*', // multiplication
@@ -55,6 +57,7 @@ export namespace Lexer {
     '<<', // left shift
     '>>', // right shift
 
+    // compare only same primitive types
     '==', // equal
     '!=', // not equal
     '<=', // less than or equal
@@ -62,10 +65,10 @@ export namespace Lexer {
     '<', // less than
     '>', // greater than
 
-    '=', // assigments
+    '=', // assigments of values to identifiers (let and type)
     '->', // functions
     ':', // type annotation
-    ';', // end of a statement
+    ';', // end of let or type statement/empty statement
     ',', // seperator for arguments
     '.', // accessing public functions from namespaces
 
