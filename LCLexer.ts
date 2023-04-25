@@ -47,6 +47,7 @@ export namespace Lexer {
     '***', // root
     '%', // remainder
 
+    // only ints
     '&', // and
     '|', // or
     '^', // xor
@@ -58,8 +59,8 @@ export namespace Lexer {
     '!=', // not equal
     '<=', // less than or equal
     '>=', // greater than or equal
-    '>', // greater than
     '<', // less than
+    '>', // greater than
 
     '=', // assigments
     '->', // functions
