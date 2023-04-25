@@ -4,7 +4,7 @@
  * Literals: +-.5e-3, 0xFF00FF
  * Keywords: let, fn, in, out
  * Identifier: _a_z_A_Z_0_9
- * Operator: +, -, *, /, ==, !=, <, >, <=, >=, ,, (, ), {, }, =, =>, .
+ * Operator: +, -, *, /, ==, !=, <, >, <=, >=, ,, (, ), {, }, =, ->, .
  *
  * TypeSystem: ...
  */
