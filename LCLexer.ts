@@ -54,6 +54,7 @@ export namespace Lexer {
     '|', // or
     '^', // xor
     '~', // not
+    '!', // logical not TODO (0 -> 1, any -> 0)
     '<<', // left shift
     '>>', // right shift
 
