@@ -132,10 +132,8 @@ export namespace Lexer {
     const identifierData: identifierData = { identifier: '', lastIdx: -1 };
 
     let i = startIdx;
-    while (i < code.length && matches(code[i], /[_a-zA-Z0-9]/g)) {
-      identifierData.identifier += code[i];
-      i++;
-    }
+    while (i < code.length && matches(code[i], /[_a-zA-Z0-9]/g))
+      identifierData.identifier += code[i++];
 
     identifierData.lastIdx = i - 1;
 

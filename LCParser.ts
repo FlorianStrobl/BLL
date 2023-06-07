@@ -1,6 +1,8 @@
 // AST generation
 // let ...
 
+// todo do larser in the background
+
 import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
