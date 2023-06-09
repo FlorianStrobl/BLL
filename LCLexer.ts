@@ -8,6 +8,7 @@
  *
  * TypeSystem: ...
  */
+// TODO, also lex strings (for errors)
 import { printMessage, ErrorID } from './FErrorMsgs'; // @ts-ignore
 import { inspect } from 'util';
 
@@ -440,6 +441,7 @@ export namespace Lexer {
         charIdx = literalData.lastIdx;
         continue;
       } else {
+        // do a while here to get errors which are on the same line/behind each other
         hadError = true;
 
         printMessage('error', {
