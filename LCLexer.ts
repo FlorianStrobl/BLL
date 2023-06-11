@@ -86,6 +86,70 @@ const mustNotLexe: string = `;
 */
 ;`;
 
+const keywords: string[] = [
+  'import', // imports all public identifiers from other files
+
+  'let', // binds a lambda term to an identifier
+  'type', // binds a type to an identifier
+  'namespace', // identifier as wrapper around identifiers
+  'pub', // make an identifier public to the outside (files or namespaces)
+
+  'func', // introduces a function
+
+  // f32 literals:
+  'nan',
+  'infinity',
+
+  // types:
+  'i32', // 32 bit integer
+  'f32', //single precision 32 bit float after the IEEE754-2008 standard
+  'undetermined' // cannot be determined at compile time but must be done at compile time
+].sort();
+
+const symbols: string[] = [
+  // only for same primitive types
+  '+', // add
+  '-', // sub
+  '*', // multiplication
+  '/', // divide (for integers: rounding down)
+  '**', // exponentiation
+  '***', // root
+  '%', // remainder
+
+  // only ints
+  '&', // and
+  '|', // or
+  '^', // xor
+  '~', // not
+  '!', // logical not TODO (0 -> 1, any -> 0)
+  '<<', // left shift
+  '>>', // right shift
+
+  // compare only same primitive types
+  '==', // equal
+  '!=', // not equal
+  '<=', // less than or equal
+  '>=', // greater than or equal
+  '<', // less than
+  '>', // greater than
+
+  '=', // assigments of values to identifiers (let and type)
+  '->', // functions
+  ':', // type annotation
+  ';', // end of let or type statement/empty statement
+  ',', // seperator for arguments
+  '.', // accessing public functions from namespaces
+
+  '(', // grouping, function calls, function arguments/parameters
+  ')',
+  '{', // namespaces
+  '}',
+  '[', // generic type annotations
+  ']'
+]
+  .sort(/*sort for length*/ (a, b) => b.length - a.length)
+  .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
+
 export namespace Lexer {
   export interface lexeme {
     value: string;
@@ -110,7 +174,7 @@ export namespace Lexer {
       }
     | { codeInvalid: true; type: 'invalid char'; chars: string };
 
-  type nextTokenData =
+  type nextToken =
     | {
         valid: true;
         value: lexeme;
@@ -123,77 +187,13 @@ export namespace Lexer {
       };
   // #endregion
 
-  const keywords: string[] = [
-    'import', // imports all public identifiers from other files
-
-    'let', // binds a lambda term to an identifier
-    'type', // binds a type to an identifier
-    'namespace', // identifier as wrapper around identifiers
-    'pub', // make an identifier public to the outside (files or namespaces)
-
-    'func', // introduces a function
-
-    // f32 literals:
-    'nan',
-    'infinity',
-
-    // types:
-    'i32', // 32 bit integer
-    'f32', //single precision 32 bit float after the IEEE754-2008 standard
-    'undetermined' // cannot be determined at compile time but must be done at compile time
-  ].sort();
-
-  const symbols: string[] = [
-    // only for same primitive types
-    '+', // add
-    '-', // sub
-    '*', // multiplication
-    '/', // divide (for integers: rounding down)
-    '**', // exponentiation
-    '***', // root
-    '%', // remainder
-
-    // only ints
-    '&', // and
-    '|', // or
-    '^', // xor
-    '~', // not
-    '!', // logical not TODO (0 -> 1, any -> 0)
-    '<<', // left shift
-    '>>', // right shift
-
-    // compare only same primitive types
-    '==', // equal
-    '!=', // not equal
-    '<=', // less than or equal
-    '>=', // greater than or equal
-    '<', // less than
-    '>', // greater than
-
-    '=', // assigments of values to identifiers (let and type)
-    '->', // functions
-    ':', // type annotation
-    ';', // end of let or type statement/empty statement
-    ',', // seperator for arguments
-    '.', // accessing public functions from namespaces
-
-    '(', // grouping, function calls, function arguments/parameters
-    ')',
-    '{', // namespaces
-    '}',
-    '[', // generic type annotations
-    ']'
-  ]
-    .sort(/*sort for length*/ (a, b) => b.length - a.length)
-    .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
-
   function matches(character: string, regexp: RegExp): boolean {
     return character[0].match(regexp) !== null;
   }
 
   // #region consume functions
   // assert: an identifier is at idx
-  function consumeIdentifier(code: string, idx: number): nextTokenData {
+  function consumeIdentifier(code: string, idx: number): nextToken {
     let identifier: string = '';
     let i = idx;
 
@@ -215,7 +215,7 @@ export namespace Lexer {
   }
 
   // assert: a comment is at idx
-  function consumeComment(code: string, idx: number): nextTokenData {
+  function consumeComment(code: string, idx: number): nextToken {
     let comment: string = code[idx];
 
     let i = idx + 1;
@@ -266,7 +266,7 @@ export namespace Lexer {
   }
 
   // assert: a numeric literal is at idx
-  function consumeNumericLiteral(code: string, idx: number): nextTokenData {
+  function consumeNumericLiteral(code: string, idx: number): nextToken {
     function consumeDigits() {
       // TODO, check if i is not outside of code
       let lastCharWasDigit = false;
@@ -387,7 +387,7 @@ export namespace Lexer {
   }
 
   // assert: an operator is at idx
-  function consumeOperator(code: string, idx: number): nextTokenData {
+  function consumeOperator(code: string, idx: number): nextToken {
     let operator = '';
     let i = idx;
 
@@ -441,7 +441,7 @@ export namespace Lexer {
   }
   // #endregion
 
-  export function lexeNextToken(code: string, idx: number): nextTokenData {
+  export function lexeNextToken(code: string, idx: number): nextToken {
     const whitespaces = /[ \t\n\r]/;
     while (idx < code.length && matches(code[idx], whitespaces)) ++idx;
 
@@ -614,8 +614,9 @@ export namespace Lexer {
   // }
 }
 
-console.log(Lexer.lexe(testCode, ''));
-
+for (const token of Lexer.lexeNextTokenIter(testCode)) {
+  console.log(token);
+}
 // test: /* You can /* nest comments *\/ by escaping slashes */
 // console.log(
 //   Lexer.lexe(
