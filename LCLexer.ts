@@ -12,8 +12,101 @@
 import { printMessage, ErrorID } from './FErrorMsgs'; // @ts-ignore
 import { inspect } from 'util';
 
+// +, - (unary and binary), *, /, **, ***, %
+// &, |, ^, ~, <<, >>
+// ==, !=, <=, >=, <, >
+// =, :, ->, () (grouping and argument list), ;, ,, . (for accessing public values from namespaces), {} (for namespaces), [] (for type templating)
+
+/*
+  TODO: have a lexeNextToken() function which also can work as an iterator
+*/
+
+const mustLexe: string = `;
+/**//**/
+/**/5
+/**/let
+/**/test
+/**/+
+
+5/**/
+// 5"hey"
+// 5let
+// 5test
+5+
+
+let/**/
+let5
+letlet
+lettest
+// let+
+
+test/**/
+test5
+testlet
+testtest
+test+
+
++/**/
++5
++let
++test
++*
+
+_
+
+~ & | ^ + - * / % = ( ) [ ] { } < > : ; . , !
+
+! * ** *** + - % / < > = == != <= >= << >> ~ & | ^ : ; . , -> () [] {} //
+
+********
+
+~~5
+
+;`;
+
+const mustNotLexe: string = `;
+"string"
+/regexp/
+
+5let
+5test
+
+\\ \` ' " ? @ # $
+;`;
+
 export namespace Lexer {
-  // #region constants
+  export interface lexeme {
+    value: string;
+    type: lexemeType;
+    idx: number;
+  }
+
+  export enum lexemeType {
+    comment = '#comment', // "//...", "/*...*/"
+    literal = '#literal', // 5.3e-4
+    keyword = '#keyword', // let
+    identifier = '#identifier', // identifier
+    operator = '#operator' // +
+  }
+
+  // #region types
+  type errorToken =
+    | { codeInvalid: false; type: 'eof' /*reached end of file*/ }
+    | {
+        codeInvalid: true;
+        type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
+      }
+    | { codeInvalid: true; type: 'invalid char'; chars: string };
+
+  type consumed = [true, lexeme, number] | [false, lexeme, number, errorToken];
+
+  type nextTokenData<valid extends boolean> = {
+    valid: valid;
+    value: valid extends true ? lexeme : errorToken;
+    idx: number;
+  };
+  // #endregion
+
   const keywords: string[] = [
     'import', // imports all public identifiers from other files
 
@@ -24,23 +117,17 @@ export namespace Lexer {
 
     'func', // introduces a function
 
-    'NaN', // NaN::f32
-    'Infinity', // Infinity::f32
+    // f32 literals:
+    'nan',
+    'infinity',
 
-    'i32', // type: 32 bit integer
-    'f32', // type: single precision 32 bit float after the IEEE754-2008 standard
-    'undetermined' // type: cannot be determined at compile time but must be done at compile time
-  ];
+    // types:
+    'i32', // 32 bit integer
+    'f32', //single precision 32 bit float after the IEEE754-2008 standard
+    'undetermined' // cannot be determined at compile time but must be done at compile time
+  ].sort();
 
-  // +, - (unary and binary), *, /, **, ***, %
-  // &, |, ^, ~, <<, >>
-  // ==, !=, <=, >=, <, >
-  // =, :, ->, () (grouping and argument list), ;, ,, . (for accessing public values from namespaces), {} (for namespaces), [] (for type templating)
-  const symbols: string[] = [
-    // ` \\ \` ' " ! ? @ # $     _  ~ & | ^  + - * / %  =  ( ) [ ] { }  : ; . ,  > < `
-    //   ^^^^^^^^^^^^^^^^^^^ invalid
-    // must lex this: `* ** *** + - % / < > = == != <= >= << >> -> ~ & | ^ : ; . , () [] {} -> //`
-
+  const operators: string[] = [
     // only for same primitive types
     '+', // add
     '-', // sub
@@ -83,79 +170,43 @@ export namespace Lexer {
   ]
     .sort(/*sort for length*/ (a, b) => b.length - a.length)
     .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
-  // #endregion
 
   function matches(character: string, regexp: RegExp): boolean {
-    return character.match(regexp) !== null;
+    return character[0].match(regexp) !== null;
   }
-
-  // #region interfaces
-  export enum lexemeType {
-    comment = '#comment', // "//...", "/*...*/"
-    literal = '#literal', // 5.3e-4
-    keyword = '#keyword', // let
-    identifier = '#identifier', // identifier
-    operator = '#operator' // +
-  }
-
-  export interface lexeme {
-    value: string;
-    type: lexemeType;
-    idx: number; // index in the original file
-  }
-
-  interface identifierData {
-    identifier: string;
-    lastIdx: number;
-  }
-
-  interface commentData {
-    comment: string;
-    lastIdx: number;
-  }
-
-  interface operatorData {
-    operator: string;
-    lastIdx: number;
-  }
-
-  interface literalData {
-    literal: string;
-    lastIdx: number;
-  }
-  // #endregion
 
   // #region consume functions
-  function consumeIdentifier(
-    code: string, // assert: last char is space
-    startIdx: number
-  ): identifierData | never {
-    const identifierData: identifierData = { identifier: '', lastIdx: -1 };
+  // assert: an identifier is at idx
+  function consumeIdentifier(code: string, idx: number): consumed {
+    let identifier: string = '';
+    let i = idx;
 
-    let i = startIdx;
-    while (i < code.length && matches(code[i], /[_a-zA-Z0-9]/g))
-      identifierData.identifier += code[i++];
+    const alphaNumeric = /[_a-zA-Z0-9]/;
+    while (i < code.length && matches(code[i], alphaNumeric))
+      identifier += code[i++];
 
-    identifierData.lastIdx = i - 1;
-
-    return identifierData;
+    return [
+      true,
+      {
+        value: identifier,
+        type: keywords.includes(identifier)
+          ? lexemeType.keyword
+          : lexemeType.identifier,
+        idx
+      },
+      i
+    ];
   }
 
-  function consumeComment(
-    code: string, // assert: last char is space
-    startIdx: number // assert: code[startIdx+1] is "/" or "*"
-  ): commentData | never {
-    const commentData: commentData = {
-      comment: code[startIdx] /* `/` */,
-      lastIdx: -1
-    };
+  // assert: a comment is at startIdx
+  function consumeComment(code: string, idx: number): consumed {
+    let comment: string = code[idx];
 
-    let i = startIdx + 1;
+    let i = idx + 1;
     if (code[i] === '/') {
       // comment type 1: "//"
 
-      while (i < code.length && code[i] !== '\n')
-        commentData.comment += code[i++];
+      while (i < code.length && code[i] !== '\n') comment += code[i++];
 
       // TODO
       // not necessary since last characters could be the comment
@@ -163,7 +214,7 @@ export namespace Lexer {
       //   throw Error('Error in `consumeComment`: reached end of file');
     } else if (code[i] === '*') {
       // comment type 2: "/*"
-      commentData.comment += code[i++]; // "*"
+      comment += code[i++]; // "*"
 
       // type 2 comment `/* */`
       while (
@@ -174,7 +225,7 @@ export namespace Lexer {
           code[i + 1] === '/'
         )
       )
-        commentData.comment += code[i++];
+        comment += code[i++];
 
       // TODO
       if (i >= code.length || i + 1 >= code.length)
@@ -186,34 +237,30 @@ export namespace Lexer {
           'Error in `consumeComment`: comment of type "/*" was not finished properly.'
         );
 
-      commentData.comment += '*/'; // code[i] + code[i+1]
+      comment += '*/'; // code[i] + code[i+1]
       i += 2;
     }
     // else not a comment, handled before calling this function
 
-    commentData.lastIdx = i - 1;
-
-    return commentData;
+    return [true, { value: comment, type: lexemeType.comment, idx }, i];
   }
 
-  function consumeOperator(
-    code: string, // assert: last char is space
-    startIdx: number
-  ): operatorData | never {
-    const operatorData: operatorData = { operator: '', lastIdx: -1 };
-    let i = startIdx;
+  // assert: an operator is at startIdx
+  function consumeOperator(code: string, idx: number): consumed {
+    let operator = '';
+    let i = idx;
 
-    operatorData.operator = code[i++]; // first char of the operator
+    operator = code[i++]; // first char of the operator
 
     while (
       i < code.length &&
-      symbols
+      operators
         // only take the amount of characters needed
-        .map((s) => [...s].slice(0, operatorData.operator.length + 1).join(''))
+        .map((s) => [...s].slice(0, operator.length + 1).join(''))
         // check if this operator and next are included
-        .includes(operatorData.operator + code[i])
+        .includes(operator + code[i])
     )
-      operatorData.operator += code[i++];
+      operator += code[i++];
 
     /* Handles the case where
     operator "->*" exists but "->" does not,
@@ -222,14 +269,14 @@ export namespace Lexer {
     "->" would be splited up into "-" and ">", thought the later one gets parsed in the next iteration of this function call
     if one of those two splited up chars is invalid, Error gets thrown
     */
-    while (!symbols.includes(operatorData.operator)) {
-      if (operatorData.operator === '') {
+    while (!operators.includes(operator)) {
+      if (operator === '') {
         // invalid operator to begin with
         printMessage('error', {
           id: ErrorID.invalidCharacter,
           code: code,
-          idx: startIdx,
-          endIdx: startIdx,
+          idx: idx,
+          endIdx: idx,
           file: 'TODO'
         } as any);
         i++; // skip the next character
@@ -241,33 +288,27 @@ export namespace Lexer {
       }
 
       // maybe just the last char was part of another symbol with more chars, so cut that off
-      operatorData.operator = operatorData.operator.slice(
-        0,
-        operatorData.operator.length - 1
-      );
+      operator = operator.slice(0, operator.length - 1);
       i--;
     }
 
-    operatorData.lastIdx = i - 1;
-
-    return operatorData;
+    return [true, { value: operator, type: lexemeType.operator, idx }, i];
   }
 
-  function consumeNumericLiteral(
-    code: string, // assert: last char is space
-    startIdx: number
-  ): literalData | never {
+  // assert: a numeric literal is at startIdx
+  function consumeNumericLiteral(code: string, idx: number): consumed {
     function consumeDigits() {
+      // TODO, check if i is not outside of code
       let lastCharWasDigit = false;
       while (i < code.length && matches(code[i], /[0-9]|_/g)) {
         if (matches(code[i], /[0-9]/g)) {
           // digit
           lastCharWasDigit = true;
-          literalData.literal += code[i++];
+          literal += code[i++];
         } else if (lastCharWasDigit && matches(code[i + 1], /[0-9]/g)) {
           // _
           lastCharWasDigit = false;
-          literalData.literal += code[i++]; // must be "_"
+          literal += code[i++]; // must be "_"
         } else {
           // _ but followed by something different than a digit
 
@@ -280,14 +321,15 @@ export namespace Lexer {
     }
 
     function consumeE() {
-      literalData.literal += code[i++]; // "e" or "E"
+      // TODO, check if i is not outside of code
+      literal += code[i++]; // "e" or "E"
 
       // now optional "+" OR "-"
-      if (code[i] === '+' || code[i] === '-') literalData.literal += code[i++];
+      if (code[i] === '+' || code[i] === '-') literal += code[i++];
 
-      const literalBefore = literalData.literal;
+      const literalBefore = literal;
       consumeDigits();
-      const runned: boolean = literalBefore !== literalData.literal;
+      const runned: boolean = literalBefore !== literal;
 
       if (!runned)
         // TODO
@@ -297,58 +339,63 @@ export namespace Lexer {
     }
 
     function consumeHex() {
-      literalData.literal += code[i++]; // 0
-      literalData.literal += code[i++]; // x
-      while (matches(code[i], /[0-9a-fA-F]/g)) literalData.literal += code[i++];
+      // TODO, check if i is not outside of code
+      literal += code[i++]; // 0
+      literal += code[i++]; // x
+      while (matches(code[i], /[0-9a-fA-F]/g)) literal += code[i++];
       // TODO, what if matches different numeric literal now, ERROR
     }
 
     function consumeBinary() {
-      literalData.literal += code[i++]; // 0
-      literalData.literal += code[i++]; // b
-      while (matches(code[i], /[01]/g)) literalData.literal += code[i++];
+      // TODO, check if i is not outside of code
+      literal += code[i++]; // 0
+      literal += code[i++]; // b
+      while (matches(code[i], /[01]/g)) literal += code[i++];
       // TODO, what if matches different numeric literal now, ERROR
     }
 
     function consumeOctal() {
-      literalData.literal += code[i++]; // 0
-      literalData.literal += code[i++]; // o
-      while (matches(code[i], /[0-7]/g)) literalData.literal += code[i++];
+      // TODO, check if i is not outside of code
+      literal += code[i++]; // 0
+      literal += code[i++]; // o
+      while (matches(code[i], /[0-7]/g)) literal += code[i++];
       // TODO, what if matches different numeric literal now, ERROR
     }
 
-    const literalData: literalData = { literal: '', lastIdx: -1 };
-    let i = startIdx;
+    let literal = '';
+    let i = idx;
 
-    if (code[startIdx] === '0') {
-      switch (code[startIdx + 1]) {
+    const specialLiteral = /[xbo]/;
+    if (
+      code[idx] === '0' &&
+      idx + 1 < code.length &&
+      matches(code[idx + 1], specialLiteral)
+    ) {
+      switch (code[idx + 1]) {
         case 'x':
           consumeHex();
-          literalData.lastIdx = i - 1;
-          return literalData;
         case 'b':
           consumeBinary();
-          literalData.lastIdx = i - 1;
-          return literalData;
         case 'o':
           consumeOctal();
-          literalData.lastIdx = i - 1;
-          return literalData;
-        default:
-          break;
       }
+      return [
+        true,
+        { value: literal, type: lexemeType.literal, idx: idx },
+        i - 1
+      ];
     }
 
     // first digits
     consumeDigits();
 
-    if (code[i] === '.') {
+    if (i < code.length && code[i] === '.') {
       // is fraction
-      literalData.literal += code[i++]; // "."
+      literal += code[i++]; // "."
 
-      const literalBefore = literalData.literal;
+      const literalBefore = literal;
       consumeDigits();
-      const runned: boolean = literalBefore !== literalData.literal;
+      const runned: boolean = literalBefore !== literal;
 
       if (!runned)
         throw Error(
@@ -357,114 +404,197 @@ export namespace Lexer {
     }
 
     // `consumeE` could throw an error
-    if (code[i].toLowerCase() === 'e') consumeE();
+    if (i < code.length && code[i].toLowerCase() === 'e') consumeE();
 
-    literalData.lastIdx = i - 1;
-
-    return literalData;
+    return [true, { value: literal, type: lexemeType.literal, idx: idx }, i];
   }
   // #endregion
 
-  export function lexe(code: string, fileName: string): lexeme[] | never {
-    let hadError: boolean = false;
+  export function lexeNextToken(
+    code: string,
+    idx: number
+  ): nextTokenData<boolean> {
+    const whitespaces = /[ \t\n\r]/;
+    while (idx < code.length && matches(code[idx], whitespaces)) ++idx;
 
-    code += ' '; // add space at the end
+    if (idx >= code.length)
+      return { valid: false, value: { type: 'eof', codeInvalid: false }, idx };
 
-    const lexedCode: lexeme[] = [];
-    for (let charIdx: number = 0; charIdx < code.length; ++charIdx) {
-      if (matches(code[charIdx], /[ \n\t\r]/g))
-        // is whitespace
-        continue; // go to next character
-
-      // could be `//` or `/*` for comment:
-      if (code[charIdx] === '/') {
-        if (code[charIdx + 1] === '/' || code[charIdx + 1] === '*') {
-          // consume comment
-          const commentData: commentData = consumeComment(code, charIdx);
-
-          lexedCode.push({
-            value: commentData.comment,
-            type: lexemeType.comment,
-            idx: charIdx
-          });
-
-          charIdx = commentData.lastIdx;
-          continue;
-        }
-        // else, do not `continue` since it was the operator /
-      }
-
-      // character is not whitespace and is not a comment
-      // it must be an identifier, keyword, literal or operator
-
-      if (matches(code[charIdx], /[a-zA-Z_]/g)) {
-        // is keyword or identifier
-        const identifierData: identifierData = consumeIdentifier(code, charIdx);
-
-        lexedCode.push({
-          value: identifierData.identifier,
-          type: keywords.includes(identifierData.identifier)
-            ? lexemeType.keyword
-            : lexemeType.identifier,
-          idx: charIdx
-        });
-
-        charIdx = identifierData.lastIdx;
-        continue;
-      } else if (
-        /*first character of some operator matches up with current symbol. does not mean this char is also an operator stand alone, so this could throw an error in this case.*/ symbols
-          .map((s) => s[0])
-          .includes(code[charIdx])
-      ) {
-        // is symbol
-        const operatorData: operatorData = consumeOperator(code, charIdx);
-        // TODO could be a symbol with multiple chars
-
-        lexedCode.push({
-          value: operatorData.operator,
-          type: lexemeType.operator,
-          idx: charIdx
-        });
-
-        charIdx = operatorData.lastIdx;
-        continue;
-      } else if (matches(code[charIdx], /[0-9]/g)) {
-        // is numeric literal
-        const literalData: literalData = consumeNumericLiteral(code, charIdx);
-
-        lexedCode.push({
-          value: literalData.literal,
-          type: lexemeType.literal,
-          idx: charIdx
-        });
-
-        charIdx = literalData.lastIdx;
-        continue;
-      } else {
-        // do a while here to get errors which are on the same line/behind each other
-        hadError = true;
-
-        printMessage('error', {
-          id: ErrorID.invalidCharacter,
-          code: code,
-          idx: charIdx,
-          endIdx: charIdx,
-          file: fileName
-        } as any);
-
-        // throw Error(
-        //   // TODO
-        //   `Error in \`lexer\`: unkown character \`${code[charIdx]}\` at position ${charIdx}`
-        // );
+    const commentStart = /[/]/;
+    if (matches(code[idx], commentStart)) {
+      const commentStart2 = /[/*]/;
+      if (idx + 1 < code.length && matches(code[idx + 1], commentStart2)) {
+        const [valid, comment, newIdx, error] = consumeComment(code, idx);
+        return {
+          valid: valid,
+          value: valid ? comment : error,
+          idx: newIdx
+        };
       }
     }
 
-    if (!hadError) return lexedCode;
-    // else
-    console.error('code could not compile');
-    return [];
+    const identifierStart = /[a-zA-Z_]/;
+    if (matches(code[idx], identifierStart)) {
+      const [valid, identifier, newIdx, error] = consumeIdentifier(code, idx);
+      return {
+        valid: valid,
+        value: valid ? identifier : error,
+        idx: newIdx
+      };
+    }
+
+    const numberStart = /[0-9]/;
+    if (matches(code[idx], numberStart)) {
+      const [valid, number, newIdx, error] = consumeNumericLiteral(code, idx);
+      return {
+        valid: valid,
+        value: valid ? number : error,
+        idx: newIdx
+      };
+    }
+
+    const operatorsFirstChars = operators.map((e) => e[0]);
+    if (operatorsFirstChars.includes(code[idx])) {
+      const [valid, operator, newIdx, error] = consumeOperator(code, idx);
+      return {
+        valid: valid,
+        value: valid ? operator : error,
+        idx: newIdx
+      };
+    }
+
+    // TODO add string support for better errors
+
+    let invalidChars: string = '';
+    const validChars = /[ \t\n\r0-9a-zA-Z_+\-*/%&|^~!<>=:;,.(){}[\]]/;
+    while (idx < code.length && !matches(code[idx], validChars))
+      invalidChars += code[idx++];
+
+    return {
+      valid: false,
+      idx,
+      value: { type: 'invalid char', chars: invalidChars, codeInvalid: true }
+    };
   }
+
+  export function lexe(code: string, filename: string): lexeme[] | never {
+    const lexemes: lexeme[] = [];
+    for (
+      let val = lexeNextToken(code, 0);
+      val.valid || val.value.type !== 'eof';
+      val = lexeNextToken(code, val.idx)
+    ) {
+      if (val.valid) lexemes.push(val.value as lexeme); // TODO fix type
+      else lexemes.push((val.value as any).chars); // TODO just for me
+    }
+
+    return lexemes;
+  }
+
+  // export function lexe(code: string, fileName: string): lexeme[] | never {
+  //   return [];
+
+  //   let hadError: boolean = false;
+
+  //   code += ' '; // add space at the end
+
+  //   const lexedCode: lexeme[] = [];
+  //   for (let charIdx: number = 0; charIdx < code.length; ++charIdx) {
+  //     if (matches(code[charIdx], /[ \t\n\r]/g))
+  //       // is whitespace
+  //       continue; // go to next character
+
+  //     // could be `//` or `/*` for comment:
+  //     if (code[charIdx] === '/') {
+  //       if (code[charIdx + 1] === '/' || code[charIdx + 1] === '*') {
+  //         // consume comment
+  //         const commentData = consumeComment(code, charIdx);
+
+  //         lexedCode.push({
+  //           value: commentData.comment,
+  //           type: lexemeType.comment,
+  //           idx: charIdx
+  //         });
+
+  //         charIdx = commentData.lastIdx;
+  //         continue;
+  //       }
+  //       // else, do not `continue` since it was the operator /
+  //     }
+
+  //     // character is not whitespace and is not a comment
+  //     // it must be an identifier, keyword, literal or operator
+
+  //     if (matches(code[charIdx], /[a-zA-Z_]/g)) {
+  //       // is keyword or identifier
+  //       const identifierData = consumeIdentifier(code, charIdx);
+
+  //       lexedCode.push({
+  //         value: identifierData.identifier,
+  //         type: keywords.includes(identifierData.identifier)
+  //           ? lexemeType.keyword
+  //           : lexemeType.identifier,
+  //         idx: charIdx
+  //       });
+
+  //       charIdx = identifierData.lastIdx;
+  //       continue;
+  //     } else if (
+  //       /*first character of some operator matches up with current symbol. does not mean this char is also an operator stand alone, so this could throw an error in this case.*/ operators
+  //         .map((s) => s[0])
+  //         .includes(code[charIdx])
+  //     ) {
+  //       // is symbol
+  //       const operatorData = consumeOperator(code, charIdx);
+  //       // TODO could be a symbol with multiple chars
+
+  //       lexedCode.push({
+  //         value: operatorData.operator,
+  //         type: lexemeType.operator,
+  //         idx: charIdx
+  //       });
+
+  //       charIdx = operatorData.lastIdx;
+  //       continue;
+  //     } else if (matches(code[charIdx], /[0-9]/g)) {
+  //       // is numeric literal
+  //       const literalData = consumeNumericLiteral(code, charIdx);
+
+  //       lexedCode.push({
+  //         value: literalData.literal,
+  //         type: lexemeType.literal,
+  //         idx: charIdx
+  //       });
+
+  //       charIdx = literalData.lastIdx;
+  //       continue;
+  //     } else {
+  //       // do a while here to get errors which are on the same line/behind each other
+  //       hadError = true;
+
+  //       printMessage('error', {
+  //         id: ErrorID.invalidCharacter,
+  //         code: code,
+  //         idx: charIdx,
+  //         endIdx: charIdx,
+  //         file: fileName
+  //       } as any);
+
+  //       // throw Error(
+  //       //   // TODO
+  //       //   `Error in \`lexer\`: unkown character \`${code[charIdx]}\` at position ${charIdx}`
+  //       // );
+  //     }
+  //   }
+
+  //   if (!hadError) return lexedCode;
+  //   // else
+  //   console.error('code could not compile');
+  //   return [];
+  // }
 }
+
+console.log(Lexer.lexe(mustNotLexe, ''));
 
 // test: 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 // test: /* You can /* nest comments *\/ by escaping slashes */

@@ -99,8 +99,8 @@ import { inspect } from 'util';
     EXPRESSION | EXPRESSION (0, left to right)
 
   NUMERIC_EXPRESSION:
-    "NaN"
-    "Infinity"
+    "nan"
+    "infinity"
     numeric_literal
 */
 
@@ -677,6 +677,10 @@ export namespace Parser {
     else return { public: false, publicLex: undefined, ...parsePubStatement() };
   }
   // #endregion
+
+/*
+  TODO: add a comment[] field in each object to acommodate for comments
+*/
 
   export function parse(
     lexemes: Lexer.lexeme[],
