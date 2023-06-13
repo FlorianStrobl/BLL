@@ -3,7 +3,7 @@ import { printMessage, ErrorID } from './FErrorMsgs'; // @ts-ignore
 // #region constants
 const testCode: string = `
 let num: i32 /* signed */ = + 5.5e-1; // an integer
-`;
+/**/`;
 
 const mustLexe: string = `;
 /**//**/
@@ -41,6 +41,8 @@ test+
 0123456789 0b1010 0x0123456789ABCDEFabcdef 0o01234567
 
 /* You can /* nest comments *\/ by escaping slashes */
+
+- > * -> * - >* ->*
 
 _
 
@@ -210,18 +212,11 @@ export namespace Lexer {
     let i = idx + 1;
     if (code[i] === '/') {
       // comment type 1: "//"
-
       while (idxValid(i, code) && code[i] !== '\n') comment += code[i++];
-
-      // TODO
-      // not necessary since last characters could be the comment
-      // if (i >= code.length)
-      //   throw Error('Error in `consumeComment`: reached end of file');
     } else if (code[i] === '*') {
       // comment type 2: "/*"
       comment += code[i++]; // "*"
 
-      // type 2 comment `/* */`
       while (
         !(
           idxValid(i, code) &&
@@ -232,7 +227,7 @@ export namespace Lexer {
       )
         comment += code[i++];
 
-      // TODO
+      // TODO, wrong since it could be the very last two characters
       if (!idxValid(i, code) || !idxValid(i + 1, code))
         throw Error('Error in `consumeComment`: reached end of file');
 
@@ -498,7 +493,7 @@ export namespace Lexer {
   }
 }
 
-console.log(Lexer.lexe(testCode, "file"));
+console.log(Lexer.lexe(testCode, 'file'));
 // TODO, not peek() and consumeChar() = bad because not standard?
 /**
  * Comments and whitespace: // and /* * /,  , \n, \t
