@@ -1,4 +1,4 @@
-import { printMessage, ErrorID } from './FErrorMsgs'; // @ts-ignore
+import { printMessage, ErrorID } from './FErrorMsgs';
 
 // #region constants
 const testCode: string = `
@@ -494,6 +494,7 @@ export namespace Lexer {
 }
 
 console.log(Lexer.lexe(testCode, 'file'));
+
 // TODO, not peek() and consumeChar() = bad because not standard?
 /**
  * Comments and whitespace: // and /* * /,  , \n, \t
