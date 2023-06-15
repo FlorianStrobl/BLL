@@ -1,7 +1,10 @@
 // AST generation
 // let ...
 
-// todo do larser in the background
+/*
+TODO Larser aka lexing while parsing
+if invalid lexeme comes, just break parsing and continue lexing to the end, to get all the errors of the lexer
+*/
 
 import { Lexer } from './LCLexer';
 // @ts-ignore
