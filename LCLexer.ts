@@ -1,11 +1,14 @@
 import { printMessage, ErrorID } from './FErrorMsgs';
 
 // #region constants
-const testCode: string = `
+const testCodes: string[] = [
+  `
 let num: i32 /* signed */ = + 5.5e-1; // an integer
-/**/`;
+/**/`
+];
 
-const mustLexe: string = `;
+const mustLexe: string[] = [
+  `;
 /**//**/
 /**/5
 /**/let
@@ -54,9 +57,11 @@ _
 
 ~~5
 
-;`;
+;`
+];
 
-const mustNotLexe: string = `
+const mustNotLexe: string[] = [
+  `
 \\ \` ' " ? @ # $
 
 5. 5e1. 5e1.2 5.1e 5.e 5e. 5e
@@ -71,7 +76,8 @@ const mustNotLexe: string = `
 
 */
 
-/*`;
+/*`
+];
 
 const keywords: string[] = [
   'import', // imports all public identifiers from other files
@@ -154,6 +160,7 @@ export namespace Lexer {
     operator = '#operator' // +
   }
 
+  // TODO
   type errorToken =
     | { codeInvalid: false; type: 'eof' /*reached end of file*/ }
     | {
@@ -167,12 +174,12 @@ export namespace Lexer {
     | {
         valid: true;
         value: lexeme;
-        idx: number;
+        newidx: number;
       }
     | {
         valid: false;
         value: errorToken;
-        idx: number;
+        newidx: number;
       };
   // #endregion
 
@@ -203,7 +210,7 @@ export namespace Lexer {
           : lexemeType.identifier,
         idx
       },
-      idx: i
+      newidx: i
     };
   }
 
@@ -237,7 +244,7 @@ export namespace Lexer {
         return {
           valid: false,
           value: { codeInvalid: true, type: 'eof in /* comment' },
-          idx: i
+          newidx: i
         };
 
       // idx valid
@@ -245,7 +252,7 @@ export namespace Lexer {
         return {
           valid: false,
           value: { codeInvalid: true, type: 'eof in /* comment' },
-          idx: i
+          newidx: i
         };
 
       comment += code[i++] + code[i++];
@@ -255,7 +262,7 @@ export namespace Lexer {
     return {
       valid: true,
       value: { value: comment, type: lexemeType.comment, idx },
-      idx: i
+      newidx: i
     };
   }
 
@@ -350,7 +357,7 @@ export namespace Lexer {
       return {
         valid: true,
         value: { value: literal, type: lexemeType.literal, idx },
-        idx: i
+        newidx: i
       };
     }
 
@@ -377,7 +384,7 @@ export namespace Lexer {
     return {
       valid: true,
       value: { value: literal, type: lexemeType.literal, idx },
-      idx: i
+      newidx: i
     };
   }
 
@@ -407,6 +414,7 @@ export namespace Lexer {
     */
     while (!symbols.includes(operator)) {
       if (operator === '') {
+        // TODO return the error
         // invalid operator to begin with
         printMessage('error', {
           id: ErrorID.invalidCharacter,
@@ -431,7 +439,7 @@ export namespace Lexer {
     return {
       valid: true,
       value: { value: operator, type: lexemeType.operator, idx },
-      idx: i
+      newidx: i
     };
   }
   // #endregion
@@ -441,7 +449,11 @@ export namespace Lexer {
     while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
 
     if (!idxValid(idx, code))
-      return { valid: false, value: { type: 'eof', codeInvalid: false }, idx };
+      return {
+        valid: false,
+        value: { type: 'eof', codeInvalid: false },
+        newidx: idx
+      };
 
     const commentStart = /[/]/;
     if (matches(code[idx], commentStart)) {
@@ -474,7 +486,7 @@ export namespace Lexer {
 
     return {
       valid: false,
-      idx,
+      newidx: idx,
       value: { type: 'invalid char', chars: invalidChars, codeInvalid: true }
     };
   }
@@ -493,8 +505,8 @@ export namespace Lexer {
 
           code: code, // the code
           file: filename, // name of the file where the error occured
-          idx: val.idx, // start position in string with the error
-          endIdx: val.idx, // end position in string with the error
+          idx: val.newidx, // start position in string with the error
+          endIdx: val.newidx, // end position in string with the error
 
           msg: '', // the error message to print
 
@@ -503,7 +515,7 @@ export namespace Lexer {
       }
 
       yield val;
-      val = lexeNextToken(code, val.idx);
+      val = lexeNextToken(code, val.newidx);
     }
 
     return undefined;
