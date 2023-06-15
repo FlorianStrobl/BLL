@@ -218,7 +218,7 @@ export namespace Lexer {
   function consumeComment(code: string, idx: number): nextToken {
     let comment: string = code[idx];
 
-    let i = idx + 1;
+    let i = idx + 1; /*assertion: index is valid*/
     if (code[i] === '/') {
       // comment type 1: "//"
       while (idxValid(i, code) && code[i] !== '\n') comment += code[i++];
@@ -226,6 +226,7 @@ export namespace Lexer {
       // comment type 2: "/*"
       comment += code[i++]; // "*"
 
+      // TODO
       console.log('here', code, i);
 
       while (
@@ -462,7 +463,7 @@ export namespace Lexer {
         return consumeComment(code, idx);
     }
 
-    const identifierStart = /[a-zA-Z_]/;
+    const identifierStart = /[_a-zA-Z]/;
     if (matches(code[idx], identifierStart)) {
       return consumeIdentifier(code, idx);
     }
@@ -499,7 +500,7 @@ export namespace Lexer {
 
     while (val.value.type !== 'eof') {
       if (!val.valid) {
-        // TODO error message
+        // TODO add full error message
         printMessage('error', {
           id: ErrorID.invalidCharacter,
 
@@ -522,7 +523,6 @@ export namespace Lexer {
   }
 
   export function lexe(code: string, filename: string): lexeme[] | undefined {
-    // TODO, add error messages
     const lexemes: lexeme[] = [];
 
     for (const token of Lexer.lexeNextTokenIter(code, filename))
