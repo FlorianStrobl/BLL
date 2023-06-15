@@ -40,7 +40,7 @@ test+
 01_23_45_67_89
 0123456789 0b1010 0x0123456789ABCDEFabcdef 0o01234567
 
-/* You can /* nest comments *\/ by escaping slashes */
+/* You can /* nest comments *\\/ by escaping slashes */
 
 - > * -> * - >* ->*
 
@@ -56,7 +56,7 @@ _
 
 ;`;
 
-const mustNotLexe: string = `;
+const mustNotLexe: string = `
 \\ \` ' " ? @ # $
 
 5. 5e1. 5e1.2 5.1e 5.e 5e. 5e
@@ -70,7 +70,8 @@ const mustNotLexe: string = `;
 /regexp/
 
 */
-;`;
+
+/*`;
 
 const keywords: string[] = [
   'import', // imports all public identifiers from other files
@@ -159,7 +160,8 @@ export namespace Lexer {
         codeInvalid: true;
         type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
       }
-    | { codeInvalid: true; type: 'invalid char'; chars: string };
+    | { codeInvalid: true; type: 'invalid char'; chars: string }
+    | { codeInvalid: true; type: 'eof in /* comment' };
 
   type nextToken =
     | {
@@ -217,28 +219,36 @@ export namespace Lexer {
       // comment type 2: "/*"
       comment += code[i++]; // "*"
 
+      console.log('here', code, i);
+
       while (
-        !(
-          idxValid(i, code) &&
-          code[i] === '*' &&
-          idxValid(i + 1, code) &&
-          code[i + 1] === '/'
-        )
-      )
+        idxValid(i, code) &&
+        idxValid(i + 1, code) &&
+        !(code[i] === '*' && code[i + 1] === '/')
+      ) {
+        console.log('exec', code, i);
         comment += code[i++];
+      }
+
+      console.log('after exec');
 
       // TODO, wrong since it could be the very last two characters
       if (!idxValid(i, code) || !idxValid(i + 1, code))
-        throw Error('Error in `consumeComment`: reached end of file');
+        return {
+          valid: false,
+          value: { codeInvalid: true, type: 'eof in /* comment' },
+          idx: i
+        };
 
+      // idx valid
       if (code[i] !== '*' || code[i + 1] !== '/')
-        throw Error(
-          // TODO
-          'Error in `consumeComment`: comment of type "/*" was not finished properly.'
-        );
+        return {
+          valid: false,
+          value: { codeInvalid: true, type: 'eof in /* comment' },
+          idx: i
+        };
 
-      comment += '*/'; // code[i] + code[i+1]
-      i += 2;
+      comment += code[i++] + code[i++];
     }
     // else not a comment, handled before calling this function
 
@@ -426,7 +436,7 @@ export namespace Lexer {
   }
   // #endregion
 
-  export function lexeNextToken(code: string, idx: number): nextToken {
+  function lexeNextToken(code: string, idx: number): nextToken {
     const whitespaces = /[ \t\n\r]/;
     while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
 
@@ -470,11 +480,28 @@ export namespace Lexer {
   }
 
   export function* lexeNextTokenIter(
-    code: string
+    code: string,
+    filename: string
   ): Generator<nextToken, undefined> {
     let val = lexeNextToken(code, 0);
 
-    while (val.valid || val.value.type !== 'eof') {
+    while (val.value.type !== 'eof') {
+      if (!val.valid) {
+        // TODO error message
+        printMessage('error', {
+          id: ErrorID.invalidCharacter,
+
+          code: code, // the code
+          file: filename, // name of the file where the error occured
+          idx: val.idx, // start position in string with the error
+          endIdx: val.idx, // end position in string with the error
+
+          msg: '', // the error message to print
+
+          compilerStep: 'lexer' // the part in the compiler where it caused the error
+        });
+      }
+
       yield val;
       val = lexeNextToken(code, val.idx);
     }
@@ -482,18 +509,31 @@ export namespace Lexer {
     return undefined;
   }
 
-  export function lexe(code: string, filename: string): lexeme[] | never {
+  export function lexe(code: string, filename: string): lexeme[] | undefined {
     // TODO, add error messages
     const lexemes: lexeme[] = [];
 
-    for (const token of Lexer.lexeNextTokenIter(code))
+    for (const token of Lexer.lexeNextTokenIter(code, filename))
       if (token.valid) lexemes.push(token.value);
+      else return undefined;
 
     return lexemes;
   }
 }
 
-console.log(Lexer.lexe(testCode, 'file'));
+/*
+test:
+""
+" "
+" \t\n\r"
+"/*"
+"/* "
+"/**"
+"/** "
+"/*\/"
+*/
+
+console.log(Lexer.lexe(`/*`, 'file'));
 
 // TODO, not peek() and consumeChar() = bad because not standard?
 /**
