@@ -1,3 +1,12 @@
+/*
+  TODO
+  syntax errors
+  type error
+  warning
+  runtime errors??
+  https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error
+*/
+
 export const enum ErrorID {
   unexpectedEndOfFile = 0x0000,
   invalidCharacter = 0x0001,

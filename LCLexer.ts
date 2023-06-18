@@ -1,5 +1,8 @@
 import { printMessage, ErrorID } from './FErrorMsgs';
 
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
+
 // #region constants
 const testCodes: string[] = [
   `
@@ -468,7 +471,8 @@ export namespace Lexer {
       return consumeOperator(code, idx);
     }
 
-    // TODO add string support for better errors
+    // TODO add string support for better errors, that means also \u{xxxx}
+    // and \", \\, \n, \r, \t
 
     let invalidChars: string = '';
     const validChars = /[ \t\n\r0-9a-zA-Z_\-+*/%&|^~!<>=:;,.(){}[\]]/;

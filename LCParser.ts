@@ -681,7 +681,7 @@ export namespace Parser {
   }
   // #endregion
 
-/*
+  /*
   TODO: add a comment[] field in each object to acommodate for comments
 */
 
@@ -689,7 +689,7 @@ export namespace Parser {
     lexemes: Lexer.token[],
     code: string,
     fileName: string
-  ): statementT[] {
+  ): statementT[] | undefined {
     _lexemes = lexemes.filter((l) => l.type !== lexemeTypes.comment);
     _code = code;
     _fileName = fileName;
@@ -697,6 +697,8 @@ export namespace Parser {
     // TODO, ast must have comments in it, in order to print them with the formatter
     let program: statementT[] = [];
     while (!isAtEnd()) program.push(parseStatement());
+
+    // TODO, on error return undefined
 
     return program;
   }

@@ -2,7 +2,6 @@
 
 // TODO, if intermediate results are stored in "%Z[id]", then pad all identifier with not "Z"
 
-import { Lexer } from './LCLexer';
 import { Parser } from './LCParser';
 
 export namespace Compiler {
@@ -11,7 +10,10 @@ export namespace Compiler {
     varCounter: { c: number } = { c: 0 }
   ): string {
     function isLLVMIRRegisterOrLiteral(str: string): boolean {
-      return str.match(/^%[0-9a-zA-Z_]+$/g) !== null || str.match(/^[0-9e+-_]+$/g) !== null;
+      return (
+        str.match(/^%[0-9a-zA-Z_]+$/g) !== null ||
+        str.match(/^[0-9e+-_]+$/g) !== null
+      );
     }
 
     switch (exp.type) {
@@ -42,216 +44,324 @@ export namespace Compiler {
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = or i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '^':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = xor i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '&':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = and i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '==':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = icmp eq i1 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '!=':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = icmp ne i1 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '<':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = gr slt i1 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '>':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = icmp sgt i1 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '<=':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = icmp sle i1 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '>=':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = icmp sge i1 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '<<':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = shl i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '>>':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = rightShift i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '+':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = add i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '-':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = sub i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '*':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = mul i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '/':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = sdiv i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '%':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = srem i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '**':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = exp i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
           case '***':
             leftSide = todoCompileSimpleExpression(exp.left, varCounter);
             leftSideVarId = varCounter.c - 1;
             rightSide = todoCompileSimpleExpression(exp.right, varCounter);
             rightSideVarId = varCounter.c - 1;
-            return `${isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'}${
+            return `${
+              isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
+            }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
             }${`%Z${varCounter.c++} = root i8 ${
-              isLLVMIRRegisterOrLiteral(leftSide) ? leftSide : '%Z' + leftSideVarId
+              isLLVMIRRegisterOrLiteral(leftSide)
+                ? leftSide
+                : '%Z' + leftSideVarId
             }, ${
-              isLLVMIRRegisterOrLiteral(rightSide) ? rightSide : '%Z' + rightSideVarId
+              isLLVMIRRegisterOrLiteral(rightSide)
+                ? rightSide
+                : '%Z' + rightSideVarId
             }`}\n`;
         }
       case 'grouping':
