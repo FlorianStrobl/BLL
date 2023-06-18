@@ -388,6 +388,8 @@ export namespace Lexer {
     // `consumeE` could throw an error
     if (idxValid(i, code) && code[i].toLowerCase() === 'e') consumeE();
 
+    // TODO invalid if followed by an alpha numeric character
+
     return {
       valid: true,
       value: { lexeme: literal, type: lexemeType.literal, idx },
