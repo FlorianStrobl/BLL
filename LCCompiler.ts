@@ -257,10 +257,10 @@ export namespace Compiler {
       case 'grouping':
         return todoCompileSimpleExpression(exp.value, varCounter);
       case 'literal':
-        const literalValue = Number(exp.literal.value);
+        const literalValue = Number(exp.literal.lexeme);
         return literalValue.toString();
       case 'identifier':
-        return '%' + exp.identifier.value;
+        return '%' + exp.identifier.lexeme;
       case 'identifier-path':
         return 'NOT DONE YET';
       case 'functionCall':
@@ -276,13 +276,13 @@ export namespace Compiler {
 
     const funcReturnType = 'i8';
 
-    const funcIdentifier = func.identifier.value;
+    const funcIdentifier = func.identifier.lexeme;
 
     let funcParameters = '';
     for (const [key, param] of Object.entries(func.body.params.args))
       if (Number(key) === func.body.params.args.length - 1)
-        funcParameters += `${'i8'} %${param.value}`;
-      else funcParameters += `${'i8'} %${param.value}, `;
+        funcParameters += `${'i8'} %${param.lexeme}`;
+      else funcParameters += `${'i8'} %${param.lexeme}, `;
 
     let idCounter = { c: 0 };
     const funcBody = todoCompileSimpleExpression(func.body.body, idCounter);

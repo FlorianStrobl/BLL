@@ -5,7 +5,7 @@ import { Parser } from './LCParser';
 import { Lexer } from './LCLexer';
 
 export namespace prettier {
-  type lexemT = Lexer.lexeme;
+  type lexemT = Lexer.token;
 
   function printExpression(expression: Parser.expressionT): string {
     // if two identifiers or operators are following one each other, put a space in between!!
@@ -21,9 +21,9 @@ export namespace prettier {
       case 'grouping':
         return `(${printExpression(expression.value)})`;
       case 'literal':
-        return expression.literal.value;
+        return expression.literal.lexeme;
       case 'identifier':
-        return expression.identifier.value;
+        return expression.identifier.lexeme;
       case 'identifier-path':
         return 'TODO';
       case 'functionCall':
@@ -35,7 +35,7 @@ export namespace prettier {
   function printStatement(statement: Parser.statementT): string {
     function printImportStatement(path: lexemT[]): string {
       let str = '';
-      for (const p of path) str += p.value;
+      for (const p of path) str += p.lexeme;
       return str;
     }
 
@@ -51,12 +51,12 @@ export namespace prettier {
           namespaceBody.push(printStatement(s));
         }
         return `${statement.public ? 'pub ' : ''}namespace ${
-          statement.identifier.value
+          statement.identifier.lexeme
         } {\n${namespaceBody.join('\n')}\n}`;
       case 'let':
         const expression = printExpression(statement.body);
         return `${statement.public ? 'pub ' : ''}let ${
-          statement.identifier.value
+          statement.identifier.lexeme
         } = ${expression};`;
     }
   }

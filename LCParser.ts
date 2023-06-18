@@ -127,7 +127,7 @@ export namespace Parser {
   // Recursive Descent Parsing
 
   // #region types
-  type lexemT = Lexer.lexeme;
+  type lexemT = Lexer.token;
 
   type importBodyT = { path: lexemT[]; semicolon: lexemT };
 
@@ -225,7 +225,7 @@ export namespace Parser {
   // #endregion
 
   let idx: number = 0; // larser
-  let _lexemes: Lexer.lexeme[] = []; // TODO, real time adding of lexems (larser)
+  let _lexemes: Lexer.token[] = []; // TODO, real time adding of lexems (larser)
   let _code: string = '';
   let _fileName: string = '';
   const lexemeTypes = Lexer.lexemeType;
@@ -235,7 +235,7 @@ export namespace Parser {
     return idx >= _lexemes.length;
   }
 
-  function peek(): Lexer.lexeme | undefined {
+  function peek(): Lexer.token | undefined {
     if (isAtEnd()) return undefined;
     return _lexemes[idx];
   }
@@ -245,22 +245,22 @@ export namespace Parser {
   //   return _lexemes[idx + 1];
   // }
 
-  function previous(): Lexer.lexeme {
-    if (idx === 0) return undefined as unknown as Lexer.lexeme;
+  function previous(): Lexer.token {
+    if (idx === 0) return undefined as unknown as Lexer.token;
     return _lexemes[idx - 1];
   }
 
-  function advance(): Lexer.lexeme | undefined {
+  function advance(): Lexer.token | undefined {
     if (isAtEnd()) return undefined;
     return idx++, previous();
   }
 
   function check(value: string): boolean {
     if (isAtEnd()) return false;
-    return peek()?.value === value; // peek() only undefined if isAtEnd() === false
+    return peek()?.lexeme === value; // peek() only undefined if isAtEnd() === false
   }
 
-  function match(...tokens: string[]): Lexer.lexeme | undefined {
+  function match(...tokens: string[]): Lexer.token | undefined {
     for (const token of tokens) if (check(token)) return advance();
     return undefined;
   }
@@ -326,7 +326,7 @@ export namespace Parser {
     while (match('==', '!=')) {
       left = {
         type: 'binary',
-        operator: previous().value as '==',
+        operator: previous().lexeme as '==',
         operatorLex: previous(),
         left,
         right: parseExprLvl4()
@@ -342,7 +342,7 @@ export namespace Parser {
     while (match('<', '>', '<=', '>=')) {
       left = {
         type: 'binary',
-        operator: previous().value as '<',
+        operator: previous().lexeme as '<',
         operatorLex: previous(),
         left,
         right: parseExprLvl5()
@@ -358,7 +358,7 @@ export namespace Parser {
     while (match('<<', '>>')) {
       left = {
         type: 'binary',
-        operator: previous().value as '<<',
+        operator: previous().lexeme as '<<',
         operatorLex: previous(),
         left,
         right: parseExprLvl6()
@@ -374,7 +374,7 @@ export namespace Parser {
     while (match('+', '-')) {
       left = {
         type: 'binary',
-        operator: previous().value as '+',
+        operator: previous().lexeme as '+',
         operatorLex: previous(),
         left,
         right: parseExprLvl7()
@@ -390,7 +390,7 @@ export namespace Parser {
     while (match('*', '/', '%')) {
       left = {
         type: 'binary',
-        operator: previous().value as '*',
+        operator: previous().lexeme as '*',
         operatorLex: previous(),
         left,
         right: parseExprLvl8()
@@ -408,7 +408,7 @@ export namespace Parser {
     if (match('**', '***')) {
       left = {
         type: 'binary',
-        operator: previous().value as '**',
+        operator: previous().lexeme as '**',
         operatorLex: previous(),
         left,
         right: parseExprLvl8() // same level because precedence order
@@ -423,7 +423,7 @@ export namespace Parser {
     if (match('-', '+', '~')) {
       return {
         type: 'unary',
-        operator: previous().value as '-',
+        operator: previous().lexeme as '-',
         operatorLex: previous(),
         body: parseExprLvl9()
       };
@@ -451,7 +451,7 @@ export namespace Parser {
       // TODO, x, x(), x.y, x.y() but not x.y().z
       let identifier = advance()!;
 
-      if (peek()!.value !== '.') {
+      if (peek()!.lexeme !== '.') {
         let openBrace;
         if ((openBrace = match('('))) {
           let callArguments = [parseExpression()]; // TODO TODO because there can be "," in between!
@@ -472,14 +472,14 @@ export namespace Parser {
       // is id1.id2
 
       const path: any = [identifier];
-      let dot: Lexer.lexeme | undefined;
+      let dot: Lexer.token | undefined;
       while ((dot = match('.'))) {
         path.push(dot);
         if (peek()!.type === lexemeTypes.identifier) path.push(advance());
         else throw Error('`identifier . not an identifier` is not ok'); // TODO
       }
 
-      let openBrace: Lexer.lexeme | undefined;
+      let openBrace: Lexer.token | undefined;
       if ((openBrace = match('('))) {
         let parseBody = parseExpression(); // TODO TODO because there can be "," in between!
         let closingBrace = match(')');
@@ -504,20 +504,20 @@ export namespace Parser {
   }
 
   function parseFuncExpression(): funcExpressionT {
-    let openingBracket: Lexer.lexeme | undefined;
+    let openingBracket: Lexer.token | undefined;
     if (!(openingBracket = match('(')))
       throw Error('functions must be opend with ('); // TODO
 
     let params: {
-      args: Lexer.lexeme[];
-      commas: Lexer.lexeme[];
+      args: Lexer.token[];
+      commas: Lexer.token[];
     } = parseFuncExprArgs();
 
-    let closingBracket: Lexer.lexeme | undefined;
+    let closingBracket: Lexer.token | undefined;
     if (!(closingBracket = match(')')))
       throw Error('functions must be closed with )'); // TODO
 
-    let arrow: Lexer.lexeme | undefined;
+    let arrow: Lexer.token | undefined;
     if (!(arrow = match('->'))) throw Error('functions must have a ->'); // TODO
 
     const body: expressionT = parseExpression();
@@ -534,7 +534,7 @@ export namespace Parser {
     const args: lexemT[] = [];
     const commas: lexemT[] = [];
 
-    while (peek()?.value !== ')') {
+    while (peek()?.lexeme !== ')') {
       if (args.length > 0) {
         let lastComma = match(',');
         if (lastComma === undefined)
@@ -542,10 +542,10 @@ export namespace Parser {
         commas.push(lastComma);
 
         // TODO: warning for trailing commas
-        if (peek()?.value === ')') break; // had trailing comma
+        if (peek()?.lexeme === ')') break; // had trailing comma
       }
 
-      let identifier: Lexer.lexeme | undefined = advance();
+      let identifier: Lexer.token | undefined = advance();
       if (
         identifier === undefined ||
         identifier.type !== lexemeTypes.identifier
@@ -554,7 +554,7 @@ export namespace Parser {
 
       args.push(identifier);
 
-      let doublePoint: Lexer.lexeme | undefined;
+      let doublePoint: Lexer.token | undefined;
       if ((doublePoint = match(':'))) {
         let typeAnnotation = parseFuncArgExprType();
         // @ts-expect-error
@@ -572,33 +572,33 @@ export namespace Parser {
   function parseLetStatement(): letStatementT {
     // matched "let" lastly
 
-    const identifier: Lexer.lexeme | undefined = advance();
+    const identifier: Lexer.token | undefined = advance();
     if (identifier?.type !== lexemeTypes.identifier)
       throw Error('invalid token type in parse let statement'); // TODO
 
-    let assigmentOperator: Lexer.lexeme | undefined;
+    let assigmentOperator: Lexer.token | undefined;
     if (!(assigmentOperator = match('=')))
       throw Error("Expected '=' in let statement");
 
     const body: expressionT = parseExpression();
 
-    let semicolon: Lexer.lexeme | undefined;
+    let semicolon: Lexer.token | undefined;
     if (!(semicolon = match(';'))) throw Error("Expected ';' in let statement");
 
     return { identifier, body, assigmentOperator, semicolon };
   }
 
   function parseNamespaceStatement(): namespaceStatementT {
-    const identifier: Lexer.lexeme | undefined = advance();
+    const identifier: Lexer.token | undefined = advance();
     if (identifier?.type !== lexemeTypes.identifier)
       throw Error('namespaces must have a name'); // TODO
 
-    let openingBracket: Lexer.lexeme | undefined;
+    let openingBracket: Lexer.token | undefined;
     if (!(openingBracket = match('{')))
       throw Error('namespaces must be opend by a bracket'); // TODO
 
     const body: statementT[] = [];
-    let closingBracket: Lexer.lexeme | undefined;
+    let closingBracket: Lexer.token | undefined;
     while (!(closingBracket = match('}'))) body.push(parseStatement());
 
     return {
@@ -625,14 +625,14 @@ export namespace Parser {
   function parseImportStatement(): importBodyT {
     function parseDots() {
       // assert, current character is a dot
-      let dot: Lexer.lexeme | undefined = match('.');
+      let dot: Lexer.token | undefined = match('.');
 
       if (dot === undefined) throw Error('INTERNAL ERROR, assertion wasnt met');
 
       path.push(dot);
       if ((dot = match('.'))) path.push(dot);
 
-      let slash: Lexer.lexeme | undefined;
+      let slash: Lexer.token | undefined;
       if (!(slash = match('/')))
         throw Error(
           'error in import statement, starting dots must be followed by a /'
@@ -642,9 +642,9 @@ export namespace Parser {
 
     let path: lexemT[] = [];
 
-    if (peek()?.value === '.') parseDots();
+    if (peek()?.lexeme === '.') parseDots();
 
-    let semicolon: Lexer.lexeme | undefined;
+    let semicolon: Lexer.token | undefined;
     while (!(semicolon = match(';'))) {
       let identifier = advance();
       if (
@@ -653,11 +653,11 @@ export namespace Parser {
       ) {
         path.push(identifier);
 
-        let slash: Lexer.lexeme | undefined;
+        let slash: Lexer.token | undefined;
         if ((slash = match('/'))) {
           path.push(slash);
           // its /./ or /../
-          while (peek()?.value === '.') parseDots();
+          while (peek()?.lexeme === '.') parseDots();
           //else: its folder/value
         }
       } else throw Error('import statement must have identifiers in it');
@@ -686,7 +686,7 @@ export namespace Parser {
 */
 
   export function parse(
-    lexemes: Lexer.lexeme[],
+    lexemes: Lexer.token[],
     code: string,
     fileName: string
   ): statementT[] {

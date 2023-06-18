@@ -146,8 +146,9 @@ const symbols: string[] = [
 
 export namespace Lexer {
   // #region types
-  export interface lexeme {
-    value: string;
+  // https://stackoverflow.com/questions/14954721/what-is-the-difference-between-a-token-and-a-lexeme BLL
+  export interface token {
+    lexeme: string;
     type: lexemeType;
     idx: number;
   }
@@ -157,7 +158,7 @@ export namespace Lexer {
     literal = '#literal', // 5.3e-4
     keyword = '#keyword', // let
     identifier = '#identifier', // identifier
-    operator = '#operator' // +
+    symbol = '#symbol' // +
   }
 
   // TODO
@@ -173,7 +174,7 @@ export namespace Lexer {
   type nextToken =
     | {
         valid: true;
-        value: lexeme;
+        value: token;
         newidx: number;
       }
     | {
@@ -206,7 +207,7 @@ export namespace Lexer {
     return {
       valid: true,
       value: {
-        value: identifier,
+        lexeme: identifier,
         type: keywords.includes(identifier)
           ? lexemeType.keyword
           : lexemeType.identifier,
@@ -264,7 +265,7 @@ export namespace Lexer {
 
     return {
       valid: true,
-      value: { value: comment, type: lexemeType.comment, idx },
+      value: { lexeme: comment, type: lexemeType.comment, idx },
       newidx: i
     };
   }
@@ -359,7 +360,7 @@ export namespace Lexer {
       }
       return {
         valid: true,
-        value: { value: literal, type: lexemeType.literal, idx },
+        value: { lexeme: literal, type: lexemeType.literal, idx },
         newidx: i
       };
     }
@@ -386,7 +387,7 @@ export namespace Lexer {
 
     return {
       valid: true,
-      value: { value: literal, type: lexemeType.literal, idx },
+      value: { lexeme: literal, type: lexemeType.literal, idx },
       newidx: i
     };
   }
@@ -428,7 +429,7 @@ export namespace Lexer {
 
     return {
       valid: true,
-      value: { value: operator, type: lexemeType.operator, idx },
+      value: { lexeme: operator, type: lexemeType.symbol, idx },
       newidx: i
     };
   }
@@ -485,9 +486,9 @@ export namespace Lexer {
     code: string,
     filename: string
   ): Generator<nextToken, undefined> {
-    let val = lexeNextToken(code, 0);
+    let val: nextToken = lexeNextToken(code, 0);
 
-    while (val.value.type !== 'eof') {
+    while (val?.value?.type !== 'eof') {
       if (!val.valid) {
         // TODO add full error message
         printMessage('error', {
@@ -511,8 +512,8 @@ export namespace Lexer {
     return undefined;
   }
 
-  export function lexe(code: string, filename: string): lexeme[] | undefined {
-    const lexemes: lexeme[] = [];
+  export function lexe(code: string, filename: string): token[] | undefined {
+    const lexemes: token[] = [];
 
     for (const token of Lexer.lexeNextTokenIter(code, filename))
       if (token.valid) lexemes.push(token.value);
@@ -535,6 +536,64 @@ test:
 */
 
 console.log(Lexer.lexe(`/*`, 'file'));
+
+/*
+// JavaScript/TypeScript quickstart guide
+// This is a comment.
+/*This is also a comment*\/
+// Comments are ignored by the programming language.
+
+// "myFunction" is a function which takes a single number
+// as an argument and returns a number when executed
+function myFunction(x: number): number {
+  // with the "let" keyword, one can define a variable
+  let myVariable: number = 5;
+  // variables can be modified by using the "=" operator
+  myVariable = myVariable + 1;
+  // "myVariable" is now (5 + 1) aka 6
+
+  // while the condition "myVariable != 8" is true
+  // the code in the "{ }" block will be executed
+  while (myVariable != 8) {
+    // the "++" operator increases the variable by one
+    ++myVariable;
+  }
+
+  // an "if" statement checks the condition
+  // and executes the "{ }" block, if the condition was true
+  if (myVariable == 8) {
+    // "console.log" prints the argument,
+    // in the brackeds to the console
+    console.log(
+      'hey' /*text literals called "strings" must be surrounded by quotes*\/
+    );
+  } else {
+    // if the "if" condition was false, the "else" block is executed
+
+    console.log(false);
+  }
+
+  // an array is a list of values
+  let numberArray: number[] = [0, 1, 2, 3];
+
+  // works like the "while" loop
+  for (
+    let i = 0 /* executed before the first iteration *\/;
+    i < 4 /* condition, gets checked before executing the next iteration *\/;
+    ++i /* gets executed at the end of each iteration *\/
+  ) {
+    // with the "[ ]" operator, one can get the value
+    // at the given position where position 0 is the first element
+    myVariable = myVariable + numberArray[i];
+  }
+
+  // myVariable is at this point 14
+  return myVariable + x;
+}
+
+// a function can be called with "( )"
+let returnedValue: number = myFunction(5);
+*/
 
 // TODO, not peek() and consumeChar() = bad because not standard?
 /**
