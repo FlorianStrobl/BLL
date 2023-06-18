@@ -1,5 +1,6 @@
 // prettier with syntax highlighting and bracket matching (see VSCode)
 // + code region folding
+// takes the ast as input and returns a string with annotations for VSCode
 
 import { Parser } from './LCParser';
 import { Lexer } from './LCLexer';

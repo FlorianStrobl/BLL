@@ -3,6 +3,7 @@
   syntax errors
   type error
   warning
+  Compilation errors
   runtime errors??
   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error
 */

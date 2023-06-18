@@ -25,14 +25,14 @@ const mustLexe: string[] = [
 5+
 
 let/**/
-// let"hey"
-letlet
-lettest
-// let+
+// let"hey", lexer error!
+letlet // identifier
+lettest // identifier
+// let+, lexer error!
 
 test/**/
-// test"hey"
-testlet
+// test"hey", lexer error!
+testlet // identifier
 testtest
 test+
 
@@ -40,7 +40,7 @@ test+
 +5
 // +let, lexer error!
 +test
-+*
++* // two operators
 
 5 5.1e2 // TODO: 51.e-3
 01_23_45_67_89
@@ -205,7 +205,7 @@ export namespace Lexer {
     while (idxValid(i, code) && matches(code[i], alphaNumeric))
       identifier += code[i++];
 
-    // TODO check if it is followed by something else than just whitespace, because that would be invalid
+    // TODO check if it is followed by something else than just whitespace, because that would be invalid (if its a string at least, for keyword and for identifier)
 
     return {
       valid: true,
@@ -429,6 +429,8 @@ export namespace Lexer {
       operator = operator.slice(0, operator.length - 1);
       i--;
     }
+
+    // TODO invalid if followed by a keyword without having a space in between
 
     return {
       valid: true,
