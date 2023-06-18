@@ -35,7 +35,7 @@ test+
 
 +/**/
 +5
-// +let
+// +let, lexer error!
 +test
 +*
 
@@ -43,7 +43,7 @@ test+
 01_23_45_67_89
 0123456789 0b1010 0x0123456789ABCDEFabcdef 0o01234567
 
-/* You can /* nest comments *\\/ by escaping slashes */
+/* You can /* nest comments *e/ by escaping slashes */
 
 - > * -> * - >* ->*
 
@@ -194,12 +194,14 @@ export namespace Lexer {
   // #region consume functions
   // assert: an identifier is at idx
   function consumeIdentifier(code: string, idx: number): nextToken {
+    let i: number = idx;
     let identifier: string = '';
-    let i = idx;
 
     const alphaNumeric = /[_a-zA-Z0-9]/;
     while (idxValid(i, code) && matches(code[i], alphaNumeric))
       identifier += code[i++];
+
+    // TODO check if it is followed by something else than just whitespace, because that would be invalid
 
     return {
       valid: true,
@@ -216,9 +218,9 @@ export namespace Lexer {
 
   // assert: a comment is at idx
   function consumeComment(code: string, idx: number): nextToken {
+    let i: number = idx + 1; /*assertion: index is valid*/
     let comment: string = code[idx];
 
-    let i = idx + 1; /*assertion: index is valid*/
     if (code[i] === '/') {
       // comment type 1: "//"
       while (idxValid(i, code) && code[i] !== '\n') comment += code[i++];
@@ -335,8 +337,8 @@ export namespace Lexer {
       // TODO, what if matches different numeric literal now, ERROR
     }
 
-    let literal = '';
-    let i = idx;
+    let i: number = idx;
+    let literal: string = '';
 
     const specialLiteral = /[xbo]/;
     if (
@@ -391,32 +393,22 @@ export namespace Lexer {
 
   // assert: an operator is at idx
   function consumeOperator(code: string, idx: number): nextToken {
-    let operator = '';
-    let i = idx;
-
-    operator = code[i++]; // first char of the operator
+    let i: number = idx;
+    let operator: string = code[i++];
 
     while (
       idxValid(i, code) &&
-      symbols
-        // only take the amount of characters needed
-        .map((s) => [...s].slice(0, operator.length + 1).join(''))
-        // check if this operator and next are included
-        .includes(operator + code[i])
+      symbols.some((symbol) => symbol.startsWith(operator + code[i]))
     )
       operator += code[i++];
 
-    /* Handles the case where
-    operator "->*" exists but "->" does not,
-    thought the later one is used in the code and would get parsed incorrectly
-
-    "->" would be splited up into "-" and ">", thought the later one gets parsed in the next iteration of this function call
-    if one of those two splited up chars is invalid, Error gets thrown
-    */
+    // consider "->*" valid and "->" not
     while (!symbols.includes(operator)) {
       if (operator === '') {
+        // consider "-", ">" and "->" invalid
+        // but "->*" valid, and got "->"
+
         // TODO return the error
-        // invalid operator to begin with
         printMessage('error', {
           id: ErrorID.invalidCharacter,
           code: code,
@@ -426,13 +418,10 @@ export namespace Lexer {
         } as any);
         i++; // skip the next character
         break;
-        // throw Error(
-        //   // TODO
-        //   `\`Lexer\` Error: Invalid character \`${code[startIdx]}\` found at position ${startIdx}`
-        // );
       }
 
-      // maybe just the last char was part of another symbol with more chars, so cut that off
+      // consider "-", ">" and "->*" valid
+      // but got "->"
       operator = operator.slice(0, operator.length - 1);
       i--;
     }

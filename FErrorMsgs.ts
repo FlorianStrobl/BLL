@@ -6,6 +6,7 @@ export const enum ErrorID {
   invalidNumericLiteralEFollowedByPoint = 0x0004,
   invalidNumericLiteralPointLast = 0x0005,
   invalidCommentUnclosed = 0x0006
+  // TODO add invalidOperator, e.g. "->" even tho only "->*" is valid
 }
 
 interface Error {
