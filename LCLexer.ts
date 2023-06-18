@@ -28,7 +28,7 @@ let/**/
 // let"hey", lexer error!
 letlet // identifier
 lettest // identifier
-// let+, lexer error!
+let+
 
 test/**/
 // test"hey", lexer error!
@@ -38,7 +38,7 @@ test+
 
 +/**/
 +5
-// +let, lexer error!
++let
 +test
 +* // two operators
 
@@ -361,6 +361,7 @@ export namespace Lexer {
           consumeOctal();
           break;
       }
+      // TODO error messages and followed by str literal
       return {
         valid: true,
         value: { lexeme: literal, type: lexemeType.literal, idx },
@@ -431,8 +432,6 @@ export namespace Lexer {
       operator = operator.slice(0, operator.length - 1);
       i--;
     }
-
-    // TODO invalid if followed by a keyword without having a space in between
 
     return {
       valid: true,
