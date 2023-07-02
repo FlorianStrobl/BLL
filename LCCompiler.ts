@@ -1,4 +1,4 @@
-// ASM generation from the AST, can be in an ascii format or in a binary object file
+// ASM (LLVM IR) generation from the AST, can be in an ascii format or in a binary object file
 
 // TODO, if intermediate results are stored in "%Z[id]", then pad all identifier with not "Z"
 

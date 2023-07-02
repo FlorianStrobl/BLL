@@ -1,6 +1,8 @@
 // AST generation
 // let ...
 
+// recursive descent instead of (LALR) Look-Ahead, Left-to-right, Rightmost Derivation parser
+
 /*
 TODO Larser aka lexing while parsing
 if invalid lexeme comes, just break parsing and continue lexing to the end, to get all the errors of the lexer
