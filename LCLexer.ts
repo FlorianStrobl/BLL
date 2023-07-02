@@ -542,7 +542,7 @@ test:
 "/*\/"
 */
 
-console.log(Lexer.lexe(`/*`, 'file'));
+//console.log(Lexer.lexe(`/*`, 'file'));
 
 /*
 // JavaScript/TypeScript quickstart guide

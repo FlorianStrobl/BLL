@@ -70,6 +70,8 @@ namespace Tuple {
   pub let second = LambdaCalculus.False;
 }
 
+// TODO add math functions
+
 namespace Math {
   // constants
   pub let NAN = func (): f32 -> NaN;
