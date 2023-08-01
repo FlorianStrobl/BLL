@@ -1,5 +1,8 @@
 import { printMessage, ErrorID } from './FErrorMsgs';
 
+// larser
+// check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#
+
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
 
