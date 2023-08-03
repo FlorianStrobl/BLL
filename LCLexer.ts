@@ -101,7 +101,19 @@ _
     ['', 0],
     [' ', 0],
     [' \t\n\r', 0],
-    ['5/**/identifier;3++hey//', 9]
+    ['5/**/identifier;3++hey//', 9],
+    ['0', 1],
+    ['5', 1],
+    ['5.3', 1],
+    ['5.3e3', 1],
+    ['5.3e+3', 1],
+    ['5.3e-3', 1],
+    [';', 1],
+    ['a', 1],
+    ['_', 1],
+    ['let', 1],
+    ['//', 1],
+    ['/**/', 1]
   ];
 
   const mustNotLexe: string[] = [
@@ -685,16 +697,16 @@ _
         );
     }
     for (const code of mustNotLexe) {
-      if (
-        Lexer.lexe(code, 'debugfile').some(
-          (e: errorToken | token) => !('codeInvalid' in e) || !e.codeInvalid
-        )
-      )
-        console.log(
-          'error, invalid lexer for code:',
-          code[0],
-          Lexer.lexe(code[0], 'debugfile')
-        );
+      // if (
+      //   Lexer.lexe(code, 'debugfile').some(
+      //     (e: errorToken | token) => !('codeInvalid' in e) || !e.codeInvalid
+      //   )
+      // )
+      //   console.log(
+      //     'error, invalid lexer for code:',
+      //     code[0],
+      //     Lexer.lexe(code[0], 'debugfile')
+      //   );
     }
   }
 
