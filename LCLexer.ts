@@ -10,7 +10,26 @@ import { printMessage, ErrorID } from './FErrorMsgs';
 const testCodes: string[] = [
   `
 let num: i32 /* signed */ = + 5.5e-1; // an integer
-/**/`
+/**/`,
+  `
+// import std;
+// import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
+
+let num1 = 5;
+let num2 = 0x5;
+let num3 = 0b1;
+let num4 = 0o7;
+
+/* You can /* nest comments *\\/ by escaping slashes */
+
+// example code
+let a: i32 = IO.in[i32](0); // gets an i32 from the console
+let b: i32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
+let c: i32 = IO.out(b); // prints b and assigneds b to c
+
+let d = func (x: i32) -> 5_4.1e-3;
+// 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
+`
 ];
 
 const mustLexe: string[] = [
@@ -63,12 +82,16 @@ _
 
 ~~5
 
+"string"
+
 ;`
 ];
 
 const mustNotLexe: string[] = [
   `
-\\ \` ' " ? @ # $
+\\ \` ' "" ? @ # $
+
+😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼
 
 5. 5e1. 5e1.2 5.1e 5.e 5e. 5e
 0__3
@@ -77,7 +100,6 @@ const mustNotLexe: string[] = [
 5let
 5test
 
-"string"
 /regexp/
 
 */
@@ -175,7 +197,15 @@ export namespace Lexer {
         type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
       }
     | { codeInvalid: true; type: 'invalid char'; chars: string }
-    | { codeInvalid: true; type: 'eof in /* comment' };
+    | { codeInvalid: true; type: 'eof in /* comment' }
+    | { codeInvalid: true; type: 'string used'; chars: string }
+    | { codeInvalid: true; type: 'eof in string'; chars: string }
+    | {
+        codeInvalid: true;
+        type: 'used escape symbol not properly in string';
+        chars: string;
+        idxs: number[];
+      };
 
   type nextToken =
     | {
@@ -199,30 +229,6 @@ export namespace Lexer {
   }
 
   // #region consume functions
-  // assert: an identifier is at idx
-  function consumeIdentifier(code: string, idx: number): nextToken {
-    let i: number = idx;
-    let identifier: string = '';
-
-    const alphaNumeric = /[_a-zA-Z0-9]/;
-    while (idxValid(i, code) && matches(code[i], alphaNumeric))
-      identifier += code[i++];
-
-    // TODO check if it is followed by something else than just whitespace, because that would be invalid (if its a string at least, for keyword and for identifier)
-
-    return {
-      valid: true,
-      value: {
-        lexeme: identifier,
-        type: keywords.includes(identifier)
-          ? lexemeType.keyword
-          : lexemeType.identifier,
-        idx
-      },
-      newidx: i
-    };
-  }
-
   // assert: a comment is at idx
   function consumeComment(code: string, idx: number): nextToken {
     let i: number = idx + 1; /*assertion: index is valid*/
@@ -230,7 +236,9 @@ export namespace Lexer {
 
     if (code[i] === '/') {
       // comment type 1: "//"
-      while (idxValid(i, code) && code[i] !== '\n') comment += code[i++];
+      while (idxValid(i, code) && code[i] !== '\n') {
+        comment += code[i++];
+      }
     } else if (code[i] === '*') {
       // comment type 2: "/*"
       comment += code[i++]; // "*"
@@ -250,20 +258,22 @@ export namespace Lexer {
       console.log('after exec');
 
       // TODO, wrong since it could be the very last two characters
-      if (!idxValid(i, code) || !idxValid(i + 1, code))
+      if (!idxValid(i, code) || !idxValid(i + 1, code)) {
         return {
           valid: false,
           value: { codeInvalid: true, type: 'eof in /* comment' },
           newidx: i
         };
+      }
 
       // idx valid
-      if (code[i] !== '*' || code[i + 1] !== '/')
+      if (code[i] !== '*' || code[i + 1] !== '/') {
         return {
           valid: false,
           value: { codeInvalid: true, type: 'eof in /* comment' },
           newidx: i
         };
+      }
 
       comment += code[i++] + code[i++];
     }
@@ -293,6 +303,7 @@ export namespace Lexer {
         } else {
           // _ but followed by something different than a digit
 
+          // TODO no throw!!
           throw Error(
             // TODO, error: `_` must be inbetween digits
             'Error in `consumeDigits` from `consumeNumericLiteral` in `Lexer`: a `_` in a numeric literal, must be preceded and followed by a digit'
@@ -306,24 +317,29 @@ export namespace Lexer {
       literal += code[i++]; // "e" or "E"
 
       // now optional "+" OR "-"
-      if (code[i] === '+' || code[i] === '-') literal += code[i++];
+      if (code[i] === '+' || code[i] === '-') {
+        literal += code[i++];
+      }
 
       const literalBefore = literal;
       consumeDigits();
       const runned: boolean = literalBefore !== literal;
 
-      if (!runned)
+      if (!runned) {
         // TODO
         throw Error(
           'Error in `consumeNumericLiteral`: unexpected end of numeric literal after `e`'
         );
+      }
     }
 
     function consumeHex() {
       // TODO, check if i is not outside of code
       literal += code[i++]; // 0
       literal += code[i++]; // x
-      while (matches(code[i], /[0-9a-fA-F]/g)) literal += code[i++];
+      while (matches(code[i], /[0-9a-fA-F]/g)) {
+        literal += code[i++];
+      }
       // TODO, what if matches different numeric literal now, ERROR
     }
 
@@ -331,8 +347,9 @@ export namespace Lexer {
       // TODO, check if i is not outside of code
       literal += code[i++]; // 0
       literal += code[i++]; // b
-      while (idxValid(i, code) && matches(code[i], /[01]/g))
+      while (idxValid(i, code) && matches(code[i], /[01]/g)) {
         literal += code[i++];
+      }
       // TODO, what if matches different numeric literal now, ERROR
     }
 
@@ -340,7 +357,9 @@ export namespace Lexer {
       // TODO, check if i is not outside of code
       literal += code[i++]; // 0
       literal += code[i++]; // o
-      while (matches(code[i], /[0-7]/g)) literal += code[i++];
+      while (matches(code[i], /[0-7]/g)) {
+        literal += code[i++];
+      }
       // TODO, what if matches different numeric literal now, ERROR
     }
 
@@ -383,14 +402,18 @@ export namespace Lexer {
       consumeDigits();
       const runned: boolean = literalBefore !== literal;
 
-      if (!runned)
+      if (!runned) {
+        // TODO
         throw Error(
           'Error in `consumeNumericLiteral`: unexpected end of numeric literal after `.`'
         );
+      }
     }
 
     // `consumeE` could throw an error
-    if (idxValid(i, code) && code[i].toLowerCase() === 'e') consumeE();
+    if (idxValid(i, code) && code[i].toLowerCase() === 'e') {
+      consumeE();
+    }
 
     // TODO invalid if followed by an alpha numeric character
 
@@ -401,20 +424,46 @@ export namespace Lexer {
     };
   }
 
-  // assert: an operator is at idx
-  function consumeOperator(code: string, idx: number): nextToken {
+  // assert: an identifier is at idx
+  function consumeIdentifier(code: string, idx: number): nextToken {
     let i: number = idx;
-    let operator: string = code[i++];
+    let identifier: string = '';
+
+    const alphaNumeric = /[_a-zA-Z0-9]/;
+    while (idxValid(i, code) && matches(code[i], alphaNumeric)) {
+      identifier += code[i++];
+    }
+
+    // TODO check if it is followed by something else than just whitespace, because that would be invalid (if its a string at least, for keyword and for identifier)
+
+    return {
+      valid: true,
+      value: {
+        lexeme: identifier,
+        type: keywords.includes(identifier)
+          ? lexemeType.keyword
+          : lexemeType.identifier,
+        idx
+      },
+      newidx: i
+    };
+  }
+
+  // assert: an operator is at idx
+  function consumeSymbol(code: string, idx: number): nextToken {
+    let i: number = idx;
+    let symbol: string = code[i++];
 
     while (
       idxValid(i, code) &&
-      symbols.some((symbol) => symbol.startsWith(operator + code[i]))
-    )
-      operator += code[i++];
+      symbols.some((symbol) => symbol.startsWith(symbol + code[i]))
+    ) {
+      symbol += code[i++];
+    }
 
     // consider "->*" valid and "->" not
-    while (!symbols.includes(operator)) {
-      if (operator === '') {
+    while (!symbols.includes(symbol)) {
+      if (symbol === '') {
         // consider "-", ">" and "->" invalid
         // but "->*" valid, and got "->"
 
@@ -432,13 +481,71 @@ export namespace Lexer {
 
       // consider "-", ">" and "->*" valid
       // but got "->"
-      operator = operator.slice(0, operator.length - 1);
+      symbol = symbol.slice(0, symbol.length - 1);
       i--;
     }
 
     return {
       valid: true,
-      value: { lexeme: operator, type: lexemeType.symbol, idx },
+      value: { lexeme: symbol, type: lexemeType.symbol, idx },
+      newidx: i
+    };
+  }
+
+  // assert: a string is at idx
+  function consumeString(code: string, idx: number): nextToken {
+    let i: number = idx;
+    let string: string = code[i++];
+
+    const stringEnd = /"/;
+    const escapeSymbol = /\\/;
+    const escapedSymbols = /["\\nrtu]/;
+    let escaped: boolean = false;
+    let escapeErrorIdxs: number[] = [];
+    while (idxValid(i, code) && !(matches(code[i], stringEnd) && !escaped)) {
+      if (escaped) {
+        escaped = false;
+        if (matches(code[i], escapedSymbols)) {
+          string += code[i++];
+          // TODO if char was "u", it has to be followed by 4 digits
+        } else {
+          escapeErrorIdxs.push(i);
+          string += code[i++];
+        }
+      } else if (matches(code[i], escapeSymbol)) {
+        escaped = true;
+        string += code[i++];
+      } else {
+        string += code[i++];
+      }
+    }
+
+    if (idxValid(i, code) && matches(code[i], stringEnd)) {
+      string += code[i++];
+    } else {
+      return {
+        valid: false,
+        value: { codeInvalid: true, type: 'eof in string', chars: string },
+        newidx: i
+      };
+    }
+
+    if (escapeErrorIdxs.length !== 0) {
+      return {
+        valid: false,
+        value: {
+          codeInvalid: true,
+          type: 'used escape symbol not properly in string',
+          chars: string,
+          idxs: escapeErrorIdxs
+        },
+        newidx: i
+      };
+    }
+
+    return {
+      valid: false,
+      value: { codeInvalid: true, type: 'string used', chars: string },
       newidx: i
     };
   }
@@ -446,20 +553,24 @@ export namespace Lexer {
 
   function lexeNextToken(code: string, idx: number): nextToken {
     const whitespaces = /[ \t\n\r]/;
-    while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
+    while (idxValid(idx, code) && matches(code[idx], whitespaces)) {
+      ++idx;
+    }
 
-    if (!idxValid(idx, code))
+    if (!idxValid(idx, code)) {
       return {
         valid: false,
         value: { type: 'eof', codeInvalid: false },
         newidx: idx
       };
+    }
 
     const commentStart = /[/]/;
     if (matches(code[idx], commentStart)) {
       const commentStart2 = /[/*]/;
-      if (idxValid(idx + 1, code) && matches(code[idx + 1], commentStart2))
+      if (idxValid(idx + 1, code) && matches(code[idx + 1], commentStart2)) {
         return consumeComment(code, idx);
+      }
     }
 
     const identifierStart = /[_a-zA-Z]/;
@@ -474,16 +585,21 @@ export namespace Lexer {
 
     const firstCharSymbols = symbols.map((e) => e[0]);
     if (firstCharSymbols.includes(code[idx])) {
-      return consumeOperator(code, idx);
+      return consumeSymbol(code, idx);
     }
 
     // TODO add string support for better errors, that means also \u{xxxx}
     // and \", \\, \n, \r, \t
+    const stringStart = /"/;
+    if (matches(code[idx], stringStart)) {
+      return consumeString(code, idx);
+    }
 
     let invalidChars: string = '';
     const validChars = /[ \t\n\r0-9a-zA-Z_\-+*/%&|^~!<>=:;,.(){}[\]]/;
-    while (idxValid(idx, code) && !matches(code[idx], validChars))
+    while (idxValid(idx, code) && !matches(code[idx], validChars)) {
       invalidChars += code[idx++];
+    }
 
     return {
       valid: false,
@@ -498,6 +614,7 @@ export namespace Lexer {
   ): Generator<nextToken, undefined> {
     let val: nextToken = lexeNextToken(code, 0);
 
+    // TODO
     while (val?.value?.type !== 'eof') {
       if (!val.valid) {
         // TODO add full error message
@@ -522,13 +639,21 @@ export namespace Lexer {
     return undefined;
   }
 
-  export function lexe(code: string, filename: string): token[] | undefined {
+  export function lexe(code: string, filename: string): token[] | errorToken[] {
     const lexemes: token[] = [];
+    const errors: errorToken[] = [];
 
-    for (const token of Lexer.lexeNextTokenIter(code, filename))
-      if (token.valid) lexemes.push(token.value);
-      else return undefined;
+    for (const token of Lexer.lexeNextTokenIter(code, filename)) {
+      if (token.valid) {
+        lexemes.push(token.value);
+      } else {
+        errors.push(token.value);
+      }
+    }
 
+    if (errors.length !== 0) {
+      return errors;
+    }
     return lexemes;
   }
 }
@@ -545,7 +670,7 @@ test:
 "/*\/"
 */
 
-//console.log(Lexer.lexe(`/*`, 'file'));
+console.log(Lexer.lexe(mustNotLexe[0], 'file'));
 
 /*
 // JavaScript/TypeScript quickstart guide
@@ -623,129 +748,3 @@ let returnedValue: number = myFunction(5);
 
 //  TODO: have a lexeNextToken() function which also can work as an iterator
 // test: /* You can /* nest comments *\/ by escaping slashes */
-// console.log(
-//   Lexer.lexe(
-//     `
-//   // import std;
-//   // import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
-
-//   let num1 = 5;
-//   let num2 = 0x5;
-//   let num3 = 0b1;
-//   let num4 = 0o7;
-
-//   /* You can /* nest comments *\\/ by escaping slashes */
-
-//   // example code
-//   let a: i32 = IO.in[i32](0); // gets an i32 from the console
-//   let b: i32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
-//   let c: i32 = IO.out(b); // prints b and assigneds b to c
-
-//   let d = func (x: i32) -> 5_4.1e-3;
-//   // 5, 5.1e2,   5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
-// `,
-//     'src'
-//   )
-// );
-
-// export function lexe(code: string, fileName: string): lexeme[] | never {
-//   return [];
-
-//   let hadError: boolean = false;
-
-//   code += ' '; // add space at the end
-
-//   const lexedCode: lexeme[] = [];
-//   for (let charIdx: number = 0; charIdx < code.length; ++charIdx) {
-//     if (matches(code[charIdx], /[ \t\n\r]/g))
-//       // is whitespace
-//       continue; // go to next character
-
-//     // could be `//` or `/*` for comment:
-//     if (code[charIdx] === '/') {
-//       if (code[charIdx + 1] === '/' || code[charIdx + 1] === '*') {
-//         // consume comment
-//         const commentData = consumeComment(code, charIdx);
-
-//         lexedCode.push({
-//           value: commentData.comment,
-//           type: lexemeType.comment,
-//           idx: charIdx
-//         });
-
-//         charIdx = commentData.lastIdx;
-//         continue;
-//       }
-//       // else, do not `continue` since it was the operator /
-//     }
-
-//     // character is not whitespace and is not a comment
-//     // it must be an identifier, keyword, literal or operator
-
-//     if (matches(code[charIdx], /[a-zA-Z_]/g)) {
-//       // is keyword or identifier
-//       const identifierData = consumeIdentifier(code, charIdx);
-
-//       lexedCode.push({
-//         value: identifierData.identifier,
-//         type: keywords.includes(identifierData.identifier)
-//           ? lexemeType.keyword
-//           : lexemeType.identifier,
-//         idx: charIdx
-//       });
-
-//       charIdx = identifierData.lastIdx;
-//       continue;
-//     } else if (
-//       /*first character of some operator matches up with current symbol. does not mean this char is also an operator stand alone, so this could throw an error in this case.*/ operators
-//         .map((s) => s[0])
-//         .includes(code[charIdx])
-//     ) {
-//       // is symbol
-//       const operatorData = consumeOperator(code, charIdx);
-//       // TODO could be a symbol with multiple chars
-
-//       lexedCode.push({
-//         value: operatorData.operator,
-//         type: lexemeType.operator,
-//         idx: charIdx
-//       });
-
-//       charIdx = operatorData.lastIdx;
-//       continue;
-//     } else if (matches(code[charIdx], /[0-9]/g)) {
-//       // is numeric literal
-//       const literalData = consumeNumericLiteral(code, charIdx);
-
-//       lexedCode.push({
-//         value: literalData.literal,
-//         type: lexemeType.literal,
-//         idx: charIdx
-//       });
-
-//       charIdx = literalData.lastIdx;
-//       continue;
-//     } else {
-//       // do a while here to get errors which are on the same line/behind each other
-//       hadError = true;
-
-//       printMessage('error', {
-//         id: ErrorID.invalidCharacter,
-//         code: code,
-//         idx: charIdx,
-//         endIdx: charIdx,
-//         file: fileName
-//       } as any);
-
-//       // throw Error(
-//       //   // TODO
-//       //   `Error in \`lexer\`: unkown character \`${code[charIdx]}\` at position ${charIdx}`
-//       // );
-//     }
-//   }
-
-//   if (!hadError) return lexedCode;
-//   // else
-//   console.error('code could not compile');
-//   return [];
-// }
