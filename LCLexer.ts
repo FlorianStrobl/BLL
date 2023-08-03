@@ -1,11 +1,12 @@
 import { printMessage, ErrorID } from './FErrorMsgs';
 
-// larser
 // check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#
 
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
 // https://stackoverflow.com/questions/14954721/what-is-the-difference-between-a-token-and-a-lexeme BLL
+
+// TODO, not peek() and consumeChar() = bad because not standard?
 
 // #region constants
 const testCodes: string[] = [
@@ -181,8 +182,6 @@ const symbols: string[] = [
   .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
 // #endregion
 
-// TODO, not peek() and consumeChar() = bad because not standard?
-
 export namespace Lexer {
   // #region types
   export interface token {
@@ -194,7 +193,7 @@ export namespace Lexer {
   export enum lexemeType {
     comment = '#comment', // "//...", "/*...*/"
     literal = '#literal', // "5.3e-4", "0xFF00FF"
-    keyword = '#keyword', // "let"
+    keyword = '#keyword', // "let", "func"
     identifier = '#identifier', // "_a_z_A_Z_0_9"
     symbol = '#symbol' // "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", ",", "(", ")", "{", "}", "=", "->", "."
   }
@@ -231,7 +230,7 @@ export namespace Lexer {
   // #endregion
 
   function matches(character: string, regexp: RegExp): boolean {
-    return character[0].match(regexp) !== null;
+    return typeof character === 'string' && character[0].match(regexp) !== null;
   }
 
   function idxValid(idx: number, obj: { length: number }) {
@@ -625,7 +624,7 @@ export namespace Lexer {
     let val: nextToken = lexeNextToken(code, 0);
 
     // TODO
-    while (val?.value?.type !== 'eof') {
+    while (val.value.type !== 'eof') {
       if (!val.valid) {
         // TODO add full error message
         printMessage('error', {
@@ -654,75 +653,16 @@ export namespace Lexer {
     const errors: errorToken[] = [];
 
     for (const token of Lexer.lexeNextTokenIter(code, filename)) {
-      if (token.valid) {
-        lexemes.push(token.value);
-      } else {
-        errors.push(token.value);
-      }
+      if (token.valid) lexemes.push(token.value);
+      else errors.push(token.value);
     }
 
-    if (errors.length !== 0) {
-      return errors;
-    }
-    return lexemes;
+    if (errors.length === 0) return lexemes;
+    else return errors;
   }
 }
 
-console.log(Lexer.lexe(mustNotLexe[0], 'file'));
+console.log(Lexer.lexe("5/**/identifier;\"stringtest\"3//", 'file'));
 
-/*
-// JavaScript/TypeScript quickstart guide
-// This is a comment. They are ignored by the programming language.
-/*This is also a comment*\/
-
-// "myFunction" is a function which takes a single number
-// as an argument and returns a number when executed.
-function myFunction(x: number): number {
-  // with the "let" keyword, one can define a variable.
-  let myVariable: number = 5;
-  // variables can be modified with the "=" operator.
-  myVariable = myVariable + 1;
-  // "myVariable" is now (5 + 1) aka 6.
-
-  // while the condition "myVariable != 8" is true
-  // the code in the "{ }" block will be executed.
-  while (myVariable != 8) {
-    // the "++" operator increases the variable value by one.
-    ++myVariable;
-  }
-
-  // an "if" statement checks the condition
-  // and executes the "{ }" block, if the condition was true.
-  if (myVariable == 8) {
-    // "console.log" prints the arguments
-    // in the brackeds to the console.
-    console.log(
-      'hey' /*character literals must be surrounded by double quotes*\/
-    );
-  } else {
-    // if the "if" condition was false, the "else" block is executed.
-
-    console.log(false);
-  }
-
-  // an array is a list of values.
-  let numberArray: number[] = [0, 1, 2, 3];
-
-  // "for" loops work like the "while" loop:
-  for (
-    let i = 0 /* executed before the first iteration *\/;
-    i < 4 /* condition, gets checked before executing the next iteration *\/;
-    ++i /* gets executed at the end of each iteration *\/
-  ) {
-    // with the "[ ]" operator, one can get the value
-    // at the given position, where position 0 is the first element.
-    myVariable = myVariable + numberArray[i];
-  }
-
-  // myVariable is at this point 14.
-  return myVariable + x;
-}
-
-// a function can be called with "( )".
-let returnedValue: number = myFunction(5);
-*/
+// https://runjs.co/s/I1irVl3Rf
+// https://www.typescriptlang.org/play?#code/PTAECkEMDdIZQMYCcCWAHALsAKgTzQKaKqagCOAriggNYDOGkSGoA5lQCYEBQIo2ACxR1Qw0JFAIA9gFsZBAHYYAdPwEFc4pAVGsFU7R1AAjTRnWg0SKaySQ5KBa1AAbSE4qRWBZbwBUgmJikC50UuKSsvJKfsDcvGAARDK4AGIUCggYKFIKiaIiEgBmGVk5CqAA7kIIAqCMNASFoHSOrC46ChQyxgRICeKFFUzs0SzuRtoYFEgKzV09fVXqFQQAHgQIFBgEHL4lmdm5oCnph+UAFGsAXKALvUgAlLf3SwDe3KCgfJUo5vUWRIdDD5Rq4SoGDgAGlAuR0CHcoC4RUcOgksFQkGMHV8X2BJ1wADUmCgsR0Xt0HqAALygACsAG5Pt8wBjSdimpJEb0TlIOCgUbsqn86uYdIlqfkpIQ7BgDLiCcTMRyaYqSWSdABqUAARiZXz4ySJ6o5+TE+kqoAudNA2p1j3ENAkADZfMyfkIOgD4bl+UcKkaleyvQBCWkADjNIgwSAoPANYDFkS4ogqScSb1AAF98tipLRhS4XCYdOtNttdgrqigvRcUkGNaAw6Bww6Pl8E97QIlNZqpTLIHKkKnkARIHROUm2Y3YC44yZNHCFV9e-WTR19dn4p3EYkBfkGIOCGNJOpaNGLNIFH7yu6wBNQGWtjsL+LMzmTC58zQYQKu1eb2OSpx3qWMfGZP862NZUvWpCM22ZTtEivMIcS-Vh8isRwMFfLRRkUHDEJZVMu2MOxaF2aNwiTFCpBxIjaLQmwLiIr4AHJ1FwNjvj8WomEgLIlhcP4+hCEQZAoBgSxaGZrAyLgjFMJEpAoFVKCkF9YiIx5NyzR9Qh0dsOz4P9033SJrz+coqhAooxIIGF0wIAzcy-AsxCfCs9m3DtGJ8dCLjsgydOZLMfL4REmDsTRglcYQWCkIpQFnOM6AVfFXiQABBJBoopRYkAAbQAXVVQqAAYYR1GEACYYQAZmKpk727IoDHyL9pRECEkBoOLGi7RJqw6DqpGla5mTa4cWI7VwCBYFBVXKnjHw2Z8hV6KadCTFEkCkkTZWs2JNy+RaAB5QAAFhWgCrNyGFvBw09NkaRSCC21by2yJwuwUdYFp2Q7jmOoje0W4A-DYeaRE8nYjEHLtFCMRLHwEuoDsHI64i+BDZp+EVBsK0Biv7UShxhOEuQqR6uxS+NjPvFgk1YFBoEUSwpFaf0YWqPodDQTm7oqZaxB2lA9pYZzjwI5c1RgnRaTXeXbTuSk+hy6LCpQJrQvCsAleDHRgiZoQRAF7DdUuhUphmCoDcbbU1iZMKBmKUp-Sp6SESLIVfn+RILlAR5El8fEbdmXZiTnAh8qpRW0ndy46RCvzlAC8O-o4KO4x0oA
