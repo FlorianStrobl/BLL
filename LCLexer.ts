@@ -10,11 +10,16 @@ import { printMessage, ErrorID } from './FErrorMsgs';
 
 export namespace Lexer {
   // #region constants
-  const testCodes: string[] = [
-    `
+  // TODO, add the number of lexemes it should produce
+  const testCodes: [string, number][] = [
+    [
+      `
 let num: i32 /* signed */ = + 5.5e-1; // an integer
 /**/`,
-    `
+      11
+    ],
+    [
+      `
 // import std;
 // import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
 
@@ -32,11 +37,14 @@ let c: i32 = IO.out(b); // prints b and assigneds b to c
 
 let d = func (x: i32) -> 5_4.1e-3;
 // 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
-`
+`,
+      80
+    ]
   ];
 
-  const mustLexe: string[] = [
-    `;
+  const mustLexe: [string, number][] = [
+    [
+      `;
 /**//**/
 /**/5
 /**/let
@@ -85,33 +93,27 @@ _
 
 ~~5
 
-"string"
+// "string"
 
 ;`,
-    '',
-    ' ',
-    ' \t\n\r',
-    '5/**/identifier;3++hey//'
+      147
+    ],
+    ['', 0],
+    [' ', 0],
+    [' \t\n\r', 0],
+    ['5/**/identifier;3++hey//', 9]
   ];
 
   const mustNotLexe: string[] = [
-    `
-\\ \` ' "" ? @ # $
-
-😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼
-
-5. 5e1. 5e1.2 5.1e 5.e 5e. 5e
-0__3
-0b 0x 0o 0b12A3 0xP 0o99A 09A4
-
-5let
-5test
-
-/regexp/
-
-*/
-
-/*`,
+    `\\ \` ' "" ? @ # $`,
+    `😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼`,
+    `5. 5e1. 5e1.2 5.1e 5.e 5e. 5e`,
+    `0__3`,
+    `0b 0x 0o 0b12A3 0xP 0o99A 09A4`,
+    `5let
+5test`,
+    `/regexp/`,
+    `*/`,
     '/*',
     '/* ',
     '/**',
@@ -207,7 +209,7 @@ _
         type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
       }
     | { codeInvalid: true; type: 'invalid char'; chars: string }
-    | { codeInvalid: true; type: 'eof in /* comment' }
+    | { codeInvalid: true; type: 'eof in /* comment'; chars: string }
     | { codeInvalid: true; type: 'string used'; chars: string }
     | { codeInvalid: true; type: 'eof in string'; chars: string }
     | {
@@ -215,6 +217,11 @@ _
         type: 'used escape symbol not properly in string';
         chars: string;
         idxs: number[];
+      }
+    | {
+        codeInvalid: true;
+        type: 'invalid symbol';
+        chars: string;
       };
 
   type nextToken =
@@ -233,53 +240,53 @@ _
   // #region consume functions
   // assert: a comment is at idx
   function consumeComment(code: string, idx: number): nextToken {
-    let i: number = idx + 1; /*assertion: index is valid*/
     let comment: string = code[idx];
+    let i: number = idx + 1;
 
-    if (code[i] === '/') {
-      // comment type 1: "//"
-      while (idxValid(i, code) && code[i] !== '\n') {
+    const commentType1Start = /\//;
+    const commentType2Start = /\*/;
+    if (matches(code[i], commentType1Start)) {
+      const commentType1Stop = /\n/;
+      while (idxValid(i, code) && !matches(code[i], commentType1Stop))
+        comment += code[i++];
+    } else if (matches(code[i], commentType2Start)) {
+      comment += code[i++];
+
+      const commentType2Stop1 = /\*/;
+      const commentType2Stop2 = /\//;
+
+      let hadCommentType2Stop1: boolean = false;
+      while (idxValid(i, code)) {
+        if (hadCommentType2Stop1) {
+          hadCommentType2Stop1 = false;
+
+          if (matches(code[i], commentType2Stop2)) {
+            comment += code[i++];
+            break;
+          }
+        }
+
+        if (matches(code[i], commentType2Stop1)) hadCommentType2Stop1 = true;
+
         comment += code[i++];
       }
-    } else if (code[i] === '*') {
-      // comment type 2: "/*"
-      comment += code[i++]; // "*"
 
-      // TODO
-      console.log('here', code, i);
-
-      while (
-        idxValid(i, code) &&
-        idxValid(i + 1, code) &&
-        !(code[i] === '*' && code[i + 1] === '/')
+      if (
+        comment.length < 4 ||
+        !matches(comment[comment.length - 2], commentType2Stop1) ||
+        !matches(comment[comment.length - 1], commentType2Stop2)
       ) {
-        console.log('exec', code, i);
-        comment += code[i++];
-      }
-
-      console.log('after exec');
-
-      // TODO, wrong since it could be the very last two characters
-      if (!idxValid(i, code) || !idxValid(i + 1, code)) {
         return {
           valid: false,
-          value: { codeInvalid: true, type: 'eof in /* comment' },
+          value: {
+            codeInvalid: true,
+            type: 'eof in /* comment',
+            chars: comment
+          },
           newidx: i
         };
       }
-
-      // idx valid
-      if (code[i] !== '*' || code[i + 1] !== '/') {
-        return {
-          valid: false,
-          value: { codeInvalid: true, type: 'eof in /* comment' },
-          newidx: i
-        };
-      }
-
-      comment += code[i++] + code[i++];
     }
-    // else not a comment, handled before calling this function
 
     return {
       valid: true,
@@ -436,8 +443,6 @@ _
       identifier += code[i++];
     }
 
-    // TODO check if it is followed by something else than just whitespace, because that would be invalid (if its a string at least, for keyword and for identifier)
-
     return {
       valid: true,
       value: {
@@ -463,26 +468,21 @@ _
       symbol += code[i++];
     }
 
-    // consider "->*" valid and "->" not
+    // got: "->"; valid: "->*"; invalid: "-", ">", "->"
+    const symbolGot: string = symbol;
     while (!symbols.includes(symbol)) {
       if (symbol === '') {
-        // consider "-", ">" and "->" invalid
-        // but "->*" valid, and got "->"
-
-        // TODO return the error
-        printMessage('error', {
-          id: ErrorID.invalidCharacter,
-          code: code,
-          idx: idx,
-          endIdx: idx,
-          file: 'TODO'
-        } as any);
-        i++; // skip the next character
-        break;
+        return {
+          valid: false,
+          value: {
+            codeInvalid: true,
+            type: 'invalid symbol',
+            chars: symbolGot
+          },
+          newidx: i
+        };
       }
 
-      // consider "-", ">" and "->*" valid
-      // but got "->"
       symbol = symbol.slice(0, symbol.length - 1);
       i--;
     }
@@ -507,6 +507,7 @@ _
     while (idxValid(i, code) && !(matches(code[i], stringEnd) && !escaped)) {
       if (escaped) {
         escaped = false;
+
         if (matches(code[i], escapedSymbols)) {
           string += code[i++];
           // TODO if char was "u", it has to be followed by 4 digits
@@ -626,7 +627,7 @@ _
     while (val.value.type !== 'eof') {
       if (!val.valid) {
         // TODO add full error message
-        printMessage('error', {
+        /*printMessage('error', {
           id: ErrorID.invalidCharacter,
 
           code: code, // the code
@@ -637,7 +638,7 @@ _
           msg: '', // the error message to print
 
           compilerStep: 'lexer' // the part in the compiler where it caused the error
-        });
+        });*/
       }
 
       yield val;
@@ -663,9 +664,42 @@ _
     if (errors.length === 0) return lexemes;
     else return errors;
   }
-}
 
-console.log(Lexer.lexe('5;', 'file'));
+  export function debugLexer() {
+    console.log('debug lexer');
+
+    for (const code of testCodes) {
+      if (Lexer.lexe(code[0], 'debugfile').length !== code[1])
+        console.log(
+          'error, invalid lexer for code:',
+          code[0],
+          Lexer.lexe(code[0], 'debugfile')
+        );
+    }
+    for (const code of mustLexe) {
+      if (Lexer.lexe(code[0], 'debugfile').length !== code[1])
+        console.log(
+          'error, invalid lexer for code:',
+          code[0],
+          Lexer.lexe(code[0], 'debugfile')
+        );
+    }
+    for (const code of mustNotLexe) {
+      if (
+        Lexer.lexe(code, 'debugfile').some(
+          (e: errorToken | token) => !('codeInvalid' in e) || !e.codeInvalid
+        )
+      )
+        console.log(
+          'error, invalid lexer for code:',
+          code[0],
+          Lexer.lexe(code[0], 'debugfile')
+        );
+    }
+  }
+
+  debugLexer();
+}
 
 // https://runjs.co/s/I1irVl3Rf
 // https://www.typescriptlang.org/play?#code/PTAECkEMDdIZQMYCcCWAHALsAKgTzQKaKqagCOAriggNYDOGkSGoA5lQCYEBQIo2ACxR1Qw0JFAIA9gFsZBAHYYAdPwEFc4pAVGsFU7R1AAjTRnWg0SKaySQ5KBa1AAbSE4qRWBZbwBUgmJikC50UuKSsvJKfsDcvGAARDK4AGIUCggYKFIKiaIiEgBmGVk5CqAA7kIIAqCMNASFoHSOrC46ChQyxgRICeKFFUzs0SzuRtoYFEgKzV09fVXqFQQAHgQIFBgEHL4lmdm5oCnph+UAFGsAXKALvUgAlLf3SwDe3KCgfJUo5vUWRIdDD5Rq4SoGDgAGlAuR0CHcoC4RUcOgksFQkGMHV8X2BJ1wADUmCgsR0Xt0HqAALygACsAG5Pt8wBjSdimpJEb0TlIOCgUbsqn86uYdIlqfkpIQ7BgDLiCcTMRyaYqSWSdABqUAARiZXz4ySJ6o5+TE+kqoAudNA2p1j3ENAkADZfMyfkIOgD4bl+UcKkaleyvQBCWkADjNIgwSAoPANYDFkS4ogqScSb1AAF98tipLRhS4XCYdOtNttdgrqigvRcUkGNaAw6Bww6Pl8E97QIlNZqpTLIHKkKnkARIHROUm2Y3YC44yZNHCFV9e-WTR19dn4p3EYkBfkGIOCGNJOpaNGLNIFH7yu6wBNQGWtjsL+LMzmTC58zQYQKu1eb2OSpx3qWMfGZP862NZUvWpCM22ZTtEivMIcS-Vh8isRwMFfLRRkUHDEJZVMu2MOxaF2aNwiTFCpBxIjaLQmwLiIr4AHJ1FwNjvj8WomEgLIlhcP4+hCEQZAoBgSxaGZrAyLgjFMJEpAoFVKCkF9YiIx5NyzR9Qh0dsOz4P9033SJrz+coqhAooxIIGF0wIAzcy-AsxCfCs9m3DtGJ8dCLjsgydOZLMfL4REmDsTRglcYQWCkIpQFnOM6AVfFXiQABBJBoopRYkAAbQAXVVQqAAYYR1GEACYYQAZmKpk727IoDHyL9pRECEkBoOLGi7RJqw6DqpGla5mTa4cWI7VwCBYFBVXKnjHw2Z8hV6KadCTFEkCkkTZWs2JNy+RaAB5QAAFhWgCrNyGFvBw09NkaRSCC21by2yJwuwUdYFp2Q7jmOoje0W4A-DYeaRE8nYjEHLtFCMRLHwEuoDsHI64i+BDZp+EVBsK0Biv7UShxhOEuQqR6uxS+NjPvFgk1YFBoEUSwpFaf0YWqPodDQTm7oqZaxB2lA9pYZzjwI5c1RgnRaTXeXbTuSk+hy6LCpQJrQvCsAleDHRgiZoQRAF7DdUuhUphmCoDcbbU1iZMKBmKUp-Sp6SESLIVfn+RILlAR5El8fEbdmXZiTnAh8qpRW0ndy46RCvzlAC8O-o4KO4x0oA
