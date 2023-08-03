@@ -8,12 +8,13 @@ import { printMessage, ErrorID } from './FErrorMsgs';
 
 // TODO, not peek() and consumeChar() = bad because not standard?
 
-// #region constants
-const testCodes: string[] = [
-  `
+export namespace Lexer {
+  // #region constants
+  const testCodes: string[] = [
+    `
 let num: i32 /* signed */ = + 5.5e-1; // an integer
 /**/`,
-  `
+    `
 // import std;
 // import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
 
@@ -32,10 +33,10 @@ let c: i32 = IO.out(b); // prints b and assigneds b to c
 let d = func (x: i32) -> 5_4.1e-3;
 // 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 `
-];
+  ];
 
-const mustLexe: string[] = [
-  `;
+  const mustLexe: string[] = [
+    `;
 /**//**/
 /**/5
 /**/let
@@ -87,13 +88,14 @@ _
 "string"
 
 ;`,
-  '',
-  ' ',
-  ' \t\n\r'
-];
+    '',
+    ' ',
+    ' \t\n\r',
+    '5/**/identifier;3++hey//'
+  ];
 
-const mustNotLexe: string[] = [
-  `
+  const mustNotLexe: string[] = [
+    `
 \\ \` ' "" ? @ # $
 
 😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼
@@ -110,79 +112,78 @@ const mustNotLexe: string[] = [
 */
 
 /*`,
-  '/*',
-  '/* ',
-  '/**',
-  '/** ',
-  '/*/'
-];
+    '/*',
+    '/* ',
+    '/**',
+    '/** ',
+    '/*/'
+  ];
 
-const keywords: string[] = [
-  'import', // imports all public identifiers from other files
+  const keywords: string[] = [
+    'import', // imports all public identifiers from other files
 
-  'let', // binds a lambda term to an identifier
-  'type', // binds a type to an identifier
-  'namespace', // identifier as wrapper around identifiers
-  'pub', // make an identifier public to the outside (files or namespaces)
+    'let', // binds a lambda term to an identifier
+    'type', // binds a type to an identifier
+    'namespace', // identifier as wrapper around identifiers
+    'pub', // make an identifier public to the outside (files or namespaces)
 
-  'func', // introduces a function
+    'func', // introduces a function
 
-  // f32 literals:
-  'nan',
-  'infinity',
+    // f32 literals:
+    'nan',
+    'infinity',
 
-  // types:
-  'i32', // 32 bit integer
-  'f32', //single precision 32 bit float after the IEEE754-2008 standard
-  'undetermined' // cannot be determined at compile time but must be done at compile time
-].sort();
+    // types:
+    'i32', // 32 bit integer
+    'f32', //single precision 32 bit float after the IEEE754-2008 standard
+    'undetermined' // cannot be determined at compile time but must be done at compile time
+  ].sort();
 
-const symbols: string[] = [
-  // only for same primitive types
-  '+', // add
-  '-', // sub
-  '*', // multiplication
-  '/', // divide (for integers: rounding down)
-  '**', // exponentiation
-  '***', // root
-  '%', // remainder
+  const symbols: string[] = [
+    // only for same primitive types
+    '+', // add
+    '-', // sub
+    '*', // multiplication
+    '/', // divide (for integers: rounding down)
+    '**', // exponentiation
+    '***', // root
+    '%', // remainder
 
-  // only ints
-  '&', // and
-  '|', // or
-  '^', // xor
-  '~', // not
-  '!', // logical not TODO (0 -> 1, any -> 0)
-  '<<', // left shift
-  '>>', // right shift
+    // only ints
+    '&', // and
+    '|', // or
+    '^', // xor
+    '~', // not
+    '!', // logical not TODO (0 -> 1, any -> 0)
+    '<<', // left shift
+    '>>', // right shift
 
-  // compare only same primitive types
-  '==', // equal
-  '!=', // not equal
-  '<=', // less than or equal
-  '>=', // greater than or equal
-  '<', // less than
-  '>', // greater than
+    // compare only same primitive types
+    '==', // equal
+    '!=', // not equal
+    '<=', // less than or equal
+    '>=', // greater than or equal
+    '<', // less than
+    '>', // greater than
 
-  '=', // assigments of values to identifiers (let and type)
-  '->', // functions
-  ':', // type annotation
-  ';', // end of let or type statement/empty statement
-  ',', // seperator for arguments
-  '.', // accessing public functions from namespaces
+    '=', // assigments of values to identifiers (let and type)
+    '->', // functions
+    ':', // type annotation
+    ';', // end of let or type statement/empty statement
+    ',', // seperator for arguments
+    '.', // accessing public functions from namespaces
 
-  '(', // grouping, function calls, function arguments/parameters
-  ')',
-  '{', // namespaces
-  '}',
-  '[', // generic type annotations
-  ']'
-]
-  .sort(/*sort for length*/ (a, b) => b.length - a.length)
-  .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
-// #endregion
+    '(', // grouping, function calls, function arguments/parameters
+    ')',
+    '{', // namespaces
+    '}',
+    '[', // generic type annotations
+    ']'
+  ]
+    .sort(/*sort for length*/ (a, b) => b.length - a.length)
+    .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
+  // #endregion
 
-export namespace Lexer {
   // #region types
   export interface token {
     lexeme: string;
@@ -228,14 +229,6 @@ export namespace Lexer {
         newidx: number;
       };
   // #endregion
-
-  function matches(character: string, regexp: RegExp): boolean {
-    return typeof character === 'string' && character[0].match(regexp) !== null;
-  }
-
-  function idxValid(idx: number, obj: { length: number }) {
-    return idx < obj.length;
-  }
 
   // #region consume functions
   // assert: a comment is at idx
@@ -560,11 +553,17 @@ export namespace Lexer {
   }
   // #endregion
 
+  function matches(character: string, regexp: RegExp): boolean {
+    return typeof character === 'string' && character[0].match(regexp) !== null;
+  }
+
+  function idxValid(idx: number, obj: { length: number }) {
+    return idx < obj.length;
+  }
+
   function lexeNextToken(code: string, idx: number): nextToken {
     const whitespaces = /[ \t\n\r]/;
-    while (idxValid(idx, code) && matches(code[idx], whitespaces)) {
-      ++idx;
-    }
+    while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
 
     if (!idxValid(idx, code)) {
       return {
@@ -605,7 +604,7 @@ export namespace Lexer {
     }
 
     let invalidChars: string = '';
-    const validChars = /[ \t\n\r0-9a-zA-Z_\-+*/%&|^~!<>=:;,.(){}[\]]/;
+    const validChars = /[" \t\n\r0-9a-zA-Z_\-+*/%&|^~!<>=:;,.(){}[\]]/;
     while (idxValid(idx, code) && !matches(code[idx], validChars)) {
       invalidChars += code[idx++];
     }
@@ -622,8 +621,8 @@ export namespace Lexer {
     filename: string
   ): Generator<nextToken, undefined> {
     let val: nextToken = lexeNextToken(code, 0);
+    let lastIdx: number = 0;
 
-    // TODO
     while (val.value.type !== 'eof') {
       if (!val.valid) {
         // TODO add full error message
@@ -642,7 +641,11 @@ export namespace Lexer {
       }
 
       yield val;
+
+      lastIdx = val.newidx;
       val = lexeNextToken(code, val.newidx);
+      if (val.value.type !== 'eof' && lastIdx === val.newidx)
+        throw Error('Internal error. Could not lexe the next token.');
     }
 
     return undefined;
@@ -662,7 +665,7 @@ export namespace Lexer {
   }
 }
 
-console.log(Lexer.lexe("5/**/identifier;\"stringtest\"3//", 'file'));
+console.log(Lexer.lexe('5;', 'file'));
 
 // https://runjs.co/s/I1irVl3Rf
 // https://www.typescriptlang.org/play?#code/PTAECkEMDdIZQMYCcCWAHALsAKgTzQKaKqagCOAriggNYDOGkSGoA5lQCYEBQIo2ACxR1Qw0JFAIA9gFsZBAHYYAdPwEFc4pAVGsFU7R1AAjTRnWg0SKaySQ5KBa1AAbSE4qRWBZbwBUgmJikC50UuKSsvJKfsDcvGAARDK4AGIUCggYKFIKiaIiEgBmGVk5CqAA7kIIAqCMNASFoHSOrC46ChQyxgRICeKFFUzs0SzuRtoYFEgKzV09fVXqFQQAHgQIFBgEHL4lmdm5oCnph+UAFGsAXKALvUgAlLf3SwDe3KCgfJUo5vUWRIdDD5Rq4SoGDgAGlAuR0CHcoC4RUcOgksFQkGMHV8X2BJ1wADUmCgsR0Xt0HqAALygACsAG5Pt8wBjSdimpJEb0TlIOCgUbsqn86uYdIlqfkpIQ7BgDLiCcTMRyaYqSWSdABqUAARiZXz4ySJ6o5+TE+kqoAudNA2p1j3ENAkADZfMyfkIOgD4bl+UcKkaleyvQBCWkADjNIgwSAoPANYDFkS4ogqScSb1AAF98tipLRhS4XCYdOtNttdgrqigvRcUkGNaAw6Bww6Pl8E97QIlNZqpTLIHKkKnkARIHROUm2Y3YC44yZNHCFV9e-WTR19dn4p3EYkBfkGIOCGNJOpaNGLNIFH7yu6wBNQGWtjsL+LMzmTC58zQYQKu1eb2OSpx3qWMfGZP862NZUvWpCM22ZTtEivMIcS-Vh8isRwMFfLRRkUHDEJZVMu2MOxaF2aNwiTFCpBxIjaLQmwLiIr4AHJ1FwNjvj8WomEgLIlhcP4+hCEQZAoBgSxaGZrAyLgjFMJEpAoFVKCkF9YiIx5NyzR9Qh0dsOz4P9033SJrz+coqhAooxIIGF0wIAzcy-AsxCfCs9m3DtGJ8dCLjsgydOZLMfL4REmDsTRglcYQWCkIpQFnOM6AVfFXiQABBJBoopRYkAAbQAXVVQqAAYYR1GEACYYQAZmKpk727IoDHyL9pRECEkBoOLGi7RJqw6DqpGla5mTa4cWI7VwCBYFBVXKnjHw2Z8hV6KadCTFEkCkkTZWs2JNy+RaAB5QAAFhWgCrNyGFvBw09NkaRSCC21by2yJwuwUdYFp2Q7jmOoje0W4A-DYeaRE8nYjEHLtFCMRLHwEuoDsHI64i+BDZp+EVBsK0Biv7UShxhOEuQqR6uxS+NjPvFgk1YFBoEUSwpFaf0YWqPodDQTm7oqZaxB2lA9pYZzjwI5c1RgnRaTXeXbTuSk+hy6LCpQJrQvCsAleDHRgiZoQRAF7DdUuhUphmCoDcbbU1iZMKBmKUp-Sp6SESLIVfn+RILlAR5El8fEbdmXZiTnAh8qpRW0ndy46RCvzlAC8O-o4KO4x0oA
