@@ -355,6 +355,7 @@ _
       const runned: boolean = literalBefore !== literal;
 
       if (!runned) {
+        // just return the thing
         // TODO
         throw Error(
           'Error in `consumeNumericLiteral`: unexpected end of numeric literal after `e`'
@@ -409,6 +410,7 @@ _
       const runned: boolean = literalBefore !== literal;
 
       if (!runned) {
+        // return the error
         // TODO
         throw Error(
           'Error in `consumeNumericLiteral`: unexpected end of numeric literal after `.`'
@@ -417,9 +419,7 @@ _
     }
 
     // `consumeE` could throw an error
-    if (idxValid(i, code) && code[i].toLowerCase() === 'e') {
-      consumeE();
-    }
+    if (idxValid(i, code) && matches(code[i], /[eE]/)) consumeE();
 
     // TODO invalid if followed by an alpha numeric character
 
