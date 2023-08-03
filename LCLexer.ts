@@ -108,6 +108,12 @@ _
     ['5.3e3', 1],
     ['5.3e+3', 1],
     ['5.3e-3', 1],
+    ['0b0', 1],
+    ['0b01', 1],
+    ['0x0', 1],
+    ['0x0123456789abcdefABCDEF', 1],
+    ['0o0', 1],
+    ['0o01234567', 1],
     [';', 1],
     ['a', 1],
     ['_', 1],
@@ -324,6 +330,8 @@ _
         } else {
           // _ but followed by something different than a digit
 
+          // TODO, probably 0__0 => error message for that
+
           // TODO no throw!!
           throw Error(
             // TODO, error: `_` must be inbetween digits
@@ -354,57 +362,34 @@ _
       }
     }
 
-    function consumeHex() {
-      // TODO, check if i is not outside of code
-      literal += code[i++]; // 0
-      literal += code[i++]; // x
-      while (matches(code[i], /[0-9a-fA-F]/g)) {
+    function consumeUntilEnd(regexp) {
+      while (idxValid(i, code) && matches(code[i], regexp))
         literal += code[i++];
-      }
-      // TODO, what if matches different numeric literal now, ERROR
-    }
-
-    function consumeBinary() {
-      // TODO, check if i is not outside of code
-      literal += code[i++]; // 0
-      literal += code[i++]; // b
-      while (idxValid(i, code) && matches(code[i], /[01]/g)) {
-        literal += code[i++];
-      }
-      // TODO, what if matches different numeric literal now, ERROR
-    }
-
-    function consumeOctal() {
-      // TODO, check if i is not outside of code
-      literal += code[i++]; // 0
-      literal += code[i++]; // o
-      while (matches(code[i], /[0-7]/g)) {
-        literal += code[i++];
-      }
-      // TODO, what if matches different numeric literal now, ERROR
     }
 
     let i: number = idx;
-    let literal: string = '';
+    let literal: string = code[i++];
 
-    const specialLiteral = /[xbo]/;
+    const nonDecimalLiteral = /[xbo]/;
     if (
-      code[idx] === '0' &&
-      idxValid(idx + 1, code) &&
-      matches(code[idx + 1], specialLiteral)
+      matches(literal, /0/) &&
+      idxValid(i + 1, code) &&
+      matches(code[i + 1], nonDecimalLiteral)
     ) {
-      switch (code[idx + 1]) {
+      literal += code[i++];
+
+      switch (literal[1]) {
         case 'x':
-          consumeHex();
+          consumeUntilEnd(/[0-9a-fA-F]/g);
           break;
         case 'b':
-          consumeBinary();
+          consumeUntilEnd(/[01]/g);
           break;
         case 'o':
-          consumeOctal();
+          consumeUntilEnd(/[0-7]/g);
           break;
       }
-      // TODO error messages and followed by str literal
+      // TODO if now comes "digit", "eE" or ".": lexe and return invalid literal
       return {
         valid: true,
         value: { lexeme: literal, type: lexemeType.literal, idx },
