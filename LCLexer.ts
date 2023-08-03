@@ -5,6 +5,7 @@ import { printMessage, ErrorID } from './FErrorMsgs';
 
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
+// https://stackoverflow.com/questions/14954721/what-is-the-difference-between-a-token-and-a-lexeme BLL
 
 // #region constants
 const testCodes: string[] = [
@@ -84,7 +85,10 @@ _
 
 "string"
 
-;`
+;`,
+  '',
+  ' ',
+  ' \t\n\r'
 ];
 
 const mustNotLexe: string[] = [
@@ -104,7 +108,12 @@ const mustNotLexe: string[] = [
 
 */
 
-/*`
+/*`,
+  '/*',
+  '/* ',
+  '/**',
+  '/** ',
+  '/*/'
 ];
 
 const keywords: string[] = [
@@ -172,9 +181,10 @@ const symbols: string[] = [
   .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
 // #endregion
 
+// TODO, not peek() and consumeChar() = bad because not standard?
+
 export namespace Lexer {
   // #region types
-  // https://stackoverflow.com/questions/14954721/what-is-the-difference-between-a-token-and-a-lexeme BLL
   export interface token {
     lexeme: string;
     type: lexemeType;
@@ -183,10 +193,10 @@ export namespace Lexer {
 
   export enum lexemeType {
     comment = '#comment', // "//...", "/*...*/"
-    literal = '#literal', // 5.3e-4
-    keyword = '#keyword', // let
-    identifier = '#identifier', // identifier
-    symbol = '#symbol' // +
+    literal = '#literal', // "5.3e-4", "0xFF00FF"
+    keyword = '#keyword', // "let"
+    identifier = '#identifier', // "_a_z_A_Z_0_9"
+    symbol = '#symbol' // "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", ",", "(", ")", "{", "}", "=", "->", "."
   }
 
   // TODO
@@ -658,93 +668,61 @@ export namespace Lexer {
   }
 }
 
-/*
-test:
-""
-" "
-" \t\n\r"
-"/*"
-"/* "
-"/**"
-"/** "
-"/*\/"
-*/
-
 console.log(Lexer.lexe(mustNotLexe[0], 'file'));
 
 /*
 // JavaScript/TypeScript quickstart guide
-// This is a comment.
+// This is a comment. They are ignored by the programming language.
 /*This is also a comment*\/
-// Comments are ignored by the programming language.
 
 // "myFunction" is a function which takes a single number
-// as an argument and returns a number when executed
+// as an argument and returns a number when executed.
 function myFunction(x: number): number {
-  // with the "let" keyword, one can define a variable
+  // with the "let" keyword, one can define a variable.
   let myVariable: number = 5;
-  // variables can be modified by using the "=" operator
+  // variables can be modified with the "=" operator.
   myVariable = myVariable + 1;
-  // "myVariable" is now (5 + 1) aka 6
+  // "myVariable" is now (5 + 1) aka 6.
 
   // while the condition "myVariable != 8" is true
-  // the code in the "{ }" block will be executed
+  // the code in the "{ }" block will be executed.
   while (myVariable != 8) {
-    // the "++" operator increases the variable by one
+    // the "++" operator increases the variable value by one.
     ++myVariable;
   }
 
   // an "if" statement checks the condition
-  // and executes the "{ }" block, if the condition was true
+  // and executes the "{ }" block, if the condition was true.
   if (myVariable == 8) {
-    // "console.log" prints the argument,
-    // in the brackeds to the console
+    // "console.log" prints the arguments
+    // in the brackeds to the console.
     console.log(
-      'hey' /*text literals called "strings" must be surrounded by quotes*\/
+      'hey' /*character literals must be surrounded by double quotes*\/
     );
   } else {
-    // if the "if" condition was false, the "else" block is executed
+    // if the "if" condition was false, the "else" block is executed.
 
     console.log(false);
   }
 
-  // an array is a list of values
+  // an array is a list of values.
   let numberArray: number[] = [0, 1, 2, 3];
 
-  // works like the "while" loop
+  // "for" loops work like the "while" loop:
   for (
     let i = 0 /* executed before the first iteration *\/;
     i < 4 /* condition, gets checked before executing the next iteration *\/;
     ++i /* gets executed at the end of each iteration *\/
   ) {
     // with the "[ ]" operator, one can get the value
-    // at the given position where position 0 is the first element
+    // at the given position, where position 0 is the first element.
     myVariable = myVariable + numberArray[i];
   }
 
-  // myVariable is at this point 14
+  // myVariable is at this point 14.
   return myVariable + x;
 }
 
-// a function can be called with "( )"
+// a function can be called with "( )".
 let returnedValue: number = myFunction(5);
 */
-
-// TODO, not peek() and consumeChar() = bad because not standard?
-/**
- * Comments and whitespace: // and /* * /,  , \n, \t
- * Literals: +-.5e-3, 0xFF00FF
- * Keywords: let, fn, in, out
- * Identifier: _a_z_A_Z_0_9
- * Operator: +, -, *, /, ==, !=, <, >, <=, >=, ,, (, ), {, }, =, ->, .
- *
- * TypeSystem: ...
- */
-// TODO, also lex strings (for errors)
-// +, - (unary and binary), *, /, **, ***, %
-// &, |, ^, ~, <<, >>
-// ==, !=, <=, >=, <, >
-// =, :, ->, () (grouping and argument list), ;, ,, . (for accessing public values from namespaces), {} (for namespaces), [] (for type templating)
-
-//  TODO: have a lexeNextToken() function which also can work as an iterator
-// test: /* You can /* nest comments *\/ by escaping slashes */
