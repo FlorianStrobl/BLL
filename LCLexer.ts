@@ -246,6 +246,38 @@ _
         codeInvalid: true;
         type: 'invalid symbol';
         chars: string;
+      }
+    | {
+        codeInvalid: true;
+        type: 'did not finish numeric literal';
+        chars: string;
+      }
+    | {
+        codeInvalid: true;
+        type: 'invalid numeric literal';
+        chars: string;
+      }
+    | {
+        codeInvalid: true;
+        type: 'identifier connected to numeric literal';
+        chars: string;
+      }
+    | {
+        codeInvalid: true;
+        type: 'numeric literal ended with underscore';
+        chars: string;
+        underscores: number[];
+      }
+    | {
+        codeInvalid: true;
+        type: 'repeating underscores in numeric literal';
+        chars: string;
+        underscores: number[];
+      }
+    | {
+        codeInvalid: true;
+        type: 'not lexed digits after eE in numeric literal';
+        chars: string;
       };
 
   type nextToken =
@@ -321,82 +353,105 @@ _
 
   // assert: a numeric literal is at idx
   function consumeNumericLiteral(code: string, idx: number): nextToken {
-    function consumeDigits() {
-      // TODO, check if i is not outside of code
-      let lastCharWasDigit = false;
-      while (idxValid(i, code) && matches(code[i], /[0-9]|_/g)) {
-        if (matches(code[i], /[0-9]/g)) {
-          // digit
+    const invalidUnderscoresMiddle: number[] = [];
+    const invalidUnderscoresEnd: number[] = [];
+
+    function consumeDigits(alphabet: RegExp = /[0-9]/): boolean {
+      let consumedSomething: boolean = false;
+      let lastCharWasDigit: boolean = false;
+      let lastCharWasUnderscore: boolean = false;
+      while (
+        idxValid(i, code) &&
+        (matches(code[i], alphabet) || matches(code[i], /_/))
+      ) {
+        if (matches(code[i], alphabet)) {
           lastCharWasDigit = true;
+          lastCharWasUnderscore = false;
+          consumedSomething = true;
           literal += code[i++];
-        } else if (lastCharWasDigit && matches(code[i + 1], /[0-9]/g)) {
-          // _
+        } else if (lastCharWasDigit && matches(code[i], /_/)) {
           lastCharWasDigit = false;
-          literal += code[i++]; // must be "_"
-        } else {
-          // _ but followed by something different than a digit
-
-          // TODO, probably 0__0 => error message for that
-
-          // TODO no throw!!
-          throw Error(
-            // TODO, error: `_` must be inbetween digits
-            'Error in `consumeDigits` from `consumeNumericLiteral` in `Lexer`: a `_` in a numeric literal, must be preceded and followed by a digit'
-          );
+          lastCharWasUnderscore = true;
+          consumedSomething = true;
+          literal += code[i++];
+        } else if (!lastCharWasDigit && matches(code[i], /_/)) {
+          invalidUnderscoresMiddle.push(i);
+          lastCharWasDigit = false;
+          lastCharWasUnderscore = true;
+          consumedSomething = true;
+          literal += code[i++];
         }
       }
-    }
 
-    function consumeE() {
-      // TODO, check if i is not outside of code
-      literal += code[i++]; // "e" or "E"
+      if (lastCharWasUnderscore) invalidUnderscoresEnd.push(i);
 
-      // now optional "+" OR "-"
-      if (code[i] === '+' || code[i] === '-') {
-        literal += code[i++];
-      }
-
-      const literalBefore = literal;
-      consumeDigits();
-      const runned: boolean = literalBefore !== literal;
-
-      if (!runned) {
-        // just return the thing
-        // TODO
-        throw Error(
-          'Error in `consumeNumericLiteral`: unexpected end of numeric literal after `e`'
-        );
-      }
-    }
-
-    function consumeUntilEnd(regexp: RegExp) {
-      while (idxValid(i, code) && matches(code[i], regexp))
-        literal += code[i++];
+      return consumedSomething;
     }
 
     let i: number = idx;
-    let literal: string = code[i++];
+    let literal: string = '';
 
     const nonDecimalLiteral = /[xbo]/;
     if (
-      matches(literal, /0/) &&
+      matches(code[i], /0/) &&
       idxValid(i + 1, code) &&
       matches(code[i + 1], nonDecimalLiteral)
     ) {
       literal += code[i++];
 
-      switch (literal[1]) {
+      const hexAlphabet = /[0-9a-fA-F]/;
+      const binaryAlphabet = /[01]/;
+      const octalAlphabet = /[0-7]/;
+      literal += code[i];
+      switch (code[i++]) {
         case 'x':
-          consumeUntilEnd(/[0-9a-fA-F]/g);
+          consumeDigits(hexAlphabet);
           break;
         case 'b':
-          consumeUntilEnd(/[01]/g);
+          consumeDigits(binaryAlphabet);
           break;
         case 'o':
-          consumeUntilEnd(/[0-7]/g);
+          consumeDigits(octalAlphabet);
           break;
       }
-      // TODO if now comes "digit", "eE" or ".": lexe and return invalid literal
+
+      if (matches(code[i], /\./)) {
+        literal += code[i++];
+        consumeDigits();
+        return {
+          valid: false,
+          newidx: i,
+          value: {
+            codeInvalid: true,
+            type: 'invalid numeric literal',
+            chars: literal
+          }
+        };
+      } else if (matches(code[i], /[eE]/)) {
+        literal += code[i++];
+        if (matches(code[i], /[+-]/)) literal += code[i++];
+        consumeDigits();
+        return {
+          valid: false,
+          newidx: i,
+          value: {
+            codeInvalid: true,
+            type: 'invalid numeric literal',
+            chars: literal
+          }
+        };
+      } else if (literal.length === 2) {
+        return {
+          valid: false,
+          newidx: i,
+          value: {
+            codeInvalid: true,
+            type: 'did not finish numeric literal',
+            chars: literal
+          }
+        };
+      }
+
       return {
         valid: true,
         value: { lexeme: literal, type: lexemeType.literal, idx },
@@ -404,30 +459,80 @@ _
       };
     }
 
-    // first digits
     consumeDigits();
 
-    if (idxValid(i, code) && code[i] === '.') {
-      // is fraction
+    if (idxValid(i, code) && matches(code[i], /\./)) {
+      // TODO, sure that not just "." something else is allowed?
       literal += code[i++]; // "."
 
-      const literalBefore = literal;
-      consumeDigits();
-      const runned: boolean = literalBefore !== literal;
+      if (!consumeDigits()) {
+        // error, TODO: could still come [eE]!
+      }
+    }
 
-      if (!runned) {
-        // return the error
-        // TODO
-        throw Error(
-          'Error in `consumeNumericLiteral`: unexpected end of numeric literal after `.`'
+    if (idxValid(i, code) && matches(code[i], /[eE]/)) {
+      literal += code[i++];
+      if (matches(code[i], /[-+]/)) literal += code[i++];
+      if (!consumeDigits()) {
+        return {
+          valid: false,
+          value: {
+            codeInvalid: true,
+            type: 'not lexed digits after eE in numeric literal',
+            chars: literal
+          },
+          newidx: i
+        };
+      }
+    }
+
+    if (matches(code[i], /[a-zA-Z_]/)) {
+      const nextToken: nextToken = consumeIdentifier(code, i);
+
+      if (
+        nextToken.valid &&
+        (nextToken.value.type === lexemeType.identifier ||
+          nextToken.value.type === lexemeType.keyword)
+      ) {
+        return {
+          valid: false,
+          value: {
+            codeInvalid: true,
+            type: 'identifier connected to numeric literal',
+            chars: literal + nextToken.value
+          },
+          newidx: nextToken.newidx
+        };
+      } else {
+        throw new Error(
+          `Internal error while parsing numeric literal and a following identifier at position ${i}`
         );
       }
     }
 
-    // `consumeE` could throw an error
-    if (idxValid(i, code) && matches(code[i], /[eE]/)) consumeE();
-
-    // TODO invalid if followed by an alpha numeric character
+    if (invalidUnderscoresEnd) {
+      return {
+        valid: false,
+        value: {
+          codeInvalid: true,
+          chars: literal,
+          type: 'numeric literal ended with underscore',
+          underscores: invalidUnderscoresEnd
+        },
+        newidx: i
+      };
+    } else if (invalidUnderscoresMiddle) {
+      return {
+        valid: false,
+        value: {
+          codeInvalid: true,
+          chars: literal,
+          type: 'repeating underscores in numeric literal',
+          underscores: invalidUnderscoresMiddle
+        },
+        newidx: i
+      };
+    }
 
     return {
       valid: true,
@@ -442,9 +547,8 @@ _
     let identifier: string = '';
 
     const alphaNumeric = /[_a-zA-Z0-9]/;
-    while (idxValid(i, code) && matches(code[i], alphaNumeric)) {
+    while (idxValid(i, code) && matches(code[i], alphaNumeric))
       identifier += code[i++];
-    }
 
     return {
       valid: true,
