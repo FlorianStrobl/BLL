@@ -136,7 +136,13 @@ _
     '/* ',
     '/**',
     '/** ',
-    '/*/'
+    '/*/',
+    '5.',
+    '.5',
+    '0x',
+    '0o',
+    '0A',
+    '0X'
   ];
 
   const keywords: string[] = [
@@ -363,7 +369,7 @@ _
       }
     }
 
-    function consumeUntilEnd(regexp) {
+    function consumeUntilEnd(regexp: RegExp) {
       while (idxValid(i, code) && matches(code[i], regexp))
         literal += code[i++];
     }
