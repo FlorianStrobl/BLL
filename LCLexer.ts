@@ -14,13 +14,13 @@ export namespace Lexer {
   const testCodes: [string, number][] = [
     [
       `
-let num: i32 /* signed */ = + 5.5e-1; // an integer
+let num: i32 /* signed */ = + 5.5_3e+2; // an integer
 /**/`,
       11
     ],
     [
       `
-// import std;
+import std;
 // import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
 
 let num1 = 5;
@@ -34,11 +34,12 @@ let num4 = 0o7;
 let a: i32 = IO.in[i32](0); // gets an i32 from the console
 let b: i32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
 let c: i32 = IO.out(b); // prints b and assigneds b to c
+let a: i32 = 3 == 3;
 
 let d = func (x: i32) -> 5_4.1e-3;
 // 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 `,
-      80
+      90
     ]
   ];
 
@@ -96,40 +97,71 @@ _
 // "string"
 
 ;`,
-      147
+      130
     ],
     ['', 0],
     [' ', 0],
     [' \t\n\r', 0],
     ['5/**/identifier;3++hey//', 9],
+    [';', 1],
+    ['a', 1],
+    ['_', 1],
+    ['let', 1],
+    ['//', 1],
+    [`*/`, 2],
+    ['/**/', 1],
+    ['.5', 2],
+    [`/regexp/`, 3],
     ['0', 1],
     ['5', 1],
     ['5.3', 1],
     ['5.3e3', 1],
     ['5.3e+3', 1],
     ['5.3e-3', 1],
+    ['5e3', 1],
     ['0b0', 1],
     ['0b01', 1],
     ['0x0', 1],
     ['0x0123456789abcdefABCDEF', 1],
     ['0o0', 1],
     ['0o01234567', 1],
-    [';', 1],
-    ['a', 1],
-    ['_', 1],
-    ['let', 1],
-    ['//', 1],
-    ['/**/', 1],
-    ['.5', 2],
-    ['5e3', 1],
-    [`/regexp/`, 3],
-    [`*/`, 2],
     [`0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e+0_1_2_3`, 1],
-    [`_0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e-0_1_2_3`, 3]
+    [`_0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e-0_1_2_3`, 3],
+    ['~', 1],
+    ['!', 1],
+    ['%', 1],
+    ['^', 1],
+    ['&', 1],
+    ['*', 1],
+    ['(', 1],
+    [')', 1],
+    ['_', 1],
+    ['-', 1],
+    ['+', 1],
+    ['=', 1],
+    ['[', 1],
+    ['{', 1],
+    [']', 1],
+    ['}', 1],
+    ['|', 1],
+    [';', 1],
+    [':', 1],
+    ['/', 1],
+    ['.', 1],
+    ['>', 1],
+    [',', 1],
+    ['<', 1]
   ];
 
   const mustNotLexe: string[] = [
-    `\\ \` ' "" ? @ # $`,
+    `\\`,
+    `'`,
+    `\``,
+    `"`,
+    `?`,
+    `@`,
+    `#`,
+    `$`,
     `0_3_.0_3e+0_3`,
     `😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼`,
     `5e1. 5e1.2 5.1e 5.e 5e. 5e`,
@@ -585,10 +617,9 @@ _
 
     while (
       idxValid(i, code) &&
-      symbols.some((symbol) => symbol.startsWith(symbol + code[i]))
-    ) {
+      symbols.some((s) => s.startsWith(symbol + code[i]))
+    )
       symbol += code[i++];
-    }
 
     // got: "->"; valid: "->*"; invalid: "-", ">", "->"
     const symbolGot: string = symbol;
@@ -791,19 +822,23 @@ _
 
   export function debugLexer() {
     for (const code of testCodes) {
-      if (Lexer.lexe(code[0], 'debugfile').length !== code[1])
+      const runned = Lexer.lexe(code[0], 'debugfile');
+      if (runned.length !== code[1])
         console.log(
           'error in testCodes, invalid lexer for code:',
           code[0],
-          Lexer.lexe(code[0], 'debugfile')
+          runned,
+          runned.length
         );
     }
     for (const code of mustLexe) {
-      if (Lexer.lexe(code[0], 'debugfile').length !== code[1])
+      const runned = Lexer.lexe(code[0], 'debugfile');
+      if (runned.length !== code[1])
         console.log(
           'error in mustLexe, invalid lexer for code:',
           code[0],
-          Lexer.lexe(code[0], 'debugfile')
+          runned,
+          runned.length
         );
     }
     for (const code of mustNotLexe) {
