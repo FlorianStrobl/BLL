@@ -122,25 +122,38 @@ _
     ['/**/', 1],
     ['.5', 2],
     [`/regexp/`, 3],
-    [`*/`, 2]
+    [`*/`, 2],
+    [`0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e+0_1_2_3`, 1]
   ];
 
   const mustNotLexe: string[] = [
     `\\ \` ' "" ? @ # $`,
+    `0_3.0_3e+0_3`,
     `😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼`,
-    `5. 5e1. 5e1.2 5.1e 5.e 5e. 5e`,
-    `0__3`,
-    `0b 0x 0o 0b12A3 0xP 0o99A 09A4`,
-    `5let
-5test`,
+    `5e1. 5e1.2 5.1e 5.e 5e. 5e`,
+    `0b12A3 0xP 0o99A 09A4`,
+    `5let`,
+    `5test`,
     '/*',
     '/* ',
     '/**',
     '/** ',
     '/*/',
     '5.',
+    '5_',
+    '5_3_',
+    '5__3',
+    '5e',
+    '5E',
+    '5e+',
+    '5e3.6',
+    '5e-',
     '0x',
     '0o',
+    '0b',
+    '0b123',
+    '0b1F',
+    '0o178',
     '0A',
     '0X'
   ];
@@ -358,32 +371,30 @@ _
 
   // assert: a numeric literal is at idx
   function consumeNumericLiteral(code: string, idx: number): nextToken {
-    const invalidUnderscoresMiddle: number[] = [];
-    const invalidUnderscoresEnd: number[] = [];
-
     function consumeDigits(alphabet: RegExp = /[0-9]/): boolean {
       let consumedSomething: boolean = false;
       let lastCharWasDigit: boolean = false;
       let lastCharWasUnderscore: boolean = false;
+
       while (
         idxValid(i, code) &&
         (matches(code[i], alphabet) || matches(code[i], /_/))
       ) {
         if (matches(code[i], alphabet)) {
+          consumedSomething = true;
           lastCharWasDigit = true;
           lastCharWasUnderscore = false;
-          consumedSomething = true;
           literal += code[i++];
         } else if (lastCharWasDigit && matches(code[i], /_/)) {
+          consumedSomething = true;
           lastCharWasDigit = false;
           lastCharWasUnderscore = true;
-          consumedSomething = true;
           literal += code[i++];
         } else if (!lastCharWasDigit && matches(code[i], /_/)) {
-          invalidUnderscoresMiddle.push(i);
+          consumedSomething = true;
           lastCharWasDigit = false;
           lastCharWasUnderscore = true;
-          consumedSomething = true;
+          invalidUnderscoresMiddle.push(i);
           literal += code[i++];
         }
       }
@@ -396,9 +407,15 @@ _
     let i: number = idx;
     let literal: string = '';
 
+    let cantHaveDotOrE: boolean = false;
+    let gotDotOrE: boolean = false;
+    const invalidUnderscoresMiddle: number[] = [];
+    const invalidUnderscoresEnd: number[] = [];
+
+    const startNonDecimalLiteral = /0/;
     const nonDecimalLiteral = /[xbo]/;
     if (
-      matches(code[i], /0/) &&
+      matches(code[i], startNonDecimalLiteral) &&
       idxValid(i + 1, code) &&
       matches(code[i + 1], nonDecimalLiteral)
     ) {
@@ -407,8 +424,10 @@ _
       const hexAlphabet = /[0-9a-fA-F]/;
       const binaryAlphabet = /[01]/;
       const octalAlphabet = /[0-7]/;
-      literal += code[i];
-      switch (code[i++]) {
+
+      const char: string = code[i++];
+      literal += char;
+      switch (char) {
         case 'x':
           consumeDigits(hexAlphabet);
           break;
@@ -420,32 +439,9 @@ _
           break;
       }
 
-      if (matches(code[i], /\./)) {
-        literal += code[i++];
-        consumeDigits();
-        return {
-          valid: false,
-          newidx: i,
-          value: {
-            codeInvalid: true,
-            type: 'invalid numeric literal',
-            chars: literal
-          }
-        };
-      } else if (matches(code[i], /[eE]/)) {
-        literal += code[i++];
-        if (matches(code[i], /[+-]/)) literal += code[i++];
-        consumeDigits();
-        return {
-          valid: false,
-          newidx: i,
-          value: {
-            codeInvalid: true,
-            type: 'invalid numeric literal',
-            chars: literal
-          }
-        };
-      } else if (literal.length === 2) {
+      cantHaveDotOrE = true;
+
+      if (literal.length === 2) {
         return {
           valid: false,
           newidx: i,
@@ -462,11 +458,12 @@ _
         value: { lexeme: literal, type: lexemeType.literal, idx },
         newidx: i
       };
+    } else {
+      consumeDigits();
     }
 
-    consumeDigits();
-
     if (idxValid(i, code) && matches(code[i], /\./)) {
+      gotDotOrE = true;
       // TODO, sure that not just "." something else is allowed?
       literal += code[i++]; // "."
 
@@ -489,8 +486,11 @@ _
     }
 
     if (idxValid(i, code) && matches(code[i], /[eE]/)) {
+      gotDotOrE = true;
+
       literal += code[i++];
       if (matches(code[i], /[-+]/)) literal += code[i++];
+
       if (!consumeDigits()) {
         return {
           valid: false,
@@ -501,6 +501,8 @@ _
           },
           newidx: i
         };
+      } else if (matches(code[i], /\./)) {
+        // TODO error
       }
     }
 
