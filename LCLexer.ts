@@ -1,11 +1,9 @@
 import { printMessage, ErrorID } from './FErrorMsgs';
 
 // check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#
-
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
 // https://stackoverflow.com/questions/14954721/what-is-the-difference-between-a-token-and-a-lexeme BLL
-
 // TODO, not peek() and consumeChar() = bad because not standard?
 
 export namespace Lexer {
