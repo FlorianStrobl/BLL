@@ -119,7 +119,10 @@ _
     ['_', 1],
     ['let', 1],
     ['//', 1],
-    ['/**/', 1]
+    ['/**/', 1],
+    ['.5', 2],
+    [`/regexp/`, 3],
+    [`*/`, 2]
   ];
 
   const mustNotLexe: string[] = [
@@ -130,15 +133,12 @@ _
     `0b 0x 0o 0b12A3 0xP 0o99A 09A4`,
     `5let
 5test`,
-    `/regexp/`,
-    `*/`,
     '/*',
     '/* ',
     '/**',
     '/** ',
     '/*/',
     '5.',
-    '.5',
     '0x',
     '0o',
     '0A',
@@ -277,6 +277,11 @@ _
     | {
         codeInvalid: true;
         type: 'not lexed digits after eE in numeric literal';
+        chars: string;
+      }
+    | {
+        codeInvalid: true;
+        type: 'not lexed digits after dot in numeric literal';
         chars: string;
       };
 
@@ -466,7 +471,20 @@ _
       literal += code[i++]; // "."
 
       if (!consumeDigits()) {
-        // error, TODO: could still come [eE]!
+        if (matches(code[i], /[eE]/)) {
+          literal += code[i++];
+          if (matches(code[i], /[+-]/)) literal += code[i++];
+          consumeDigits();
+        }
+        return {
+          valid: false,
+          value: {
+            codeInvalid: true,
+            type: 'not lexed digits after dot in numeric literal',
+            chars: literal
+          },
+          newidx: i
+        };
       }
     }
 
@@ -510,7 +528,7 @@ _
       }
     }
 
-    if (invalidUnderscoresEnd) {
+    if (invalidUnderscoresEnd.length !== 0) {
       return {
         valid: false,
         value: {
@@ -521,7 +539,7 @@ _
         },
         newidx: i
       };
-    } else if (invalidUnderscoresMiddle) {
+    } else if (invalidUnderscoresMiddle.length !== 0) {
       return {
         valid: false,
         value: {
@@ -681,41 +699,36 @@ _
       };
     }
 
-    const commentStart = /[/]/;
-    if (matches(code[idx], commentStart)) {
-      const commentStart2 = /[/*]/;
-      if (idxValid(idx + 1, code) && matches(code[idx + 1], commentStart2)) {
-        return consumeComment(code, idx);
-      }
-    }
+    const commentStart1 = /[/]/;
+    const commentStart2 = /[/*]/;
+    if (
+      matches(code[idx], commentStart1) &&
+      idxValid(idx + 1, code) &&
+      matches(code[idx + 1], commentStart2)
+    )
+      return consumeComment(code, idx);
 
     const identifierStart = /[_a-zA-Z]/;
-    if (matches(code[idx], identifierStart)) {
+    if (matches(code[idx], identifierStart))
       return consumeIdentifier(code, idx);
-    }
 
     const numberStart = /[0-9]/;
-    if (matches(code[idx], numberStart)) {
+    if (matches(code[idx], numberStart))
       return consumeNumericLiteral(code, idx);
-    }
 
-    const firstCharSymbols = symbols.map((e) => e[0]);
-    if (firstCharSymbols.includes(code[idx])) {
-      return consumeSymbol(code, idx);
-    }
+    const firstCharSymbols: string[] = symbols.map((e) => e[0]);
+    if (firstCharSymbols.includes(code[idx])) return consumeSymbol(code, idx);
 
     // TODO add string support for better errors, that means also \u{xxxx}
     // and \", \\, \n, \r, \t
     const stringStart = /"/;
-    if (matches(code[idx], stringStart)) {
-      return consumeString(code, idx);
-    }
+    if (matches(code[idx], stringStart)) return consumeString(code, idx);
 
     let invalidChars: string = '';
+    // TODO not "\"?
     const validChars = /[" \t\n\r0-9a-zA-Z_\-+*/%&|^~!<>=:;,.(){}[\]]/;
-    while (idxValid(idx, code) && !matches(code[idx], validChars)) {
+    while (idxValid(idx, code) && !matches(code[idx], validChars))
       invalidChars += code[idx++];
-    }
 
     return {
       valid: false,
@@ -792,16 +805,16 @@ _
         );
     }
     for (const code of mustNotLexe) {
-      // if (
-      //   Lexer.lexe(code, 'debugfile').some(
-      //     (e: errorToken | token) => !('codeInvalid' in e) || !e.codeInvalid
-      //   )
-      // )
-      //   console.log(
-      //     'error, invalid lexer for code:',
-      //     code[0],
-      //     Lexer.lexe(code[0], 'debugfile')
-      //   );
+      if (
+        Lexer.lexe(code, 'debugfile').some(
+          (e: errorToken | token) => !('codeInvalid' in e) || !e.codeInvalid
+        )
+      )
+        console.log(
+          'error, invalid lexer for code:',
+          code,
+          Lexer.lexe(code, 'debugfile')
+        );
     }
   }
 
