@@ -164,8 +164,16 @@ _
     `$`,
     `0_3_.0_3e+0_3`,
     `😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼`,
-    `5e1. 5e1.2 5.1e 5.e 5e. 5e`,
-    `0b12A3 0xP 0o99A 09A4`,
+    `5e1.`,
+    `5e1.2`,
+    `5.1e`,
+    `5.e`,
+    `5e.`,
+    `5e`,
+    `0b12A3`,
+    `0xP`,
+    `0o99A`,
+    `09A4`,
     `5let`,
     `5test`,
     '/*',
@@ -528,7 +536,7 @@ _
           value: {
             codeInvalid: true,
             type: 'identifier connected to numeric literal',
-            chars: literal + nextToken.value,
+            chars: literal + nextToken.value.lexeme,
             idx
           },
           newidx: nextToken.newidx
