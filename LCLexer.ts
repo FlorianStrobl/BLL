@@ -242,52 +242,65 @@ _
 
   // TODO
   type errorToken =
-    | { codeInvalid: false; type: 'eof' /*reached end of file*/ }
+    | { codeInvalid: false; type: 'eof' /*reached end of file*/; idx: number }
     | {
         codeInvalid: true;
         type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
+        idx: number;
       }
-    | { codeInvalid: true; type: 'invalid char'; chars: string }
-    | { codeInvalid: true; type: 'eof in /* comment'; chars: string }
-    | { codeInvalid: true; type: 'string used'; chars: string }
-    | { codeInvalid: true; type: 'eof in string'; chars: string }
+    | { codeInvalid: true; type: 'invalid char'; chars: string; idx: number }
+    | {
+        codeInvalid: true;
+        type: 'eof in /* comment';
+        chars: string;
+        idx: number;
+      }
+    | { codeInvalid: true; type: 'string used'; chars: string; idx: number }
+    | { codeInvalid: true; type: 'eof in string'; chars: string; idx: number }
     | {
         codeInvalid: true;
         type: 'used escape symbol not properly in string';
         chars: string;
         idxs: number[];
+        idx: number;
       }
     | {
         codeInvalid: true;
         type: 'invalid symbol';
         chars: string;
+        idx: number;
       }
     | {
         codeInvalid: true;
         type: 'invalid numeric literal';
         chars: string;
+        idx: number;
       }
     | {
         codeInvalid: true;
         type: 'identifier connected to numeric literal';
         chars: string;
+        idx: number;
       }
     | {
         codeInvalid: true;
         type: 'part of numeric literal ended with underscore';
         chars: string;
         underscores: number[];
+        idx: number;
       }
     | {
         codeInvalid: true;
         type: 'repeating underscores in numeric literal';
         chars: string;
         underscores: number[];
+        idx: number;
       }
     | {
         codeInvalid: true;
         type: 'not lexed digits after dot in numeric literal';
         chars: string;
+        idx: number;
       };
 
   type nextToken =
@@ -347,7 +360,8 @@ _
           value: {
             codeInvalid: true,
             type: 'eof in /* comment',
-            chars: comment
+            chars: comment,
+            idx
           },
           newidx: i
         };
@@ -482,7 +496,8 @@ _
           value: {
             codeInvalid: true,
             type: 'identifier connected to numeric literal',
-            chars: literal + nextToken.value
+            chars: literal + nextToken.value,
+            idx
           },
           newidx: nextToken.newidx
         };
@@ -500,7 +515,8 @@ _
           codeInvalid: true,
           chars: literal,
           type: 'part of numeric literal ended with underscore',
-          underscores: invalidUnderscoresEnd
+          underscores: invalidUnderscoresEnd,
+          idx
         },
         newidx: i
       };
@@ -511,7 +527,8 @@ _
           codeInvalid: true,
           chars: literal,
           type: 'repeating underscores in numeric literal',
-          underscores: invalidUnderscoresMiddle
+          underscores: invalidUnderscoresMiddle,
+          idx
         },
         newidx: i
       };
@@ -526,7 +543,8 @@ _
         value: {
           codeInvalid: true,
           type: 'invalid numeric literal',
-          chars: literal
+          chars: literal,
+          idx
         }
       };
     }
@@ -581,7 +599,8 @@ _
           value: {
             codeInvalid: true,
             type: 'invalid symbol',
-            chars: symbolGot
+            chars: symbolGot,
+            idx
           },
           newidx: i
         };
@@ -603,16 +622,17 @@ _
     let i: number = idx;
     let string: string = code[i++];
 
-    const stringEnd = /"/;
+    const stringStartSymbol: string = string;
+    const stringEnd = new RegExp(stringStartSymbol);
     const escapeSymbol = /\\/;
-    const escapedSymbols = /["\\nrtu]/;
+    const toEscapSymbols = new RegExp(`[${stringStartSymbol}\\\\nrtu]`);
     let escaped: boolean = false;
     let escapeErrorIdxs: number[] = [];
     while (idxValid(i, code) && !(matches(code[i], stringEnd) && !escaped)) {
       if (escaped) {
         escaped = false;
 
-        if (matches(code[i], escapedSymbols)) {
+        if (matches(code[i], toEscapSymbols)) {
           string += code[i++];
           // TODO if char was "u", it has to be followed by 4 digits
         } else {
@@ -632,7 +652,7 @@ _
     } else {
       return {
         valid: false,
-        value: { codeInvalid: true, type: 'eof in string', chars: string },
+        value: { codeInvalid: true, type: 'eof in string', chars: string, idx },
         newidx: i
       };
     }
@@ -644,7 +664,8 @@ _
           codeInvalid: true,
           type: 'used escape symbol not properly in string',
           chars: string,
-          idxs: escapeErrorIdxs
+          idxs: escapeErrorIdxs,
+          idx
         },
         newidx: i
       };
@@ -652,7 +673,7 @@ _
 
     return {
       valid: false,
-      value: { codeInvalid: true, type: 'string used', chars: string },
+      value: { codeInvalid: true, type: 'string used', chars: string, idx },
       newidx: i
     };
   }
@@ -673,7 +694,7 @@ _
     if (!idxValid(idx, code)) {
       return {
         valid: false,
-        value: { type: 'eof', codeInvalid: false },
+        value: { type: 'eof', codeInvalid: false, idx },
         newidx: idx
       };
     }
@@ -700,19 +721,23 @@ _
 
     // TODO add string support for better errors, that means also \u{xxxx}
     // and \", \\, \n, \r, \t
-    const stringStart = /"/;
+    const stringStart = /["'`]/;
     if (matches(code[idx], stringStart)) return consumeString(code, idx);
 
     let invalidChars: string = '';
-    // TODO not "\"?
-    const validChars = /[" \t\n\r0-9a-zA-Z_\-+*/%&|^~!<>=:;,.(){}[\]]/;
+    const validChars = /['`" \t\n\r0-9a-zA-Z_\-+*/%&|^~!<>=:;,.(){}[\]]/;
     while (idxValid(idx, code) && !matches(code[idx], validChars))
       invalidChars += code[idx++];
 
     return {
       valid: false,
       newidx: idx,
-      value: { type: 'invalid char', chars: invalidChars, codeInvalid: true }
+      value: {
+        type: 'invalid char',
+        chars: invalidChars,
+        codeInvalid: true,
+        idx
+      }
     };
   }
 
@@ -765,8 +790,6 @@ _
   }
 
   export function debugLexer() {
-    console.log('debug lexer');
-
     for (const code of testCodes) {
       if (Lexer.lexe(code[0], 'debugfile').length !== code[1])
         console.log(
@@ -795,6 +818,7 @@ _
           Lexer.lexe(code, 'debugfile')
         );
     }
+    console.log('runned debug lexer');
   }
 
   debugLexer();
