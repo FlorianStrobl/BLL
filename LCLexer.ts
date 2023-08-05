@@ -8,196 +8,6 @@ import { printMessage, ErrorID } from './FErrorMsgs';
 
 export namespace Lexer {
   // #region constants
-  // TODO, add the number of lexemes it should produce
-  const testCodes: [string, number][] = [
-    [
-      `
-let num: i32 /* signed */ = + 5.5_3e+2; // an integer
-/**/`,
-      11
-    ],
-    [
-      `
-import std;
-// import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
-
-let num1 = 5;
-let num2 = 0x5;
-let num3 = 0b1;
-let num4 = 0o7;
-
-/* You can /* nest comments *\\/ by escaping slashes */
-
-// example code
-let a: i32 = IO.in[i32](0); // gets an i32 from the console
-let b: i32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
-let c: i32 = IO.out(b); // prints b and assigneds b to c
-let a: i32 = 3 == 3;
-
-let d = func (x: i32) -> 5_4.1e-3;
-// 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
-`,
-      90
-    ]
-  ];
-
-  const mustLexe: [string, number][] = [
-    [
-      `;
-/**//**/
-/**/5
-/**/let
-/**/test
-/**/+
-
-5/**/
-// 5"hey"
-// 5let
-// 5test
-5+
-
-let/**/
-// let"hey", lexer error!
-letlet // identifier
-lettest // identifier
-let+
-
-test/**/
-// test"hey", lexer error!
-testlet // identifier
-testtest
-test+
-
-+/**/
-+5
-+let
-+test
-+* // two operators
-
-5 5.1e2 // TODO: 51.e-3
-01_23_45_67_89
-0123456789 0b1010 0x0123456789ABCDEFabcdef 0o01234567
-
-/* You can /* nest comments *e/ by escaping slashes */
-
-- > * -> * - >* ->*
-
-_
-
-~ & | ^ + - * / % = ( ) [ ] { } < > : ; . , !
-
-! * ** *** + - % / < > = == != <= >= << >> ~ & | ^ : ; . , -> () [] {} //
-
-********
-
-~~5
-
-// "string"
-
-;`,
-      130
-    ],
-    ['', 0],
-    [' ', 0],
-    [' \t\n\r', 0],
-    ['5/**/identifier;3++hey//', 9],
-    [';', 1],
-    ['a', 1],
-    ['_', 1],
-    ['let', 1],
-    ['//', 1],
-    [`*/`, 2],
-    ['/**/', 1],
-    ['.5', 2],
-    [`/regexp/`, 3],
-    ['0', 1],
-    ['5', 1],
-    ['5.3', 1],
-    ['5.3e3', 1],
-    ['5.3e+3', 1],
-    ['5.3e-3', 1],
-    ['5e3', 1],
-    ['0b0', 1],
-    ['0b01', 1],
-    ['0x0', 1],
-    ['0x0123456789abcdefABCDEF', 1],
-    ['0o0', 1],
-    ['0o01234567', 1],
-    [`0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e+0_1_2_3`, 1],
-    [`_0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e-0_1_2_3`, 3],
-    ['~', 1],
-    ['!', 1],
-    ['%', 1],
-    ['^', 1],
-    ['&', 1],
-    ['*', 1],
-    ['(', 1],
-    [')', 1],
-    ['_', 1],
-    ['-', 1],
-    ['+', 1],
-    ['=', 1],
-    ['[', 1],
-    ['{', 1],
-    [']', 1],
-    ['}', 1],
-    ['|', 1],
-    [';', 1],
-    [':', 1],
-    ['/', 1],
-    ['.', 1],
-    ['>', 1],
-    [',', 1],
-    ['<', 1]
-  ];
-
-  const mustNotLexe: string[] = [
-    `\\`,
-    `'`,
-    `\``,
-    `"`,
-    `?`,
-    `@`,
-    `#`,
-    `$`,
-    `0_3_.0_3e+0_3`,
-    `😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼`,
-    `5e1.`,
-    `5e1.2`,
-    `5.1e`,
-    `5.e`,
-    `5e.`,
-    `5e`,
-    `0b12A3`,
-    `0xP`,
-    `0o99A`,
-    `09A4`,
-    `5let`,
-    `5test`,
-    '/*',
-    '/* ',
-    '/**',
-    '/** ',
-    '/*/',
-    '5.',
-    '5_',
-    '5_3_',
-    '5__3',
-    '5e',
-    '5E',
-    '5e+',
-    '5e3.6',
-    '5e-',
-    '0x',
-    '0o',
-    '0b',
-    '0b123',
-    '0b1F',
-    '0o178',
-    '0A',
-    '0X'
-  ];
-
   const keywords: string[] = [
     'import', // imports all public identifiers from other files
 
@@ -216,7 +26,7 @@ _
     'i32', // 32 bit integer
     'f32', //single precision 32 bit float after the IEEE754-2008 standard
     'undetermined' // cannot be determined at compile time but must be done at compile time
-  ].sort();
+  ]; //.sort();
 
   const symbols: string[] = [
     // only for same primitive types
@@ -258,9 +68,9 @@ _
     '}',
     '[', // generic type annotations
     ']'
-  ]
-    .sort(/*sort for length*/ (a, b) => b.length - a.length)
-    .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
+  ];
+  //  .sort((a, b) => b.length - a.length)
+  //  .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
   // #endregion
 
   // #region types
@@ -718,18 +528,23 @@ _
 
   function matches(
     character: string,
-    regexp: string | string[] | RegExp
+    toMatch: string | string[] | RegExp
   ): boolean {
     return (
       typeof character === 'string' &&
-      ((typeof regexp === 'string' && character === regexp) ||
-        (Array.isArray(regexp) && regexp.includes(character)) ||
-        (regexp instanceof RegExp && character[0].match(regexp) !== null))
+      character.length === 1 &&
+      ((typeof toMatch === 'string' && character === toMatch) ||
+        (Array.isArray(toMatch) && toMatch.includes(character)) ||
+        (toMatch instanceof RegExp && character.match(toMatch) !== null))
     );
   }
 
-  function idxValid(idx: number, obj: { length: number }) {
-    return idx < obj.length;
+  function idxValid(idx: number, obj: number | { length: number }) {
+    return (
+      0 <= idx &&
+      Number.isSafeInteger(idx) &&
+      (typeof obj === 'number' ? idx < obj : idx < obj.length)
+    );
   }
 
   function lexeNextToken(code: string, idx: number): nextToken {
@@ -833,6 +648,206 @@ _
   }
 
   export function debugLexer() {
+    const testCodes: [string, number][] = [
+      [
+        `
+let num: i32 /* signed */ = + 5.5_3e+2; // an integer
+/**/`,
+        11
+      ],
+      [
+        `
+import std;
+// import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
+
+let num1 = 5;
+let num2 = 0x5;
+let num3 = 0b1;
+let num4 = 0o7;
+
+/* You can /* nest comments *\\/ by escaping slashes */
+
+// example code
+let a: i32 = IO.in[i32](0); // gets an i32 from the console
+let b: i32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
+let c: i32 = IO.out(b); // prints b and assigneds b to c
+let a: i32 = 3 == 3;
+
+let d = func (x: i32) -> 5_4.1e-3;
+// 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
+`,
+        90
+      ]
+    ];
+
+    const mustLexe: [string, number][] = [
+      [
+        `;
+/**//**/
+/**/5
+/**/let
+/**/test
+/**/+
+
+5/**/
+// 5"hey"
+// 5let
+// 5test
+5+
+
+let/**/
+// let"hey", lexer error!
+letlet // identifier
+lettest // identifier
+let+
+
+test/**/
+// test"hey", lexer error!
+testlet // identifier
+testtest
+test+
+
++/**/
++5
++let
++test
++* // two operators
+
+5 5.1e2 // TODO: 51.e-3
+01_23_45_67_89
+0123456789 0b1010 0x0123456789ABCDEFabcdef 0o01234567
+
+/* You can /* nest comments *e/ by escaping slashes */
+
+- > * -> * - >* ->*
+
+_
+
+~ & | ^ + - * / % = ( ) [ ] { } < > : ; . , !
+
+! * ** *** + - % / < > = == != <= >= << >> ~ & | ^ : ; . , -> () [] {} //
+
+********
+
+~~5
+
+// "string"
+
+;`,
+        130
+      ],
+      ['', 0],
+      [' ', 0],
+      [' \t\n\r', 0],
+      ['5/**/identifier;3++hey//', 9],
+      [';', 1],
+      ['a', 1],
+      ['_', 1],
+      ['let', 1],
+      ['identifier_', 1],
+      ['//', 1],
+      [`*/`, 2],
+      ['/**/', 1],
+      ['.5', 2],
+      [`/regexp/`, 3],
+      ['0', 1],
+      ['5', 1],
+      ['5.3', 1],
+      ['5.3e3', 1],
+      ['5.3e+3', 1],
+      ['5.3e-3', 1],
+      ['5e3', 1],
+      ['0b0', 1],
+      ['0b01', 1],
+      ['0x0', 1],
+      ['0x0123456789abcdefABCDEF', 1],
+      ['0o0', 1],
+      ['0o01234567', 1],
+      [`0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e+0_1_2_3`, 1],
+      [`_0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e-0_1_2_3`, 3],
+      ['~', 1],
+      ['!', 1],
+      ['%', 1],
+      ['^', 1],
+      ['&', 1],
+      ['*', 1],
+      ['(', 1],
+      [')', 1],
+      ['_', 1],
+      ['-', 1],
+      ['+', 1],
+      ['=', 1],
+      ['[', 1],
+      ['{', 1],
+      [']', 1],
+      ['}', 1],
+      ['|', 1],
+      [';', 1],
+      [':', 1],
+      ['/', 1],
+      ['.', 1],
+      ['>', 1],
+      [',', 1],
+      ['<', 1],
+      ['0xa+3', 3],
+      ['0xE+3', 3],
+      ['0xaE+3', 3],
+      ['0xeee', 1],
+      ['534e354', 1],
+      ...symbols.map((e: string) => [e, 1] as [string, number]),
+      ...keywords.map((e: string) => [e, 1] as [string, number])
+    ];
+
+    const mustNotLexe: string[] = [
+      `\\`,
+      `'`,
+      `\``,
+      `"`,
+      `?`,
+      `@`,
+      `#`,
+      `$`,
+      `0_3_.0_3e+0_3`,
+      `😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼`,
+      `5e1.`,
+      `5e1.2`,
+      `5.1e`,
+      `5.e`,
+      `5e.`,
+      `5e`,
+      `0b12A3`,
+      `0xP`,
+      `0o99A`,
+      `09A4`,
+      `5let`,
+      `5test`,
+      '/*',
+      '/* ',
+      '/**',
+      '/** ',
+      '/*/',
+      '5.',
+      '5_',
+      '5_3_',
+      '5__3',
+      '5e',
+      '5E',
+      '5e+',
+      '5e3.6',
+      '5e-',
+      '0x',
+      '0o',
+      '0b',
+      '0b123',
+      '0b1F',
+      '0o178',
+      '0A',
+      '0X',
+      '0B',
+      '0O',
+      '03434a35'
+    ];
+
     for (const code of testCodes) {
       const runned = Lexer.lexe(code[0], 'debugfile');
       if (runned.length !== code[1])
