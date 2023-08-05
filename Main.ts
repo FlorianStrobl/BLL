@@ -9,7 +9,7 @@ import { inspect } from 'util';
 const filename = 'src';
 const code = `
 // **
-let my_func = func (x) -> !2 - (x + 3);
+let my_func = func (x) -> - 2 - (x + 3);
 
 //let g = func (x, y) -> x / y;
 `;
