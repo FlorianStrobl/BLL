@@ -43,7 +43,7 @@ export namespace Lexer {
     '|', // or
     '^', // xor
     '~', // not
-    '!', // logical not TODO (0 -> 1, any -> 0)
+    '!', // logical not (0 -> 1, any -> 0)
     '<<', // left shift
     '>>', // right shift
 
@@ -71,6 +71,22 @@ export namespace Lexer {
   ];
   //  .sort((a, b) => b.length - a.length)
   //  .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
+
+  const alphaNumeric: RegExp = /[0-9a-zA-Z_]/;
+  const identifierStart: RegExp = /[a-zA-Z_]/;
+  const hexDigits: RegExp = /[0-9a-fA-F]/;
+  const decimalDigits: string[] = [
+    '0',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9'
+  ];
   // #endregion
 
   // #region types
@@ -108,6 +124,13 @@ export namespace Lexer {
     | {
         codeInvalid: true;
         type: 'used escape symbol not properly in string';
+        chars: string;
+        idxs: number[];
+        idx: number;
+      }
+    | {
+        codeInvalid: true;
+        type: 'used escape symbol with u not properly in string';
         chars: string;
         idxs: number[];
         idx: number;
@@ -195,11 +218,12 @@ export namespace Lexer {
         comment += code[i++];
       }
 
+      // incase idxValid() stopped
       if (
         comment.length < 4 ||
         !matches(comment[comment.length - 2], commentType2Stop1) ||
         !matches(comment[comment.length - 1], commentType2Stop2)
-      ) {
+      )
         return {
           valid: false,
           value: {
@@ -210,7 +234,6 @@ export namespace Lexer {
           },
           newidx: i
         };
-      }
     }
 
     return {
@@ -229,7 +252,7 @@ export namespace Lexer {
 
       while (
         idxValid(i, code) &&
-        (matches(code[i], hexAlphabet) || matches(code[i], '_'))
+        (matches(code[i], hexDigits) || matches(code[i], '_'))
       ) {
         if (matches(code[i], alphabet)) {
           consumedSomething = true;
@@ -247,10 +270,7 @@ export namespace Lexer {
           lastCharWasUnderscore = true;
           invalidUnderscoresMiddle.push(i);
           literal += code[i++];
-        } else if (
-          matches(code[i], hexAlphabet) &&
-          !matches(code[i], alphabet)
-        ) {
+        } else if (matches(code[i], hexDigits) && !matches(code[i], alphabet)) {
           if (matches(code[i], 'e')) break; // TODO
           invalidHadWrongAlpabet = true;
           literal += code[i++];
@@ -265,10 +285,9 @@ export namespace Lexer {
     let i: number = idx;
     let literal: string = '';
 
-    const hexAlphabet = /[0-9a-fA-F]/;
-    const binaryAlphabet = /[01]/;
-    const octalAlphabet = /[0-7]/;
-    let alphabet = /[0-9]/;
+    let alphabet: RegExp | string[] = decimalDigits;
+    const binaryDigits: string[] = ['0', '1'];
+    const octalDigits: string[] = ['0', '1', '2', '3', '4', '5', '6', '7'];
 
     let gotDotOrE: boolean = false;
     let cantHaveDotOrE: boolean = false;
@@ -291,15 +310,15 @@ export namespace Lexer {
       literal += char;
       switch (char) {
         case 'x':
-          alphabet = hexAlphabet;
+          alphabet = hexDigits;
           if (!consumeDigits()) invalidDidNotConsumDigits = true;
           break;
         case 'b':
-          alphabet = binaryAlphabet;
+          alphabet = binaryDigits;
           if (!consumeDigits()) invalidDidNotConsumDigits = true;
           break;
         case 'o':
-          alphabet = octalAlphabet;
+          alphabet = octalDigits;
           if (!consumeDigits()) invalidDidNotConsumDigits = true;
           break;
       }
@@ -328,7 +347,8 @@ export namespace Lexer {
       }
     }
 
-    if (matches(code[i], /[a-zA-Z_]/)) {
+    if (matches(code[i], identifierStart)) {
+      // TODO, add index as information
       const nextToken: nextToken = consumeIdentifier(code, i);
 
       if (
@@ -406,7 +426,6 @@ export namespace Lexer {
     let i: number = idx;
     let identifier: string = '';
 
-    const alphaNumeric = /[_a-zA-Z0-9]/;
     while (idxValid(i, code) && matches(code[i], alphaNumeric))
       identifier += code[i++];
 
@@ -426,7 +445,7 @@ export namespace Lexer {
   // assert: an operator is at idx
   function consumeSymbol(code: string, idx: number): nextToken {
     let i: number = idx;
-    let symbol: string = code[i++];
+    let symbol: string = '';
 
     while (
       idxValid(i, code) &&
@@ -437,7 +456,7 @@ export namespace Lexer {
     // got: "->"; valid: "->*"; invalid: "-", ">", "->"
     const symbolGot: string = symbol;
     while (!symbols.includes(symbol)) {
-      if (symbol === '') {
+      if (symbol.length === 0) {
         return {
           valid: false,
           value: {
@@ -450,7 +469,7 @@ export namespace Lexer {
         };
       }
 
-      symbol = symbol.slice(0, symbol.length - 1);
+      symbol = symbol.substring(0, symbol.length - 1);
       i--;
     }
 
@@ -463,45 +482,56 @@ export namespace Lexer {
 
   // assert: a string is at idx
   function consumeString(code: string, idx: number): nextToken {
+    // TODO, what about \n in the middle of a string?
     let i: number = idx;
     let string: string = code[i++];
 
-    const stringStartSymbol: string = string;
-    const stringEnd = stringStartSymbol;
+    const stringEnd: string = string;
     const escapeSymbol = '\\';
-    const toEscapSymbols = new RegExp(`[${stringStartSymbol}\\\\nrtu]`);
+    const toEscapSymbols = [stringEnd, '\\', 'n', 't', 'r', 'u'];
+
     let escaped: boolean = false;
     let escapeErrorIdxs: number[] = [];
+    let escapeErrorU: number[] = [];
     while (idxValid(i, code) && !(matches(code[i], stringEnd) && !escaped)) {
-      if (escaped) {
-        escaped = false;
-
-        if (matches(code[i], toEscapSymbols)) {
-          string += code[i++];
-          // TODO if char was "u", it has to be followed by 4 digits
-        } else {
-          escapeErrorIdxs.push(i);
-          string += code[i++];
-        }
-      } else if (matches(code[i], escapeSymbol)) {
-        escaped = true;
+      if (!escaped) {
+        if (matches(code[i], escapeSymbol)) escaped = true;
         string += code[i++];
       } else {
-        string += code[i++];
+        if (!matches(code[i], toEscapSymbols)) {
+          escapeErrorIdxs.push(i);
+          string += code[i++];
+        } else {
+          const char: string = code[i++];
+          string += char;
+
+          if (matches(char, 'u')) {
+            if (
+              idxValid(i, code) &&
+              idxValid(i + 3, code) &&
+              matches(code[i], hexDigits) &&
+              matches(code[i + 1], hexDigits) &&
+              matches(code[i + 2], hexDigits) &&
+              matches(code[i + 3], hexDigits)
+            )
+              string += code[i++] + code[i++] + code[i++] + code[i++];
+            else escapeErrorU.push(i);
+          }
+        }
+
+        escaped = false;
       }
     }
 
-    if (idxValid(i, code) && matches(code[i], stringEnd)) {
-      string += code[i++];
-    } else {
+    if (idxValid(i, code) && matches(code[i], stringEnd)) string += code[i++];
+    else
       return {
         valid: false,
         value: { codeInvalid: true, type: 'eof in string', chars: string, idx },
         newidx: i
       };
-    }
 
-    if (escapeErrorIdxs.length !== 0) {
+    if (escapeErrorIdxs.length !== 0)
       return {
         valid: false,
         value: {
@@ -513,7 +543,18 @@ export namespace Lexer {
         },
         newidx: i
       };
-    }
+    else if (escapeErrorU.length !== 0)
+      return {
+        valid: false,
+        value: {
+          codeInvalid: true,
+          type: 'used escape symbol with u not properly in string',
+          chars: string,
+          idxs: escapeErrorU,
+          idx
+        },
+        newidx: i
+      };
 
     return {
       valid: false,
@@ -564,12 +605,10 @@ export namespace Lexer {
     )
       return consumeComment(code, idx);
 
-    const identifierStart = /[_a-zA-Z]/;
     if (matches(code[idx], identifierStart))
       return consumeIdentifier(code, idx);
 
-    const numberStart = /[0-9]/;
-    if (matches(code[idx], numberStart))
+    if (matches(code[idx], decimalDigits))
       return consumeNumericLiteral(code, idx);
 
     const firstCharSymbols: string[] = symbols.map((e) => e[0]);
@@ -607,8 +646,7 @@ export namespace Lexer {
 
       if (nToken.value.type !== 'eof' && idxBefore === newIdx)
         throw new Error('Internal error. Could not lexe the next token.');
-
-      yield nToken;
+      else if (nToken.value.type !== 'eof') yield nToken;
     } while (nToken.value.type !== 'eof');
 
     return undefined;
@@ -631,7 +669,7 @@ export namespace Lexer {
     else return { valid: false, errors, tokens };
   }
 
-  export function debugLexer() {
+  function debugLexer() {
     const c: string = ''; // `0.0e-`;
     if (c !== '') console.log(Lexer.lexe(c));
 
@@ -697,7 +735,7 @@ test+
 +test
 +* // two operators
 
-5 5.1e2 // TODO: 51.e-3
+5 5.1e2 51.0e-3
 01_23_45_67_89
 0123456789 0b1010 0x0123456789ABCDEFabcdef 0o01234567
 
@@ -785,7 +823,6 @@ _
       ...symbols.map((e: string) => [e, 1] as [string, number]),
       ...keywords.map((e: string) => [e, 1] as [string, number])
     ];
-
     const mustNotLexe: string[] = [
       `\\`,
       `'`,
@@ -842,28 +879,33 @@ _
       '0.0e',
       '0.e',
       '0.e0',
-      '0E0'
+      '0E0',
+      '\\u1234',
+      '\\uFFfF',
+      '\\uxy',
+      '51.e-3'
     ];
 
     for (const code of mustLexe) {
-      const runned = Lexer.lexe(code[0]);
-      if (!runned.valid || runned.tokens.length !== code[1])
-        console.log(
+      const lexed = Lexer.lexe(code[0]);
+      if (!lexed.valid || lexed.tokens.length !== code[1])
+        console.error(
           'error in mustLexe, invalid lexer for code:',
           code[0],
-          runned,
-          runned.tokens.length
+          lexed,
+          lexed.tokens.length
         );
     }
     for (const code of mustNotLexe) {
       let lexed = Lexer.lexe(code);
       if (lexed.valid)
-        console.log(
+        console.error(
           'error in mustNotLexe, invalid lexer for code:',
           code,
           lexed
         );
     }
+
     console.log('runned debug lexer');
   }
 
