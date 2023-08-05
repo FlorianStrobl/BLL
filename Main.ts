@@ -6,14 +6,20 @@ import { prettier } from './LCFormatter';
 
 const filename = 'src';
 const code = `
-let f = func (x, y) -> 3 * x - y % x + 4;
+// **
+let my_func =
+func (x, y) ->
+  x + x - x * x / x % x
+  & x | x ^ x << x >> x
+  == 1 != 2 < 3 > 4 <= 5 >= 6;
+
 //let g = func (x, y) -> x / y;
 `;
 
-const lexemes: Lexer.token[] | undefined = Lexer.lexe(code, filename);
-if (lexemes) {
+const lexemes = Lexer.lexe(code);
+if (lexemes.valid) {
   const ast: Parser.statementT[] | undefined = Parser.parse(
-    lexemes,
+    lexemes.tokens,
     code,
     filename
   );
@@ -26,6 +32,4 @@ if (lexemes) {
   } else {
     console.log('invalid ast');
   }
-} else {
-  console.log('invalid lexemes');
-}
+} else console.log('lexer error:', ...lexemes.errors);

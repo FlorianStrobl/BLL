@@ -1,5 +1,7 @@
 import { printMessage, ErrorID } from './FErrorMsgs';
 
+console.time('a');
+
 // check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
@@ -30,30 +32,30 @@ export namespace Lexer {
 
   const symbols: string[] = [
     // only for same primitive types
-    '+', // add
-    '-', // sub
-    '*', // multiplication
-    '/', // divide (for integers: rounding down)
-    '**', // exponentiation
-    '***', // root
-    '%', // remainder
+    '+', // add (binary, unary)
+    '-', // sub (binary, unary)
+    '*', // multiplication (binary)
+    '/', // divide (binary, for integers: rounding down)
+    '**', // exponentiation (binary)
+    '***', // root (binary)
+    '%', // remainder (binary)
 
     // only ints
-    '&', // and
-    '|', // or
-    '^', // xor
-    '~', // not
-    '!', // logical not (0 -> 1, any -> 0)
-    '<<', // left shift
-    '>>', // right shift
+    '&', // and (binary)
+    '|', // or (binary)
+    '^', // xor (binary)
+    '~', // not (unary)
+    '!', // logical not (unary, 0 -> 1, any -> 0)
+    '<<', // logical left shift (binary)
+    '>>', // logical right shift (binary)
 
     // compare only same primitive types
-    '==', // equal
-    '!=', // not equal
-    '<=', // less than or equal
-    '>=', // greater than or equal
-    '<', // less than
-    '>', // greater than
+    '==', // equal (binary)
+    '!=', // not equal (binary)
+    '<=', // less than or equal (binary)
+    '>=', // greater than or equal (binary)
+    '<', // less than (binary)
+    '>', // greater than (binary)
 
     '=', // assigments of values to identifiers (let and type)
     '->', // functions
@@ -72,36 +74,72 @@ export namespace Lexer {
   //  .sort((a, b) => b.length - a.length)
   //  .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
 
-  const alphaNumeric: RegExp = /[0-9a-zA-Z_]/;
-  const identifierStart: RegExp = /[a-zA-Z_]/;
-  const hexDigits: RegExp = /[0-9a-fA-F]/;
-  const decimalDigits: string[] = [
-    '0',
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9'
+  const whitespaces: string[] = ' \t\n\r'.split('');
+
+  const identifierStart: string[] = [
+    '_',
+    // A-Z
+    ...new Array(26).fill('').map((_, i) => String.fromCharCode(65 + i)),
+    // a-z
+    ...new Array(26).fill('').map((_, i) => String.fromCharCode(97 + i))
+  ];
+  const alphaNumeric: string[] = [
+    // _, a-z, A-Z
+    ...identifierStart,
+    // 0-9
+    ...new Array(10).fill(0).map((_, i) => i.toString())
+  ];
+
+  // 0-9
+  const decimalDigits: string[] = new Array(10)
+    .fill(0)
+    .map((_, i) => i.toString());
+  // 0-7
+  const octalDigits: string[] = new Array(8)
+    .fill(0)
+    .map((_, i) => i.toString());
+  const binaryDigits: string[] = '01'.split('');
+  const hexDigits: string[] = [
+    ...decimalDigits,
+    ...'abcdef'.split(''),
+    ...'ABCDEF'.split('')
+  ];
+  const nonDecimalLiteralStart: string = '0';
+  const nonDecimalLiteralTypes: string[] = ['x', 'b', 'o'];
+
+  const commentStart: string = '/';
+  const commentTypes: string[] = ['/', '*'];
+  const commentType1Start: string = '/';
+  const commentType2Start: string = '*';
+
+  const commentType1Stop: string = '\n';
+  const commentType2Stop1: string = '*';
+  const commentType2Stop2: string = '/';
+
+  const stringStart: string[] = '\'"`'.split('');
+  const escapeSymbol: string = '\\';
+
+  const validChars: string[] = [
+    ...whitespaces,
+    ...alphaNumeric,
+    ...stringStart,
+    ...'+-*/%&|^~=!><;:,.(){}[]'.split('')
   ];
   // #endregion
 
   // #region types
-  export interface token {
-    lexeme: string;
-    type: lexemeType;
-    idx: number;
-  }
-
   export enum lexemeType {
     comment = '#comment', // "//...", "/*...*/"
     literal = '#literal', // "5.3e-4", "0xFF00FF"
     keyword = '#keyword', // "let", "func"
     identifier = '#identifier', // "_a_z_A_Z_0_9"
     symbol = '#symbol' // "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", ",", "(", ")", "{", "}", "=", "->", "."
+  }
+
+  export interface token {
+    lexeme: string;
+    type: lexemeType;
+    idx: number;
   }
 
   // TODO
@@ -193,17 +231,11 @@ export namespace Lexer {
     let comment: string = code[idx];
     let i: number = idx + 1; // safe because assertion
 
-    const commentType1Start = '/';
-    const commentType2Start = '*';
     if (matches(code[i], commentType1Start)) {
-      const commentType1Stop = '\n';
       while (idxValid(i, code) && !matches(code[i], commentType1Stop))
         comment += code[i++];
     } else if (matches(code[i], commentType2Start)) {
       comment += code[i++];
-
-      const commentType2Stop1 = '*';
-      const commentType2Stop2 = '/';
 
       let hadCommentType2Stop1: boolean = false;
       while (idxValid(i, code)) {
@@ -218,7 +250,7 @@ export namespace Lexer {
         comment += code[i++];
       }
 
-      // incase idxValid() stopped
+      // in case idxValid() stopped
       if (
         comment.length < 4 ||
         !matches(comment[comment.length - 2], commentType2Stop1) ||
@@ -252,7 +284,8 @@ export namespace Lexer {
 
       while (
         idxValid(i, code) &&
-        (matches(code[i], hexDigits) || matches(code[i], '_'))
+        (matches(code[i], alphabet === hexDigits ? hexDigits : decimalDigits) ||
+          matches(code[i], '_'))
       ) {
         if (matches(code[i], alphabet)) {
           consumedSomething = true;
@@ -268,10 +301,12 @@ export namespace Lexer {
           consumedSomething = true;
           lastCharWasDigit = false;
           lastCharWasUnderscore = true;
-          invalidUnderscoresMiddle.push(i);
+          invalidDoubleUnderscore.push(i);
           literal += code[i++];
-        } else if (matches(code[i], hexDigits) && !matches(code[i], alphabet)) {
-          if (matches(code[i], 'e')) break; // TODO
+        } else if (
+          matches(code[i], decimalDigits) &&
+          !matches(code[i], alphabet)
+        ) {
           invalidHadWrongAlpabet = true;
           literal += code[i++];
         }
@@ -285,23 +320,19 @@ export namespace Lexer {
     let i: number = idx;
     let literal: string = '';
 
-    let alphabet: RegExp | string[] = decimalDigits;
-    const binaryDigits: string[] = ['0', '1'];
-    const octalDigits: string[] = ['0', '1', '2', '3', '4', '5', '6', '7'];
+    let alphabet: string[] = decimalDigits;
 
     let gotDotOrE: boolean = false;
     let cantHaveDotOrE: boolean = false;
     let invalidDidNotConsumDigits: boolean = false;
     let invalidHadWrongAlpabet: boolean = false;
-    const invalidUnderscoresMiddle: number[] = [];
+    const invalidDoubleUnderscore: number[] = [];
     const invalidUnderscoresEnd: number[] = [];
 
-    const startNonDecimalLiteral = '0';
-    const nonDecimalLiteral = ['x', 'b', 'o'];
     if (
-      matches(code[i], startNonDecimalLiteral) &&
+      matches(code[i], nonDecimalLiteralStart) &&
       idxValid(i + 1, code) &&
-      matches(code[i + 1], nonDecimalLiteral)
+      matches(code[i + 1], nonDecimalLiteralTypes)
     ) {
       cantHaveDotOrE = true;
 
@@ -385,14 +416,14 @@ export namespace Lexer {
         },
         newidx: i
       };
-    } else if (invalidUnderscoresMiddle.length !== 0) {
+    } else if (invalidDoubleUnderscore.length !== 0) {
       return {
         valid: false,
         value: {
           codeInvalid: true,
           chars: literal,
           type: 'repeating underscores in numeric literal',
-          underscores: invalidUnderscoresMiddle,
+          underscores: invalidDoubleUnderscore,
           idx
         },
         newidx: i
@@ -487,15 +518,16 @@ export namespace Lexer {
     let string: string = code[i++];
 
     const stringEnd: string = string;
-    const escapeSymbol = '\\';
-    const toEscapSymbols = [stringEnd, '\\', 'n', 't', 'r', 'u'];
-
-    let escaped: boolean = false;
+    const toEscapSymbols: string[] = [stringEnd, '\\', 'n', 't', 'r', 'u'];
+    let lastCharWasEscape: boolean = false;
     let escapeErrorIdxs: number[] = [];
     let escapeErrorU: number[] = [];
-    while (idxValid(i, code) && !(matches(code[i], stringEnd) && !escaped)) {
-      if (!escaped) {
-        if (matches(code[i], escapeSymbol)) escaped = true;
+    while (
+      idxValid(i, code) &&
+      !(matches(code[i], stringEnd) && !lastCharWasEscape)
+    ) {
+      if (!lastCharWasEscape) {
+        if (matches(code[i], escapeSymbol)) lastCharWasEscape = true;
         string += code[i++];
       } else {
         if (!matches(code[i], toEscapSymbols)) {
@@ -519,7 +551,7 @@ export namespace Lexer {
           }
         }
 
-        escaped = false;
+        lastCharWasEscape = false;
       }
     }
 
@@ -564,16 +596,12 @@ export namespace Lexer {
   }
   // #endregion
 
-  function matches(
-    character: string,
-    toMatch: string | string[] | RegExp
-  ): boolean {
+  function matches(character: string, toMatch: string | string[]): boolean {
     return (
       typeof character === 'string' &&
       character.length === 1 &&
       ((typeof toMatch === 'string' && character === toMatch) ||
-        (Array.isArray(toMatch) && toMatch.includes(character)) ||
-        (toMatch instanceof RegExp && character.match(toMatch) !== null))
+        (Array.isArray(toMatch) && toMatch.includes(character)))
     );
   }
 
@@ -586,7 +614,6 @@ export namespace Lexer {
   }
 
   function lexeNextToken(code: string, idx: number): nextToken {
-    const whitespaces = [' ', '\t', '\n', '\r'];
     while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
 
     if (!idxValid(idx, code))
@@ -596,12 +623,10 @@ export namespace Lexer {
         newidx: idx
       };
 
-    const commentStart1 = '/';
-    const commentStart2 = ['/', '*'];
     if (
-      matches(code[idx], commentStart1) &&
+      matches(code[idx], commentStart) &&
       idxValid(idx + 1, code) &&
-      matches(code[idx + 1], commentStart2)
+      matches(code[idx + 1], commentTypes)
     )
       return consumeComment(code, idx);
 
@@ -614,11 +639,9 @@ export namespace Lexer {
     const firstCharSymbols: string[] = symbols.map((e) => e[0]);
     if (firstCharSymbols.includes(code[idx])) return consumeSymbol(code, idx);
 
-    const stringStart = ['"', "'", '`'];
     if (matches(code[idx], stringStart)) return consumeString(code, idx);
 
     let invalidChars: string = '';
-    const validChars = /['`" \t\n\r0-9a-zA-Z_\-+*/%&|^~=!><;:,.(){}[\]]/;
     while (idxValid(idx, code) && !matches(code[idx], validChars))
       invalidChars += code[idx++];
     return {
@@ -656,7 +679,7 @@ export namespace Lexer {
     code: string
   ):
     | { valid: true; tokens: token[] }
-    | { valid: false; errors: errorToken[]; tokens: token[] } {
+    | { valid: false; tokens: token[]; errors: errorToken[] } {
     const tokens: token[] = [];
     const errors: errorToken[] = [];
 
@@ -669,7 +692,10 @@ export namespace Lexer {
     else return { valid: false, errors, tokens };
   }
 
-  function debugLexer() {
+  function debugLexer(): void {
+    const timerName: string = 'Lexer tests';
+    console.time(timerName);
+
     const c: string = ''; // `0.0e-`;
     if (c !== '') console.log(Lexer.lexe(c));
 
@@ -883,9 +909,11 @@ _
       '\\u1234',
       '\\uFFfF',
       '\\uxy',
-      '51.e-3'
+      '51.e-3',
+      '0o012345678'
     ];
 
+    let successfullTests: number = 0;
     for (const code of mustLexe) {
       const lexed = Lexer.lexe(code[0]);
       if (!lexed.valid || lexed.tokens.length !== code[1])
@@ -895,6 +923,7 @@ _
           lexed,
           lexed.tokens.length
         );
+      else successfullTests++;
     }
     for (const code of mustNotLexe) {
       let lexed = Lexer.lexe(code);
@@ -904,13 +933,30 @@ _
           code,
           lexed
         );
+      else successfullTests++;
     }
 
-    console.log('runned debug lexer');
+    if (successfullTests !== mustLexe.length + mustNotLexe.length)
+      console.error(
+        `${
+          mustLexe.length + mustNotLexe.length - successfullTests
+        } failed tests in the Lexer-stage!`
+      );
+    else
+      console.debug(
+        `Lexer successfully lexed ${successfullTests} tests and ${
+          mustLexe.map((e) => e[0]).reduce((a, b) => a + b).length +
+          mustNotLexe.reduce((a, b) => a + b).length
+        } characters.`
+      );
+
+    console.timeEnd(timerName);
   }
 
   debugLexer();
 }
+
+console.timeEnd('a');
 
 // https://runjs.co/s/I1irVl3Rf
 // https://www.typescriptlang.org/play?#code/PTAECkEMDdIZQMYCcCWAHALsAKgTzQKaKqagCOAriggNYDOGkSGoA5lQCYEBQIo2ACxR1Qw0JFAIA9gFsZBAHYYAdPwEFc4pAVGsFU7R1AAjTRnWg0SKaySQ5KBa1AAbSE4qRWBZbwBUgmJikC50UuKSsvJKfsDcvGAARDK4AGIUCggYKFIKiaIiEgBmGVk5CqAA7kIIAqCMNASFoHSOrC46ChQyxgRICeKFFUzs0SzuRtoYFEgKzV09fVXqFQQAHgQIFBgEHL4lmdm5oCnph+UAFGsAXKALvUgAlLf3SwDe3KCgfJUo5vUWRIdDD5Rq4SoGDgAGlAuR0CHcoC4RUcOgksFQkGMHV8X2BJ1wADUmCgsR0Xt0HqAALygACsAG5Pt8wBjSdimpJEb0TlIOCgUbsqn86uYdIlqfkpIQ7BgDLiCcTMRyaYqSWSdABqUAARiZXz4ySJ6o5+TE+kqoAudNA2p1j3ENAkADZfMyfkIOgD4bl+UcKkaleyvQBCWkADjNIgwSAoPANYDFkS4ogqScSb1AAF98tipLRhS4XCYdOtNttdgrqigvRcUkGNaAw6Bww6Pl8E97QIlNZqpTLIHKkKnkARIHROUm2Y3YC44yZNHCFV9e-WTR19dn4p3EYkBfkGIOCGNJOpaNGLNIFH7yu6wBNQGWtjsL+LMzmTC58zQYQKu1eb2OSpx3qWMfGZP862NZUvWpCM22ZTtEivMIcS-Vh8isRwMFfLRRkUHDEJZVMu2MOxaF2aNwiTFCpBxIjaLQmwLiIr4AHJ1FwNjvj8WomEgLIlhcP4+hCEQZAoBgSxaGZrAyLgjFMJEpAoFVKCkF9YiIx5NyzR9Qh0dsOz4P9033SJrz+coqhAooxIIGF0wIAzcy-AsxCfCs9m3DtGJ8dCLjsgydOZLMfL4REmDsTRglcYQWCkIpQFnOM6AVfFXiQABBJBoopRYkAAbQAXVVQqAAYYR1GEACYYQAZmKpk727IoDHyL9pRECEkBoOLGi7RJqw6DqpGla5mTa4cWI7VwCBYFBVXKnjHw2Z8hV6KadCTFEkCkkTZWs2JNy+RaAB5QAAFhWgCrNyGFvBw09NkaRSCC21by2yJwuwUdYFp2Q7jmOoje0W4A-DYeaRE8nYjEHLtFCMRLHwEuoDsHI64i+BDZp+EVBsK0Biv7UShxhOEuQqR6uxS+NjPvFgk1YFBoEUSwpFaf0YWqPodDQTm7oqZaxB2lA9pYZzjwI5c1RgnRaTXeXbTuSk+hy6LCpQJrQvCsAleDHRgiZoQRAF7DdUuhUphmCoDcbbU1iZMKBmKUp-Sp6SESLIVfn+RILlAR5El8fEbdmXZiTnAh8qpRW0ndy46RCvzlAC8O-o4KO4x0oA
