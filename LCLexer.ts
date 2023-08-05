@@ -500,7 +500,7 @@ _
 
     if (idxValid(i, code) && matches(code[i], /\./)) {
       gotDotOrE = true;
-      literal += code[i++]; // "."
+      literal += code[i++];
 
       if (!consumeDigits()) invalidDidNotConsumDigits = true;
     }
@@ -756,8 +756,6 @@ _
     const firstCharSymbols: string[] = symbols.map((e) => e[0]);
     if (firstCharSymbols.includes(code[idx])) return consumeSymbol(code, idx);
 
-    // TODO add string support for better errors, that means also \u{xxxx}
-    // and \", \\, \n, \r, \t
     const stringStart = /["'`]/;
     if (matches(code[idx], stringStart)) return consumeString(code, idx);
 
