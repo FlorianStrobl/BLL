@@ -360,8 +360,8 @@ _
     let comment: string = code[idx];
     let i: number = idx + 1;
 
-    const commentType1Start = /\//;
-    const commentType2Start = /\*/;
+    const commentType1Start = '/';
+    const commentType2Start = '*';
     if (matches(code[i], commentType1Start)) {
       const commentType1Stop = /\n/;
       while (idxValid(i, code) && !matches(code[i], commentType1Stop))
@@ -422,19 +422,19 @@ _
 
       while (
         idxValid(i, code) &&
-        (matches(code[i], hexAlphabet) || matches(code[i], /_/))
+        (matches(code[i], hexAlphabet) || matches(code[i], '_'))
       ) {
         if (matches(code[i], alphabet)) {
           consumedSomething = true;
           lastCharWasDigit = true;
           lastCharWasUnderscore = false;
           literal += code[i++];
-        } else if (lastCharWasDigit && matches(code[i], /_/)) {
+        } else if (lastCharWasDigit && matches(code[i], '_')) {
           consumedSomething = true;
           lastCharWasDigit = false;
           lastCharWasUnderscore = true;
           literal += code[i++];
-        } else if (!lastCharWasDigit && matches(code[i], /_/)) {
+        } else if (!lastCharWasDigit && matches(code[i], '_')) {
           consumedSomething = true;
           lastCharWasDigit = false;
           lastCharWasUnderscore = true;
@@ -444,7 +444,7 @@ _
           matches(code[i], hexAlphabet) &&
           !matches(code[i], alphabet)
         ) {
-          if (matches(code[i], /[eE]/)) break; // TODO
+          if (matches(code[i], ['e', 'E'])) break; // TODO
           invalidHadWrongAlpabet = true;
           literal += code[i++];
         }
@@ -470,8 +470,8 @@ _
     const invalidUnderscoresMiddle: number[] = [];
     const invalidUnderscoresEnd: number[] = [];
 
-    const startNonDecimalLiteral = /0/;
-    const nonDecimalLiteral = /[xbo]/;
+    const startNonDecimalLiteral = '0';
+    const nonDecimalLiteral = ['x', 'b', 'o'];
     if (
       matches(code[i], startNonDecimalLiteral) &&
       idxValid(i + 1, code) &&
@@ -498,22 +498,22 @@ _
       }
     } else consumeDigits();
 
-    if (idxValid(i, code) && matches(code[i], /\./)) {
+    if (idxValid(i, code) && matches(code[i], '.')) {
       gotDotOrE = true;
       literal += code[i++];
 
       if (!consumeDigits()) invalidDidNotConsumDigits = true;
     }
 
-    if (idxValid(i, code) && matches(code[i], /[eE]/)) {
+    if (idxValid(i, code) && matches(code[i], ['e', 'E'])) {
       gotDotOrE = true;
 
       literal += code[i++];
-      if (matches(code[i], /[-+]/)) literal += code[i++];
+      if (matches(code[i], ['+', '-'])) literal += code[i++];
 
       if (!consumeDigits()) invalidDidNotConsumDigits = true;
 
-      if (matches(code[i], /\./)) {
+      if (matches(code[i], '.')) {
         cantHaveDotOrE = true;
         gotDotOrE = true;
         literal += code[i++];
@@ -660,8 +660,8 @@ _
     let string: string = code[i++];
 
     const stringStartSymbol: string = string;
-    const stringEnd = new RegExp(stringStartSymbol);
-    const escapeSymbol = /\\/;
+    const stringEnd = stringStartSymbol;
+    const escapeSymbol = '\\';
     const toEscapSymbols = new RegExp(`[${stringStartSymbol}\\\\nrtu]`);
     let escaped: boolean = false;
     let escapeErrorIdxs: number[] = [];
@@ -716,8 +716,16 @@ _
   }
   // #endregion
 
-  function matches(character: string, regexp: RegExp): boolean {
-    return typeof character === 'string' && character[0].match(regexp) !== null;
+  function matches(
+    character: string,
+    regexp: string | string[] | RegExp
+  ): boolean {
+    return (
+      typeof character === 'string' &&
+      ((typeof regexp === 'string' && character === regexp) ||
+        (Array.isArray(regexp) && regexp.includes(character)) ||
+        (regexp instanceof RegExp && character[0].match(regexp) !== null))
+    );
   }
 
   function idxValid(idx: number, obj: { length: number }) {
@@ -725,7 +733,7 @@ _
   }
 
   function lexeNextToken(code: string, idx: number): nextToken {
-    const whitespaces = /[ \t\n\r]/;
+    const whitespaces = [' ', '\t', '\n', '\r'];
     while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
 
     if (!idxValid(idx, code)) {
@@ -736,8 +744,8 @@ _
       };
     }
 
-    const commentStart1 = /[/]/;
-    const commentStart2 = /[/*]/;
+    const commentStart1 = '/';
+    const commentStart2 = ['/', '*'];
     if (
       matches(code[idx], commentStart1) &&
       idxValid(idx + 1, code) &&
@@ -756,7 +764,7 @@ _
     const firstCharSymbols: string[] = symbols.map((e) => e[0]);
     if (firstCharSymbols.includes(code[idx])) return consumeSymbol(code, idx);
 
-    const stringStart = /["'`]/;
+    const stringStart = ['"', "'", '`'];
     if (matches(code[idx], stringStart)) return consumeString(code, idx);
 
     let invalidChars: string = '';
