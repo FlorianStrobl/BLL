@@ -3,15 +3,13 @@ import { Parser } from './LCParser';
 import { Compiler } from './LCCompiler';
 import { Interpreter } from './LCInterpreter';
 import { prettier } from './LCFormatter';
+// @ts-ignore
+import { inspect } from 'util';
 
 const filename = 'src';
 const code = `
 // **
-let my_func =
-func (x, y) ->
-  x + x - x * x / x % x
-  & x | x ^ x << x >> x
-  == 1 != 2 < 3 > 4 <= 5 >= 6;
+let my_func = func (x) -> !2 - (x + 3);
 
 //let g = func (x, y) -> x / y;
 `;
@@ -24,6 +22,8 @@ if (lexemes.valid) {
     filename
   );
 
+  console.log(inspect(ast, { depth: 999 }));
+
   if (ast) {
     const asm = Compiler.compile(ast, code, filename);
     console.log(asm);
@@ -33,3 +33,11 @@ if (lexemes.valid) {
     console.log('invalid ast');
   }
 } else console.log('lexer error:', ...lexemes.errors);
+
+namespace TEST {
+  export namespace TEST2 {
+    export const X = 5;
+  }
+}
+
+TEST.TEST2.X;

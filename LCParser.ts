@@ -144,7 +144,7 @@ export namespace Parser {
   export type expressionT =
     | {
         type: 'unary';
-        operator: '-' | '+' | '~';
+        operator: '-' | '+' | '~' | "!";
         operatorLex: lexemT;
         body: expressionT;
       }
@@ -422,7 +422,8 @@ export namespace Parser {
 
   function parseExprLvl9(): expressionT {
     // unary:
-    if (match('-', '+', '~')) {
+    // TODO, "!"
+    if (match('!', '-', '+', '~')) {
       return {
         type: 'unary',
         operator: previous().lexeme as '-',
@@ -431,7 +432,23 @@ export namespace Parser {
       };
     }
 
-    return primary();
+    return parseExprLvl10();
+  }
+
+  // TODO just to debug
+  function parseExprLvl10() {
+    let left: any = primary();
+    while (match('(')) {
+      //   f(
+      let args: any = [];
+      while (!match(')')) {
+        // parse until we find `)` (end of argument list)
+        if (args.length > 0) match(',');
+        args.push(parseExpression());
+      }
+      return { type: 'FunctionCall', callee: left, args };
+    }
+    return left;
   }
 
   // TODO, parse literals, highest precedence level
@@ -447,28 +464,30 @@ export namespace Parser {
       if (!match(')')) throw Error('Expression wasnt closed'); // TODO
       expression.endBracket = previous();
       return expression;
-    } else if (peek()!.type === lexemeTypes.literal)
+    } else if (peek()!.type === lexemeTypes.literal) {
       return { type: 'literal', literal: advance()! };
-    else if (peek()!.type === lexemeTypes.identifier) {
+    } else if (peek()!.type === lexemeTypes.identifier) {
+      // TODO do not do () because of (x.y).z
       // TODO, x, x(), x.y, x.y() but not x.y().z
       let identifier = advance()!;
 
+      return { type: 'identifier', identifier: identifier };
+
       if (peek()!.lexeme !== '.') {
-        let openBrace;
-        if ((openBrace = match('('))) {
-          let callArguments = [parseExpression()]; // TODO TODO because there can be "," in between!
-          let closingBrace = match(')');
-          if (closingBrace === undefined) throw Error(''); // TODO
-          return {
-            type: 'functionCall',
-            functionIdentifier: identifier,
-            callArguments,
-            openBrace,
-            closingBrace
-          };
-        }
+        // let openBrace;
+        // if ((openBrace = match('('))) {
+        //   let callArguments = [parseExpression()]; // TODO TODO because there can be "," in between!
+        //   let closingBrace = match(')');
+        //   if (closingBrace === undefined) throw Error(''); // TODO
+        //   return {
+        //     type: 'functionCall',
+        //     functionIdentifier: identifier,
+        //     callArguments,
+        //     openBrace,
+        //     closingBrace
+        //   };
+        // }
         // TODO x()
-        return { type: 'identifier', identifier: identifier };
       }
 
       // is id1.id2
@@ -496,13 +515,14 @@ export namespace Parser {
       }
 
       return { type: 'identifier-path', path };
-    } else if (match('func'))
+    } else if (match('func')) {
       return {
         type: 'func',
         typeLex: previous(),
         ...parseFuncExpression()
       };
-    else throw Error('could not match anything in parsing expressions!'); // TODO
+    } else throw new Error('could not match anything in parsing expressions!');
+    // TODO
   }
 
   function parseFuncExpression(): funcExpressionT {
@@ -565,7 +585,6 @@ export namespace Parser {
         args[args.length - 1].doublePoint = doublePoint;
       }
     }
-
     return { args, commas };
   }
   // #endregion

@@ -699,7 +699,9 @@ export namespace Lexer {
     const c: string = ''; // `0.0e-`;
     if (c !== '') console.log(Lexer.lexe(c));
 
-    const mustLexe: [string, number][] = [
+    const mustLexe: [string, number][] = [[
+      "let x = (func (a) -> a)(3+1);",17
+    ],
       [
         `
 let num: i32 /* signed */ = + 5.5_3e+2; // an integer

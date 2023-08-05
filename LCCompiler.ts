@@ -19,19 +19,35 @@ export namespace Compiler {
     switch (exp.type) {
       case 'unary':
         let str = '';
+        let value: string;
+        let valueId: number;
         switch (exp.operator) {
           case '+':
             return todoCompileSimpleExpression(exp.body, varCounter);
           case '-':
-            str = todoCompileSimpleExpression(exp.body, varCounter);
-            //str += `%${++varCounter.c} = mul ${'i64'} -1, %${varCounter.c - 1}`;
-            // TODO: insert mul -1, lastVal
-            return str;
+            value = todoCompileSimpleExpression(exp.body, varCounter);
+            valueId = varCounter.c - 1;
+            return `${
+              isLLVMIRRegisterOrLiteral(value) ? '' : value + '\n'
+            }%Z${varCounter.c++} = sub ${'i64'} 0, ${
+              isLLVMIRRegisterOrLiteral(value) ? value : '%Z' + valueId
+            }\n`;
           case '~':
-            str = todoCompileSimpleExpression(exp.body, varCounter);
-            str += '';
-            // TODO: insert not lastVal
-            return str;
+            value = todoCompileSimpleExpression(exp.body, varCounter);
+            valueId = varCounter.c - 1;
+            return `${
+              isLLVMIRRegisterOrLiteral(value) ? '' : value + '\n'
+            }%Z${varCounter.c++} = xor ${'i64'} -1, ${
+              isLLVMIRRegisterOrLiteral(value) ? value : '%Z' + valueId
+            }\n`;
+          case '!':
+            value = todoCompileSimpleExpression(exp.body, varCounter);
+            valueId = varCounter.c - 1;
+            return `${
+              isLLVMIRRegisterOrLiteral(value) ? '' : value + '\n'
+            }%Z${varCounter.c++} = xor ${'i64'} 1, ${
+              isLLVMIRRegisterOrLiteral(value) ? value : '%Z' + valueId
+            }\n`;
         }
       case 'binary':
         let leftSide: string;
@@ -103,7 +119,7 @@ export namespace Compiler {
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
             }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
-            }${`%Z${tmp=varCounter.c++} = icmp eq i64 ${
+            }${`%Z${(tmp = varCounter.c++)} = icmp eq i64 ${
               isLLVMIRRegisterOrLiteral(leftSide)
                 ? leftSide
                 : '%Z' + leftSideVarId
@@ -121,7 +137,7 @@ export namespace Compiler {
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
             }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
-            }${`%Z${tmp=varCounter.c++} = icmp ne i64 ${
+            }${`%Z${(tmp = varCounter.c++)} = icmp ne i64 ${
               isLLVMIRRegisterOrLiteral(leftSide)
                 ? leftSide
                 : '%Z' + leftSideVarId
@@ -139,7 +155,7 @@ export namespace Compiler {
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
             }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
-            }${`%Z${tmp=varCounter.c++} = icmp slt i64 ${
+            }${`%Z${(tmp = varCounter.c++)} = icmp slt i64 ${
               isLLVMIRRegisterOrLiteral(leftSide)
                 ? leftSide
                 : '%Z' + leftSideVarId
@@ -157,7 +173,7 @@ export namespace Compiler {
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
             }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
-            }${`%Z${tmp=varCounter.c++} = icmp sgt i64 ${
+            }${`%Z${(tmp = varCounter.c++)} = icmp sgt i64 ${
               isLLVMIRRegisterOrLiteral(leftSide)
                 ? leftSide
                 : '%Z' + leftSideVarId
@@ -175,7 +191,7 @@ export namespace Compiler {
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
             }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
-            }${`%Z${tmp=varCounter.c++} = icmp sle i64 ${
+            }${`%Z${(tmp = varCounter.c++)} = icmp sle i64 ${
               isLLVMIRRegisterOrLiteral(leftSide)
                 ? leftSide
                 : '%Z' + leftSideVarId
@@ -193,7 +209,7 @@ export namespace Compiler {
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
             }${
               isLLVMIRRegisterOrLiteral(rightSide) ? '' : rightSide + '\n'
-            }${`%Z${tmp=varCounter.c++} = icmp sge i64 ${
+            }${`%Z${(tmp = varCounter.c++)} = icmp sge i64 ${
               isLLVMIRRegisterOrLiteral(leftSide)
                 ? leftSide
                 : '%Z' + leftSideVarId
