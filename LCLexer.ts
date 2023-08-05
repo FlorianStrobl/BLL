@@ -96,7 +96,7 @@ export namespace Lexer {
         type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
         idx: number;
       }
-    | { codeInvalid: true; type: 'invalid char'; chars: string; idx: number }
+    | { codeInvalid: true; type: 'invalid chars'; chars: string; idx: number }
     | {
         codeInvalid: true;
         type: 'eof in /* comment';
@@ -168,31 +168,28 @@ export namespace Lexer {
   // assert: a comment is at idx
   function consumeComment(code: string, idx: number): nextToken {
     let comment: string = code[idx];
-    let i: number = idx + 1;
+    let i: number = idx + 1; // safe because assertion
 
     const commentType1Start = '/';
     const commentType2Start = '*';
     if (matches(code[i], commentType1Start)) {
-      const commentType1Stop = /\n/;
+      const commentType1Stop = '\n';
       while (idxValid(i, code) && !matches(code[i], commentType1Stop))
         comment += code[i++];
     } else if (matches(code[i], commentType2Start)) {
       comment += code[i++];
 
-      const commentType2Stop1 = /\*/;
-      const commentType2Stop2 = /\//;
+      const commentType2Stop1 = '*';
+      const commentType2Stop2 = '/';
 
       let hadCommentType2Stop1: boolean = false;
       while (idxValid(i, code)) {
-        if (hadCommentType2Stop1) {
-          hadCommentType2Stop1 = false;
-
-          if (matches(code[i], commentType2Stop2)) {
-            comment += code[i++];
-            break;
-          }
+        if (hadCommentType2Stop1 && matches(code[i], commentType2Stop2)) {
+          comment += code[i++];
+          break;
         }
 
+        hadCommentType2Stop1 = false;
         if (matches(code[i], commentType2Stop1)) hadCommentType2Stop1 = true;
 
         comment += code[i++];
@@ -254,7 +251,7 @@ export namespace Lexer {
           matches(code[i], hexAlphabet) &&
           !matches(code[i], alphabet)
         ) {
-          if (matches(code[i], ['e', 'E'])) break; // TODO
+          if (matches(code[i], 'e')) break; // TODO
           invalidHadWrongAlpabet = true;
           literal += code[i++];
         }
@@ -315,7 +312,7 @@ export namespace Lexer {
       if (!consumeDigits()) invalidDidNotConsumDigits = true;
     }
 
-    if (idxValid(i, code) && matches(code[i], ['e', 'E'])) {
+    if (idxValid(i, code) && matches(code[i], 'e')) {
       gotDotOrE = true;
 
       literal += code[i++];
@@ -551,13 +548,12 @@ export namespace Lexer {
     const whitespaces = [' ', '\t', '\n', '\r'];
     while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
 
-    if (!idxValid(idx, code)) {
+    if (!idxValid(idx, code))
       return {
         valid: false,
         value: { type: 'eof', codeInvalid: false, idx },
         newidx: idx
       };
-    }
 
     const commentStart1 = '/';
     const commentStart2 = ['/', '*'];
@@ -583,15 +579,14 @@ export namespace Lexer {
     if (matches(code[idx], stringStart)) return consumeString(code, idx);
 
     let invalidChars: string = '';
-    const validChars = /['`" \t\n\r0-9a-zA-Z_\-+*/%&|^~!<>=:;,.(){}[\]]/;
+    const validChars = /['`" \t\n\r0-9a-zA-Z_\-+*/%&|^~=!><;:,.(){}[\]]/;
     while (idxValid(idx, code) && !matches(code[idx], validChars))
       invalidChars += code[idx++];
-
     return {
       valid: false,
       newidx: idx,
       value: {
-        type: 'invalid char',
+        type: 'invalid chars',
         chars: invalidChars,
         codeInvalid: true,
         idx
@@ -600,55 +595,47 @@ export namespace Lexer {
   }
 
   export function* lexeNextTokenIter(
-    code: string,
-    filename: string
+    code: string
   ): Generator<nextToken, undefined> {
-    let val: nextToken = lexeNextToken(code, 0);
-    let lastIdx: number = 0;
+    let newIdx: number = 0;
+    let nToken: nextToken;
 
-    while (val.value.type !== 'eof') {
-      if (!val.valid) {
-        // TODO add full error message
-        /*printMessage('error', {
-          id: ErrorID.invalidCharacter,
+    do {
+      let idxBefore: number = newIdx;
+      nToken = lexeNextToken(code, newIdx);
+      newIdx = nToken.newidx;
 
-          code: code, // the code
-          file: filename, // name of the file where the error occured
-          idx: val.newidx, // start position in string with the error
-          endIdx: val.newidx, // end position in string with the error
+      if (nToken.value.type !== 'eof' && idxBefore === newIdx)
+        throw new Error('Internal error. Could not lexe the next token.');
 
-          msg: '', // the error message to print
-
-          compilerStep: 'lexer' // the part in the compiler where it caused the error
-        });*/
-      }
-
-      yield val;
-
-      lastIdx = val.newidx;
-      val = lexeNextToken(code, val.newidx);
-      if (val.value.type !== 'eof' && lastIdx === val.newidx)
-        throw Error('Internal error. Could not lexe the next token.');
-    }
+      yield nToken;
+    } while (nToken.value.type !== 'eof');
 
     return undefined;
   }
 
-  export function lexe(code: string, filename: string): token[] | errorToken[] {
-    const lexemes: token[] = [];
+  export function lexe(
+    code: string
+  ):
+    | { valid: true; tokens: token[] }
+    | { valid: false; errors: errorToken[]; tokens: token[] } {
+    const tokens: token[] = [];
     const errors: errorToken[] = [];
 
-    for (const token of Lexer.lexeNextTokenIter(code, filename)) {
-      if (token.valid) lexemes.push(token.value);
+    for (const token of Lexer.lexeNextTokenIter(code)) {
+      if (token.valid) tokens.push(token.value);
       else errors.push(token.value);
     }
 
-    if (errors.length === 0) return lexemes;
-    else return errors;
+    if (errors.length === 0) return { valid: true, tokens };
+    else return { valid: false, errors, tokens };
   }
 
   export function debugLexer() {
-    const testCodes: [string, number][] = [
+    const c: string = ''; // `0.0e-`;
+    if (c !== '') console.log(Lexer.lexe(c));
+
+    const mustLexe: [string, number][] = [
       [
         `
 let num: i32 /* signed */ = + 5.5_3e+2; // an integer
@@ -677,10 +664,7 @@ let d = func (x: i32) -> 5_4.1e-3;
 // 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 `,
         90
-      ]
-    ];
-
-    const mustLexe: [string, number][] = [
+      ],
       [
         `;
 /**//**/
@@ -736,6 +720,7 @@ _
 ;`,
         130
       ],
+      ['let x: i32 = 5;', 7],
       ['', 0],
       [' ', 0],
       [' \t\n\r', 0],
@@ -745,6 +730,7 @@ _
       ['_', 1],
       ['let', 1],
       ['identifier_', 1],
+      ['id1_ id_2 _id3', 3],
       ['//', 1],
       [`*/`, 2],
       ['/**/', 1],
@@ -794,6 +780,8 @@ _
       ['0xaE+3', 3],
       ['0xeee', 1],
       ['534e354', 1],
+      ['0.0e-0', 1],
+      ['0e0', 1],
       ...symbols.map((e: string) => [e, 1] as [string, number]),
       ...keywords.map((e: string) => [e, 1] as [string, number])
     ];
@@ -845,39 +833,35 @@ _
       '0X',
       '0B',
       '0O',
-      '03434a35'
+      '03434a35',
+      '0_.0e-0',
+      '0_.e-0',
+      '0.e-0',
+      '0.0e-',
+      '0.0e+',
+      '0.0e',
+      '0.e',
+      '0.e0',
+      '0E0'
     ];
 
-    for (const code of testCodes) {
-      const runned = Lexer.lexe(code[0], 'debugfile');
-      if (runned.length !== code[1])
-        console.log(
-          'error in testCodes, invalid lexer for code:',
-          code[0],
-          runned,
-          runned.length
-        );
-    }
     for (const code of mustLexe) {
-      const runned = Lexer.lexe(code[0], 'debugfile');
-      if (runned.length !== code[1])
+      const runned = Lexer.lexe(code[0]);
+      if (!runned.valid || runned.tokens.length !== code[1])
         console.log(
           'error in mustLexe, invalid lexer for code:',
           code[0],
           runned,
-          runned.length
+          runned.tokens.length
         );
     }
     for (const code of mustNotLexe) {
-      if (
-        Lexer.lexe(code, 'debugfile').some(
-          (e: errorToken | token) => !('codeInvalid' in e) || !e.codeInvalid
-        )
-      )
+      let lexed = Lexer.lexe(code);
+      if (lexed.valid)
         console.log(
           'error in mustNotLexe, invalid lexer for code:',
           code,
-          Lexer.lexe(code, 'debugfile')
+          lexed
         );
     }
     console.log('runned debug lexer');
