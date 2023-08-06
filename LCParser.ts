@@ -1,6 +1,8 @@
 import { Lexer } from './LCLexer';
-// @ts-ignore
+// @ts-expect-error, for debugging only
 import { inspect } from 'util';
+
+// TODO, make a larser: if found one error, stop parsing immediatly and finish the lexing, then print the errors
 
 // Recursive Descent Parsing
 export namespace Parser {
