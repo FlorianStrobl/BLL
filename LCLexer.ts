@@ -1,7 +1,5 @@
 import { printMessage, ErrorID } from './FErrorMsgs';
 
-console.time('a');
-
 // check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
@@ -255,7 +253,7 @@ export namespace Lexer {
       }
     | {
         codeInvalid: true;
-        type: 'invalid numeric literal';
+        type: 'did not consume digits in numeric literal';
         chars: string;
         idx: number;
       }
@@ -263,6 +261,7 @@ export namespace Lexer {
         codeInvalid: true;
         type: 'identifier connected to numeric literal';
         chars: string;
+        invalidIdentifierIdx: number;
         idx: number;
       }
     | {
@@ -282,6 +281,18 @@ export namespace Lexer {
     | {
         codeInvalid: true;
         type: 'not lexed digits after dot in numeric literal';
+        chars: string;
+        idx: number;
+      }
+    | {
+        codeInvalid: true;
+        type: 'got a dot or e in a numeric literal which cant have it at that place';
+        chars: string;
+        idx: number;
+      }
+    | {
+        codeInvalid: true;
+        type: 'had wrong alphabet in numeric literal';
         chars: string;
         idx: number;
       };
@@ -309,17 +320,17 @@ export namespace Lexer {
       while (idxValid(i, code) && !matches(code[i], commentType1Stop))
         comment += code[i++];
     } else if (matches(code[i], commentType2Start)) {
-      comment += code[i++];
+      comment += code[i++]; // *
 
       let hadCommentType2Stop1: boolean = false;
       while (idxValid(i, code)) {
         if (hadCommentType2Stop1 && matches(code[i], commentType2Stop2)) {
-          comment += code[i++];
+          comment += code[i++]; // /
           break;
         }
 
-        hadCommentType2Stop1 = false;
         if (matches(code[i], commentType2Stop1)) hadCommentType2Stop1 = true;
+        else hadCommentType2Stop1 = false;
 
         comment += code[i++];
       }
@@ -366,17 +377,14 @@ export namespace Lexer {
           lastCharWasDigit = true;
           lastCharWasUnderscore = false;
           literal += code[i++];
-        } else if (lastCharWasDigit && matches(code[i], '_')) {
+        } else if (matches(code[i], '_')) {
+          if (!lastCharWasDigit) invalidDoubleUnderscore.push(i);
+
           consumedSomething = true;
           lastCharWasDigit = false;
           lastCharWasUnderscore = true;
-          literal += code[i++];
-        } else if (!lastCharWasDigit && matches(code[i], '_')) {
-          consumedSomething = true;
-          lastCharWasDigit = false;
-          lastCharWasUnderscore = true;
-          invalidDoubleUnderscore.push(i);
-          literal += code[i++];
+
+          literal += code[i++]; // _
         } else if (
           matches(code[i], decimalDigits) &&
           !matches(code[i], alphabet)
@@ -410,8 +418,8 @@ export namespace Lexer {
     ) {
       cantHaveDotOrE = true;
 
-      literal += code[i++];
-      const char: string = code[i++];
+      literal += code[i++]; // 0
+      const char: string = code[i++]; // x | o | b
       literal += char;
       switch (char) {
         case 'x':
@@ -431,7 +439,8 @@ export namespace Lexer {
 
     if (idxValid(i, code) && matches(code[i], '.')) {
       gotDotOrE = true;
-      literal += code[i++];
+
+      literal += code[i++]; // .
 
       if (!consumeDigits()) invalidDidNotConsumDigits = true;
     }
@@ -439,8 +448,8 @@ export namespace Lexer {
     if (idxValid(i, code) && matches(code[i], 'e')) {
       gotDotOrE = true;
 
-      literal += code[i++];
-      if (matches(code[i], ['+', '-'])) literal += code[i++];
+      literal += code[i++]; // e
+      if (matches(code[i], ['+', '-'])) literal += code[i++]; // + | -
 
       if (!consumeDigits()) invalidDidNotConsumDigits = true;
 
@@ -453,7 +462,6 @@ export namespace Lexer {
     }
 
     if (matches(code[i], identifierStart)) {
-      // TODO, add index as information
       const nextToken: nextToken = consumeIdentifier(code, i);
 
       if (
@@ -467,15 +475,15 @@ export namespace Lexer {
             codeInvalid: true,
             type: 'identifier connected to numeric literal',
             chars: literal + nextToken.value.lexeme,
+            invalidIdentifierIdx: nextToken.value.idx,
             idx
           },
           newidx: nextToken.newidx
         };
-      } else {
+      } else
         throw new Error(
           `Internal error while parsing numeric literal and a following identifier at position ${i}`
         );
-      }
     }
 
     if (invalidUnderscoresEnd.length !== 0) {
@@ -502,17 +510,35 @@ export namespace Lexer {
         },
         newidx: i
       };
-    } else if (
-      (gotDotOrE && cantHaveDotOrE) ||
-      invalidHadWrongAlpabet ||
-      invalidDidNotConsumDigits
-    ) {
+    } else if (gotDotOrE && cantHaveDotOrE) {
       return {
         valid: false,
         newidx: i,
         value: {
           codeInvalid: true,
-          type: 'invalid numeric literal',
+          type: 'got a dot or e in a numeric literal which cant have it at that place',
+          chars: literal,
+          idx
+        }
+      };
+    } else if (invalidHadWrongAlpabet) {
+      return {
+        valid: false,
+        newidx: i,
+        value: {
+          codeInvalid: true,
+          type: 'had wrong alphabet in numeric literal',
+          chars: literal,
+          idx
+        }
+      };
+    } else if (invalidDidNotConsumDigits) {
+      return {
+        valid: false,
+        newidx: i,
+        value: {
+          codeInvalid: true,
+          type: 'did not consume digits in numeric literal',
           chars: literal,
           idx
         }
@@ -553,7 +579,7 @@ export namespace Lexer {
     let symbol: string = '';
 
     // reduce the search space
-    let possibleSymbols: string[] = symbols.filter((str) =>
+    const possibleSymbols: string[] = symbols.filter((str) =>
       str.startsWith(code[i])
     );
     while (
@@ -564,7 +590,7 @@ export namespace Lexer {
 
     // got: "->"; valid: "->*"; invalid: "-", ">", "->"
     const symbolGot: string = symbol;
-    while (!symbols.includes(symbol)) {
+    while (!possibleSymbols.includes(symbol)) {
       if (symbol.length === 0) {
         return {
           valid: false,
@@ -593,7 +619,7 @@ export namespace Lexer {
   function consumeString(code: string, idx: number): nextToken {
     // TODO, what about \n in the middle of a string?
     let i: number = idx;
-    let string: string = code[i++];
+    let string: string = code[i++]; // " | ' | `
 
     const stringEnd: string = string;
     const toEscapSymbols: string[] = [stringEnd, '\\', 'n', 't', 'r', 'u'];
@@ -633,7 +659,8 @@ export namespace Lexer {
       }
     }
 
-    if (idxValid(i, code) && matches(code[i], stringEnd)) string += code[i++];
+    if (idxValid(i, code) && matches(code[i], stringEnd))
+      string += code[i++]; // " | ' | `
     else
       return {
         valid: false,
@@ -759,8 +786,10 @@ export namespace Lexer {
   }
 
   function debugLexer(): void {
+    const timerAndIO: boolean = true;
+
     const timerName: string = 'Lexer tests';
-    console.time(timerName);
+    if (timerAndIO) console.time(timerName);
 
     const c: string = ''; // `0.0e-`;
     if (c !== '') console.log(Lexer.lexe(c));
@@ -977,7 +1006,8 @@ _
       '\\uFFfF',
       '\\uxy',
       '51.e-3',
-      '0o012345678'
+      '0o012345678',
+      '"'
     ];
 
     let successfullTests: number = 0;
@@ -1003,27 +1033,28 @@ _
       else successfullTests++;
     }
 
-    if (successfullTests !== mustLexe.length + mustNotLexe.length)
-      console.error(
-        `${
-          mustLexe.length + mustNotLexe.length - successfullTests
-        } failed tests in the Lexer-stage!`
-      );
-    else
+    if (
+      timerAndIO &&
+      successfullTests === mustLexe.length + mustNotLexe.length
+    ) {
       console.debug(
         `Lexer successfully lexed ${successfullTests} tests and ${
           mustLexe.map((e) => e[0]).reduce((a, b) => a + b).length +
           mustNotLexe.reduce((a, b) => a + b).length
         } characters.`
       );
+    } else if (successfullTests !== mustLexe.length + mustNotLexe.length)
+      console.error(
+        `${
+          mustLexe.length + mustNotLexe.length - successfullTests
+        } failed tests in the Lexer-stage!`
+      );
 
-    console.timeEnd(timerName);
+    if (timerAndIO) console.timeEnd(timerName);
   }
 
-  debugLexer();
+  // for (let i = 0; i < 1; ++i) debugLexer();
 }
-
-console.timeEnd('a');
 
 // https://runjs.co/s/I1irVl3Rf
 // https://www.typescriptlang.org/play?#code/PTAECkEMDdIZQMYCcCWAHALsAKgTzQKaKqagCOAriggNYDOGkSGoA5lQCYEBQIo2ACxR1Qw0JFAIA9gFsZBAHYYAdPwEFc4pAVGsFU7R1AAjTRnWg0SKaySQ5KBa1AAbSE4qRWBZbwBUgmJikC50UuKSsvJKfsDcvGAARDK4AGIUCggYKFIKiaIiEgBmGVk5CqAA7kIIAqCMNASFoHSOrC46ChQyxgRICeKFFUzs0SzuRtoYFEgKzV09fVXqFQQAHgQIFBgEHL4lmdm5oCnph+UAFGsAXKALvUgAlLf3SwDe3KCgfJUo5vUWRIdDD5Rq4SoGDgAGlAuR0CHcoC4RUcOgksFQkGMHV8X2BJ1wADUmCgsR0Xt0HqAALygACsAG5Pt8wBjSdimpJEb0TlIOCgUbsqn86uYdIlqfkpIQ7BgDLiCcTMRyaYqSWSdABqUAARiZXz4ySJ6o5+TE+kqoAudNA2p1j3ENAkADZfMyfkIOgD4bl+UcKkaleyvQBCWkADjNIgwSAoPANYDFkS4ogqScSb1AAF98tipLRhS4XCYdOtNttdgrqigvRcUkGNaAw6Bww6Pl8E97QIlNZqpTLIHKkKnkARIHROUm2Y3YC44yZNHCFV9e-WTR19dn4p3EYkBfkGIOCGNJOpaNGLNIFH7yu6wBNQGWtjsL+LMzmTC58zQYQKu1eb2OSpx3qWMfGZP862NZUvWpCM22ZTtEivMIcS-Vh8isRwMFfLRRkUHDEJZVMu2MOxaF2aNwiTFCpBxIjaLQmwLiIr4AHJ1FwNjvj8WomEgLIlhcP4+hCEQZAoBgSxaGZrAyLgjFMJEpAoFVKCkF9YiIx5NyzR9Qh0dsOz4P9033SJrz+coqhAooxIIGF0wIAzcy-AsxCfCs9m3DtGJ8dCLjsgydOZLMfL4REmDsTRglcYQWCkIpQFnOM6AVfFXiQABBJBoopRYkAAbQAXVVQqAAYYR1GEACYYQAZmKpk727IoDHyL9pRECEkBoOLGi7RJqw6DqpGla5mTa4cWI7VwCBYFBVXKnjHw2Z8hV6KadCTFEkCkkTZWs2JNy+RaAB5QAAFhWgCrNyGFvBw09NkaRSCC21by2yJwuwUdYFp2Q7jmOoje0W4A-DYeaRE8nYjEHLtFCMRLHwEuoDsHI64i+BDZp+EVBsK0Biv7UShxhOEuQqR6uxS+NjPvFgk1YFBoEUSwpFaf0YWqPodDQTm7oqZaxB2lA9pYZzjwI5c1RgnRaTXeXbTuSk+hy6LCpQJrQvCsAleDHRgiZoQRAF7DdUuhUphmCoDcbbU1iZMKBmKUp-Sp6SESLIVfn+RILlAR5El8fEbdmXZiTnAh8qpRW0ndy46RCvzlAC8O-o4KO4x0oA
