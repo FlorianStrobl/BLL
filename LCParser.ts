@@ -1,133 +1,9 @@
-// AST generation
-// let ...
-
-// recursive descent instead of (LALR) Look-Ahead, Left-to-right, Rightmost Derivation parser
-
-/*
-TODO Larser aka lexing while parsing
-if invalid lexeme comes, just break parsing and continue lexing to the end, to get all the errors of the lexer
-*/
-
 import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
 
-// see: https://www.wikiwand.com/en/Extended_Backus-Naur_form
-// https://www.geeksforgeeks.org/types-of-parsers-in-compiler-design/
-
-/*
-  ?: 0 or 1
-  *: 0 or more
-  +: 1 or more
-  in () is the order of evaluation for expressions: precedence and associativity
-
-  STATEMENT:
-    ;
-    "import" IMPORT_PATH ;
-    "pub" PUB_STATEMENTS
-    PUB_STATEMENTS
-
-  IMPORT_PATH:
-    identifier (. identifier)?
-    identifier / (.)+ / IMPORT_PATH
-
-  PUB_STATEMENTS:
-    "namespace" identifier { (STATEMENT)* }
-    "let" identifier = EXPRESSION ;
-    "let" identifier: TYPE = EXPRESSION ;
-    "type" identifier = TYPE_EXPRESSION ;
-
-  TYPE:
-    ( TYPE )
-    "f32"
-    "i32"
-    "undetermined"
-    TYPE -> TYPE
-
-  TYPE_EXPRESSION:
-    TYPE
-
-  TYPE_INFER:
-    identifier : TYPE
-    TYPE_INFER , TYPE_INFER
-
-  EXPRESSION:
-    ( EXPRESSION )                   (10, n/a)
-    identifier                       (10, n/a)
-    identifier.identifier??? TODO    (10, n/a)
-    NUMERIC_EXPRESSION               (10, n/a)
-    identifier(ARG_LIST)             (10, n/a)
-    identifier[TYPE_INFER](ARG_LIST) (10, n/a)
-    "func" identifier(PARAM_LIST) -> EXPRESSION
-    "func" identifier[GENERIC_TYPE_LIST](PARAM_LIST) -> EXPRESSION
-    UNARY_EXPRESSION
-    BINARY_EXPRESSION
-
-  ARG_LIST:
-
-    EXPRESSION
-    ARG_LIST, ARG_LIST
-
-  PARAM_LIST:
-
-    identifier
-    identifier: TYPE
-    PARAM_LIST, PARAM_LIST
-
-  GENERIC_TYPE_LIST:
-    identifier
-    GENERIC_TYPE_LIST, GENERIC_TYPE_LIST
-
-  UNARY_EXPRESSION:
-    ~ EXPRESSION  (9, right to left TODO)
-    - EXPRESSION  (9, right to left)
-    + EXPRESSION  (9, right to left)
-
-  BINARY_EXPRESSION:
-    EXPRESSION *** EXPRESSION (8, right to left)
-    EXPRESSION ** EXPRESSION (8, right to left)
-    EXPRESSION * EXPRESSION (7, left to right)
-    EXPRESSION / EXPRESSION (7, left to right)
-    EXPRESSION % EXPRESSION (7, left to right)
-    EXPRESSION + EXPRESSION (6, left to right)
-    EXPRESSION - EXPRESSION (6, left to right)
-    EXPRESSION << EXPRESSION (5, left to right)
-    EXPRESSION >> EXPRESSION (5, left to right)
-    EXPRESSION < EXPRESSION (4, left to right)
-    EXPRESSION > EXPRESSION (4, left to right)
-    EXPRESSION <= EXPRESSION (4, left to right)
-    EXPRESSION >= EXPRESSION (4, left to right)
-    EXPRESSION != EXPRESSION (3, left to right)
-    EXPRESSION == EXPRESSION (3, left to right)
-    EXPRESSION & EXPRESSION (2, left to right)
-    EXPRESSION ^ EXPRESSION (1, left to right)
-    EXPRESSION | EXPRESSION (0, left to right)
-
-  NUMERIC_EXPRESSION:
-    "nan"
-    "infinity"
-    numeric_literal
-*/
-
-/*
-numeric_literal to binary_float/binary_int:
-
-if numeric_literal is bin|hex|oct:
-  // no decimal places nor e+5/e-2
-  convert_literal_to_decimal_literal()
-
-0. remove all the "_"
-1. resolve "e" by shifting the string to the side by the amount specified (while paying attention to the potential ".")
-2. int part before "." resolve
-3. decimal part before "." resolve (maybe by starting as an int, and then dividing by 10**i)
-4. add int part and decimal part while rounding
-
-for_sure_float: true|false
-*/
-
+// Recursive Descent Parsing
 export namespace Parser {
-  // Recursive Descent Parsing
-
   // #region types
   type lexemT = Lexer.token;
 
@@ -144,7 +20,7 @@ export namespace Parser {
   export type expressionT =
     | {
         type: 'unary';
-        operator: '-' | '+' | '~' | "!";
+        operator: '-' | '+' | '~' | '!';
         operatorLex: lexemT;
         body: expressionT;
       }
@@ -230,7 +106,7 @@ export namespace Parser {
   let _lexemes: Lexer.token[] = []; // TODO, real time adding of lexems (larser)
   let _code: string = '';
   let _fileName: string = '';
-  const lexemeTypes = Lexer.lexemeType;
+  const tokenTypes = Lexer.tokenType;
 
   // #region helper
   function isAtEnd(): boolean {
@@ -464,9 +340,9 @@ export namespace Parser {
       if (!match(')')) throw Error('Expression wasnt closed'); // TODO
       expression.endBracket = previous();
       return expression;
-    } else if (peek()!.type === lexemeTypes.literal) {
+    } else if (peek()!.type === tokenTypes.literal) {
       return { type: 'literal', literal: advance()! };
-    } else if (peek()!.type === lexemeTypes.identifier) {
+    } else if (peek()!.type === tokenTypes.identifier) {
       // TODO do not do () because of (x.y).z
       // TODO, x, x(), x.y, x.y() but not x.y().z
       let identifier = advance()!;
@@ -496,7 +372,7 @@ export namespace Parser {
       let dot: Lexer.token | undefined;
       while ((dot = match('.'))) {
         path.push(dot);
-        if (peek()!.type === lexemeTypes.identifier) path.push(advance());
+        if (peek()!.type === tokenTypes.identifier) path.push(advance());
         else throw Error('`identifier . not an identifier` is not ok'); // TODO
       }
 
@@ -568,10 +444,7 @@ export namespace Parser {
       }
 
       let identifier: Lexer.token | undefined = advance();
-      if (
-        identifier === undefined ||
-        identifier.type !== lexemeTypes.identifier
-      )
+      if (identifier === undefined || identifier.type !== tokenTypes.identifier)
         throw Error('must have identifier between two commas'); // TODO
 
       args.push(identifier);
@@ -594,7 +467,7 @@ export namespace Parser {
     // matched "let" lastly
 
     const identifier: Lexer.token | undefined = advance();
-    if (identifier?.type !== lexemeTypes.identifier)
+    if (identifier?.type !== tokenTypes.identifier)
       throw Error('invalid token type in parse let statement'); // TODO
 
     let assigmentOperator: Lexer.token | undefined;
@@ -611,7 +484,7 @@ export namespace Parser {
 
   function parseNamespaceStatement(): namespaceStatementT {
     const identifier: Lexer.token | undefined = advance();
-    if (identifier?.type !== lexemeTypes.identifier)
+    if (identifier?.type !== tokenTypes.identifier)
       throw Error('namespaces must have a name'); // TODO
 
     let openingBracket: Lexer.token | undefined;
@@ -670,7 +543,7 @@ export namespace Parser {
       let identifier = advance();
       if (
         identifier !== undefined &&
-        identifier.type === lexemeTypes.identifier
+        identifier.type === tokenTypes.identifier
       ) {
         path.push(identifier);
 
@@ -711,7 +584,7 @@ export namespace Parser {
     code: string,
     fileName: string
   ): statementT[] | undefined {
-    _lexemes = lexemes.filter((l) => l.type !== lexemeTypes.comment);
+    _lexemes = lexemes.filter((l) => l.type !== tokenTypes.comment);
     _code = code;
     _fileName = fileName;
 
@@ -724,6 +597,132 @@ export namespace Parser {
     return program;
   }
 }
+
+// check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
+// AST generation
+// let ...
+
+// recursive descent instead of (LALR) Look-Ahead, Left-to-right, Rightmost Derivation parser
+
+/*
+TODO Larser aka lexing while parsing
+if invalid lexeme comes, just break parsing and continue lexing to the end, to get all the errors of the lexer
+*/
+
+// see: https://www.wikiwand.com/en/Extended_Backus-Naur_form
+// https://www.geeksforgeeks.org/types-of-parsers-in-compiler-design/
+
+/*
+  ?: 0 or 1
+  *: 0 or more
+  +: 1 or more
+  in () is the order of evaluation for expressions: precedence and associativity
+
+  STATEMENT:
+    ;
+    "import" IMPORT_PATH ;
+    "pub" PUB_STATEMENTS
+    PUB_STATEMENTS
+
+  IMPORT_PATH:
+    identifier (. identifier)?
+    identifier / (.)+ / IMPORT_PATH
+
+  PUB_STATEMENTS:
+    "namespace" identifier { (STATEMENT)* }
+    "let" identifier = EXPRESSION ;
+    "let" identifier: TYPE = EXPRESSION ;
+    "type" identifier = TYPE_EXPRESSION ;
+
+  TYPE:
+    ( TYPE )
+    "f32"
+    "i32"
+    "undetermined"
+    TYPE -> TYPE
+
+  TYPE_EXPRESSION:
+    TYPE
+
+  TYPE_INFER:
+    identifier : TYPE
+    TYPE_INFER , TYPE_INFER
+
+  EXPRESSION:
+    ( EXPRESSION )                   (10, n/a)
+    identifier                       (10, n/a)
+    identifier.identifier??? TODO    (10, n/a)
+    NUMERIC_EXPRESSION               (10, n/a)
+    identifier(ARG_LIST)             (10, n/a)
+    identifier[TYPE_INFER](ARG_LIST) (10, n/a)
+    "func" identifier(PARAM_LIST) -> EXPRESSION
+    "func" identifier[GENERIC_TYPE_LIST](PARAM_LIST) -> EXPRESSION
+    UNARY_EXPRESSION
+    BINARY_EXPRESSION
+
+  ARG_LIST:
+
+    EXPRESSION
+    ARG_LIST, ARG_LIST
+
+  PARAM_LIST:
+
+    identifier
+    identifier: TYPE
+    PARAM_LIST, PARAM_LIST
+
+  GENERIC_TYPE_LIST:
+    identifier
+    GENERIC_TYPE_LIST, GENERIC_TYPE_LIST
+
+  UNARY_EXPRESSION:
+    ~ EXPRESSION  (9, right to left TODO)
+    - EXPRESSION  (9, right to left)
+    + EXPRESSION  (9, right to left)
+
+  BINARY_EXPRESSION:
+    EXPRESSION *** EXPRESSION (8, right to left)
+    EXPRESSION ** EXPRESSION (8, right to left)
+    EXPRESSION * EXPRESSION (7, left to right)
+    EXPRESSION / EXPRESSION (7, left to right)
+    EXPRESSION % EXPRESSION (7, left to right)
+    EXPRESSION + EXPRESSION (6, left to right)
+    EXPRESSION - EXPRESSION (6, left to right)
+    EXPRESSION << EXPRESSION (5, left to right)
+    EXPRESSION >> EXPRESSION (5, left to right)
+    EXPRESSION < EXPRESSION (4, left to right)
+    EXPRESSION > EXPRESSION (4, left to right)
+    EXPRESSION <= EXPRESSION (4, left to right)
+    EXPRESSION >= EXPRESSION (4, left to right)
+    EXPRESSION != EXPRESSION (3, left to right)
+    EXPRESSION == EXPRESSION (3, left to right)
+    EXPRESSION & EXPRESSION (2, left to right)
+    EXPRESSION ^ EXPRESSION (1, left to right)
+    EXPRESSION | EXPRESSION (0, left to right)
+
+  NUMERIC_EXPRESSION:
+    "nan"
+    "infinity"
+    numeric_literal
+*/
+
+/*
+numeric_literal to binary_float/binary_int:
+
+if numeric_literal is bin|hex|oct:
+  // no decimal places nor e+5/e-2
+  convert_literal_to_decimal_literal()
+
+0. remove all the "_"
+1. resolve "e" by shifting the string to the side by the amount specified (while paying attention to the potential ".")
+2. int part before "." resolve
+3. decimal part before "." resolve (maybe by starting as an int, and then dividing by 10**i)
+4. add int part and decimal part while rounding
+
+for_sure_float: true|false
+*/
 
 // const code = `
 // //let x = ((5 + 3) * y ** 3 * 3 + 3 * 2 + 7 *** 4 + 4 ** 4 *** 3 * 1);

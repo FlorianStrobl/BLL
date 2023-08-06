@@ -1,12 +1,8 @@
 import { printMessage, ErrorID } from './FErrorMsgs';
 
-// check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
-// https://stackoverflow.com/questions/14954721/what-is-the-difference-between-a-token-and-a-lexeme BLL
-// TODO, not peek() and consumeChar() = bad because not standard?
-
 export namespace Lexer {
+  // TODO usually peek() and consumeChar()
+
   // #region constants
   const keywords: string[] = [
     'import', // imports all public identifiers from other files
@@ -200,7 +196,7 @@ export namespace Lexer {
   // #endregion
 
   // #region types
-  export enum lexemeType {
+  export enum tokenType {
     comment = '#comment', // "//...", "/*...*/"
     literal = '#literal', // "5.3e-4", "0xFF00FF"
     keyword = '#keyword', // "let", "func"
@@ -209,9 +205,9 @@ export namespace Lexer {
   }
 
   export interface token {
-    lexeme: string;
-    type: lexemeType;
-    idx: number;
+    lexeme: string; // the raw character sequence in the src code, matching a token pattern
+    type: tokenType;
+    idx: number; // index of the lexeme in the src code
   }
 
   // TODO
@@ -355,7 +351,7 @@ export namespace Lexer {
 
     return {
       valid: true,
-      value: { lexeme: comment, type: lexemeType.comment, idx },
+      value: { lexeme: comment, type: tokenType.comment, idx },
       newidx: i
     };
   }
@@ -466,8 +462,8 @@ export namespace Lexer {
 
       if (
         nextToken.valid &&
-        (nextToken.value.type === lexemeType.identifier ||
-          nextToken.value.type === lexemeType.keyword)
+        (nextToken.value.type === tokenType.identifier ||
+          nextToken.value.type === tokenType.keyword)
       ) {
         return {
           valid: false,
@@ -547,7 +543,7 @@ export namespace Lexer {
 
     return {
       valid: true,
-      value: { lexeme: literal, type: lexemeType.literal, idx },
+      value: { lexeme: literal, type: tokenType.literal, idx },
       newidx: i
     };
   }
@@ -565,8 +561,8 @@ export namespace Lexer {
       value: {
         lexeme: identifier,
         type: keywords.includes(identifier)
-          ? lexemeType.keyword
-          : lexemeType.identifier,
+          ? tokenType.keyword
+          : tokenType.identifier,
         idx
       },
       newidx: i
@@ -610,7 +606,7 @@ export namespace Lexer {
 
     return {
       valid: true,
-      value: { lexeme: symbol, type: lexemeType.symbol, idx },
+      value: { lexeme: symbol, type: tokenType.symbol, idx },
       newidx: i
     };
   }
@@ -805,7 +801,7 @@ let num: i32 /* signed */ = + 5.5_3e+2; // an integer
       [
         `
 import std;
-// import my_libs/./wrong_lib/../math_lib/./my_math_lib.bll;
+// import my_libs/./wrong_lib/../math_lib/./my_math_lib.bl l;
 
 let num1 = 5;
 let num2 = 0x5;
@@ -816,7 +812,7 @@ let num4 = 0o7;
 
 // example code
 let a: i32 = IO.in[i32](0); // gets an i32 from the console
-let b: i32 = Math.sq(a); // a ** 2, TODO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
+let b: i32 = Math.sq(a); // a ** 2, TO DO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
 let c: i32 = IO.out(b); // prints b and assigneds b to c
 let a: i32 = 3 == 3;
 
