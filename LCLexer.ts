@@ -28,7 +28,7 @@ export namespace Lexer {
     'i32', // 32 bit integer
     'f32', //single precision 32 bit float after the IEEE754-2008 standard
     'undetermined' // cannot be determined at compile time but must be done at compile time
-  ]; //.sort();
+  ];
 
   const symbols: string[] = [
     // only for same primitive types
@@ -71,41 +71,113 @@ export namespace Lexer {
     '[', // generic type annotations
     ']'
   ];
-  //  .sort((a, b) => b.length - a.length)
-  //  .filter(/*remove doubles*/ (e, i, a) => !a.slice(0, i).includes(e));
 
-  const whitespaces: string[] = ' \t\n\r'.split('');
+  const whitespaces: string[] = [' ', '\t', '\n', '\r'];
 
+  // new Array(10).fill(0).map((_, i) => i.toString());
+  const decimalDigits: string[] = [
+    '0',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9'
+  ];
+  const octalDigits: string[] = ['0', '1', '2', '3', '4', '5', '6', '7'];
+  const binaryDigits: string[] = ['0', '1'];
+  const hexDigits: string[] = [
+    '0',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'f',
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F'
+  ];
+  const nonDecimalLiteralStart: string = '0';
+  const nonDecimalLiteralTypes: string[] = ['x', 'b', 'o'];
+
+  //...new Array(26).fill('').map((_, i) => String.fromCharCode(65 /*97*/ + i)),
   const identifierStart: string[] = [
     '_',
-    // A-Z
-    ...new Array(26).fill('').map((_, i) => String.fromCharCode(65 + i)),
-    // a-z
-    ...new Array(26).fill('').map((_, i) => String.fromCharCode(97 + i))
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'I',
+    'J',
+    'K',
+    'L',
+    'M',
+    'N',
+    'O',
+    'P',
+    'Q',
+    'R',
+    'S',
+    'T',
+    'U',
+    'V',
+    'W',
+    'X',
+    'Y',
+    'Z',
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'f',
+    'g',
+    'h',
+    'i',
+    'j',
+    'k',
+    'l',
+    'm',
+    'n',
+    'o',
+    'p',
+    'q',
+    'r',
+    's',
+    't',
+    'u',
+    'v',
+    'w',
+    'x',
+    'y',
+    'z'
   ];
   const alphaNumeric: string[] = [
     // _, a-z, A-Z
     ...identifierStart,
     // 0-9
-    ...new Array(10).fill(0).map((_, i) => i.toString())
+    ...decimalDigits
   ];
-
-  // 0-9
-  const decimalDigits: string[] = new Array(10)
-    .fill(0)
-    .map((_, i) => i.toString());
-  // 0-7
-  const octalDigits: string[] = new Array(8)
-    .fill(0)
-    .map((_, i) => i.toString());
-  const binaryDigits: string[] = '01'.split('');
-  const hexDigits: string[] = [
-    ...decimalDigits,
-    ...'abcdef'.split(''),
-    ...'ABCDEF'.split('')
-  ];
-  const nonDecimalLiteralStart: string = '0';
-  const nonDecimalLiteralTypes: string[] = ['x', 'b', 'o'];
 
   const commentStart: string = '/';
   const commentTypes: string[] = ['/', '*'];
@@ -116,8 +188,8 @@ export namespace Lexer {
   const commentType2Stop1: string = '*';
   const commentType2Stop2: string = '/';
 
-  const stringStart: string[] = '\'"`'.split('');
-  const escapeSymbol: string = '\\';
+  const stringStart: string[] = ["'", '"', '`'];
+  const escapeSymbol: string = '\\'; // only valid inside strings
 
   const validChars: string[] = [
     ...whitespaces,
@@ -125,6 +197,8 @@ export namespace Lexer {
     ...stringStart,
     ...'+-*/%&|^~=!><;:,.(){}[]'.split('')
   ];
+
+  const firstCharSymbols: string[] = symbols.map((str) => str[0]);
   // #endregion
 
   // #region types
@@ -478,9 +552,13 @@ export namespace Lexer {
     let i: number = idx;
     let symbol: string = '';
 
+    // reduce the search space
+    let possibleSymbols: string[] = symbols.filter((str) =>
+      str.startsWith(code[i])
+    );
     while (
       idxValid(i, code) &&
-      symbols.some((s) => s.startsWith(symbol + code[i]))
+      possibleSymbols.some((str) => str.startsWith(symbol + code[i]))
     )
       symbol += code[i++];
 
@@ -598,19 +676,13 @@ export namespace Lexer {
 
   function matches(character: string, toMatch: string | string[]): boolean {
     return (
-      typeof character === 'string' &&
-      character.length === 1 &&
-      ((typeof toMatch === 'string' && character === toMatch) ||
-        (Array.isArray(toMatch) && toMatch.includes(character)))
+      (typeof toMatch === 'string' && character === toMatch) ||
+      toMatch.includes(character)
     );
   }
 
-  function idxValid(idx: number, obj: number | { length: number }) {
-    return (
-      0 <= idx &&
-      Number.isSafeInteger(idx) &&
-      (typeof obj === 'number' ? idx < obj : idx < obj.length)
-    );
+  function idxValid(idx: number, obj: { length: number }) {
+    return idx < obj.length && idx >= 0;
   }
 
   function lexeNextToken(code: string, idx: number): nextToken {
@@ -636,7 +708,6 @@ export namespace Lexer {
     if (matches(code[idx], decimalDigits))
       return consumeNumericLiteral(code, idx);
 
-    const firstCharSymbols: string[] = symbols.map((e) => e[0]);
     if (firstCharSymbols.includes(code[idx])) return consumeSymbol(code, idx);
 
     if (matches(code[idx], stringStart)) return consumeString(code, idx);
@@ -646,33 +717,29 @@ export namespace Lexer {
       invalidChars += code[idx++];
     return {
       valid: false,
-      newidx: idx,
       value: {
         type: 'invalid chars',
         chars: invalidChars,
         codeInvalid: true,
         idx
-      }
+      },
+      newidx: idx
     };
   }
 
-  export function* lexeNextTokenIter(
-    code: string
-  ): Generator<nextToken, undefined> {
+  export function* lexeNextTokenIter(code: string): Generator<nextToken> {
     let newIdx: number = 0;
     let nToken: nextToken;
 
     do {
-      let idxBefore: number = newIdx;
       nToken = lexeNextToken(code, newIdx);
-      newIdx = nToken.newidx;
 
-      if (nToken.value.type !== 'eof' && idxBefore === newIdx)
+      if (nToken.value.type !== 'eof' && nToken.newidx === newIdx)
         throw new Error('Internal error. Could not lexe the next token.');
-      else if (nToken.value.type !== 'eof') yield nToken;
-    } while (nToken.value.type !== 'eof');
 
-    return undefined;
+      newIdx = nToken.newidx;
+      if (nToken.value.type !== 'eof') yield nToken;
+    } while (nToken.value.type !== 'eof');
   }
 
   export function lexe(
@@ -683,13 +750,12 @@ export namespace Lexer {
     const tokens: token[] = [];
     const errors: errorToken[] = [];
 
-    for (const token of Lexer.lexeNextTokenIter(code)) {
+    for (const token of Lexer.lexeNextTokenIter(code))
       if (token.valid) tokens.push(token.value);
       else errors.push(token.value);
-    }
 
     if (errors.length === 0) return { valid: true, tokens };
-    else return { valid: false, errors, tokens };
+    else return { valid: false, tokens, errors };
   }
 
   function debugLexer(): void {
@@ -699,9 +765,8 @@ export namespace Lexer {
     const c: string = ''; // `0.0e-`;
     if (c !== '') console.log(Lexer.lexe(c));
 
-    const mustLexe: [string, number][] = [[
-      "let x = (func (a) -> a)(3+1);",17
-    ],
+    const mustLexe: [string, number][] = [
+      ['let x = (func (a) -> a)(3+1);', 17],
       [
         `
 let num: i32 /* signed */ = + 5.5_3e+2; // an integer
