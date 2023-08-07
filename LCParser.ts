@@ -1,5 +1,5 @@
 import { Lexer } from './LCLexer';
-// @ts-expect-error, for debugging only
+// ts-expect-error, for debugging only
 import { inspect } from 'util';
 
 // TODO, make a larser: if found one error, stop parsing immediatly and finish the lexing, then print the errors
@@ -316,15 +316,20 @@ export namespace Parser {
   // TODO just to debug
   function parseExprLvl10() {
     let left: any = primary();
-    while (match('(')) {
-      //   f(
-      let args: any = [];
-      while (!match(')')) {
-        // parse until we find `)` (end of argument list)
-        if (args.length > 0) match(',');
-        args.push(parseExpression());
+    while (match('(', '.')) {
+      if (previous().lexeme === '.') {
+        const property = advance();
+        left = { type: 'PropertyAccess', target: left, property };
+      } else {
+        //   f(
+        let args: any = [];
+        while (!match(')')) {
+          // parse until we find `)` (end of argument list)
+          if (args.length > 0) match(',');
+          args.push(parseExpression());
+        }
+        left = { type: 'FunctionCall', callee: left, args };
       }
-      return { type: 'FunctionCall', callee: left, args };
     }
     return left;
   }
@@ -600,7 +605,7 @@ export namespace Parser {
   }
 }
 
-// check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#
+// check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#, go, rustc, py
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
 // AST generation
