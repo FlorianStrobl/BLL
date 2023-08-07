@@ -936,6 +936,7 @@ _
       ['534e354', 1],
       ['0.0e-0', 1],
       ['0e0', 1],
+      ['5.3.2', 3],
       ...symbols.map((e: string) => [e, 1] as [string, number]),
       ...keywords.map((e: string) => [e, 1] as [string, number])
     ];
@@ -1001,7 +1002,9 @@ _
       '\\uxy',
       '51.e-3',
       '0o012345678',
-      '"'
+      '"',
+      '5..3',
+      '5e1e2' // TODO, why?
     ];
 
     let successfullTests: number = 0;
