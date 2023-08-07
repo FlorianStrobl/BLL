@@ -448,6 +448,7 @@ export namespace Lexer {
       if (!consumeDigits()) invalidDidNotConsumDigits = true;
 
       if (matches(code[i], '.')) {
+        // TODO, what if it is "5e1.toString()"
         cantHaveDotOrE = true;
         gotDotOrE = true;
         literal += code[i++];
