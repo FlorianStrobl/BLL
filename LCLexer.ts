@@ -1,3 +1,4 @@
+// compiler/interpreter frontend: scanner
 export namespace Lexer {
   // TODO usually peek() and consumeChar()
 
@@ -7,7 +8,7 @@ export namespace Lexer {
 
     'let', // binds a lambda term to an identifier
     'type', // binds a type to an identifier
-    "match", // expression to unwrap values of specific types
+    'match', // expression to unwrap values of specific types
     'group', // identifier as wrapper around identifiers
     'pub', // make an identifier public to the outside (files or groups)
 
@@ -15,12 +16,13 @@ export namespace Lexer {
 
     // f32 literals:
     'nan',
-    'infinity',
+    'inf',
 
     // types:
     'i32', // 32 bit integer
-    'f32', //single precision 32 bit float after the IEEE754-2008 standard
-    'dyn' // cannot be determined at compile time but must be done at compile time
+    'f32', // single precision 32 bit float after the IEEE754-2008 standard
+    'infer', // automatically infer the type at compile time
+    'empty' // has no  type
   ];
 
   const symbols: string[] = [
@@ -51,7 +53,8 @@ export namespace Lexer {
     '>', // greater than (binary)
 
     '=', // assigments of values to identifiers (let and type)
-    '->', // functions
+    '->', // used in function definitions and match expressions
+    '=>', // used for function signatures
     ':', // type annotation
     ';', // end of let or type statement/empty statement
     ',', // seperator for arguments
@@ -292,7 +295,7 @@ export namespace Lexer {
         idx: number;
       };
 
-  type nextToken =
+  export type nextToken =
     | {
         valid: true;
         value: token;
@@ -763,6 +766,8 @@ export namespace Lexer {
       newIdx = nToken.newidx;
       if (nToken.value.type !== 'eof') yield nToken;
     } while (nToken.value.type !== 'eof');
+
+    yield nToken;
   }
 
   export function lexe(
@@ -775,7 +780,8 @@ export namespace Lexer {
 
     for (const token of Lexer.lexeNextTokenIter(code))
       if (token.valid) tokens.push(token.value);
-      else errors.push(token.value);
+      else if (!token.valid && token.value.codeInvalid)
+        errors.push(token.value);
 
     if (errors.length === 0) return { valid: true, tokens };
     else return { valid: false, tokens, errors };
@@ -959,7 +965,7 @@ _
           test.t1 -> optional.None;
           test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
         };`,
-        96
+        99
       ],
       ...symbols.map((e: string) => [e, 1] as [string, number]),
       ...keywords.map((e: string) => [e, 1] as [string, number])
@@ -1074,5 +1080,5 @@ _
     if (timerAndIO) console.timeEnd(timerName);
   }
 
-  for (let i = 0; i < 1; ++i) debugLexer();
+  // for (let i = 0; i < 1; ++i) debugLexer();
 }

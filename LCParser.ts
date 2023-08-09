@@ -610,10 +610,6 @@ export namespace Parser {
   }
   // #endregion
 
-  /*
-  TODO: add a comment[] field in each object to acommodate for comments
-*/
-
   export function parse(
     lexemes: Lexer.token[],
     code: string,
