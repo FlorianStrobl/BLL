@@ -938,6 +938,25 @@ _
       ['0.0e-0', 1],
       ['0e0', 1],
       ['5.3.2', 3],
+      [`type test {
+        t1,
+        t2(a.x)
+      }
+
+      type a {
+        x(i32, f32, i32)
+      }
+
+      type optional[t] {
+        None,
+        Some(t)
+      }
+
+      let f = func (x: test): optional[a] ->
+        match(x) {
+          case test.t1 -> optional.Nonel;
+          case test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
+        };`, 96],
       ...symbols.map((e: string) => [e, 1] as [string, number]),
       ...keywords.map((e: string) => [e, 1] as [string, number])
     ];
@@ -1051,5 +1070,5 @@ _
     if (timerAndIO) console.timeEnd(timerName);
   }
 
-  // for (let i = 0; i < 1; ++i) debugLexer();
+  for (let i = 0; i < 1; ++i) debugLexer();
 }

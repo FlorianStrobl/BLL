@@ -1,8 +1,35 @@
 import { Lexer } from './LCLexer';
-// ts-expect-error, for debugging only
+// for debugging only
+// @ts-ignore
 import { inspect } from 'util';
 
 // TODO, make a larser: if found one error, stop parsing immediatly and finish the lexing, then print the errors
+
+// type = and type {} for special purpose enums/union
+
+/**
+ * type test {
+  t1,
+  t2(a.x)
+}
+
+type a {
+  x(i32, f32, i32)
+}
+
+type optional[t] {
+  None,
+  Some(t)
+}
+
+let f = func (x: test): optional[a] ->
+  match(x) {
+    case test.t1 -> optional.Nonel;
+    case test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
+  };
+
+  // func[t] (x: t) -> t;
+ */
 
 // Recursive Descent Parsing
 export namespace Parser {
