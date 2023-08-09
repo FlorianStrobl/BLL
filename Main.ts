@@ -1,7 +1,7 @@
 import { Lexer } from './LCLexer';
 import { Parser } from './LCParser';
 import { Compiler } from './LCCompiler';
-import { Interpreter } from './LCInterpreter';
+// import { Interpreter } from './LCInterpreter';
 import { prettier } from './LCFormatter';
 // @ts-ignore
 import { inspect } from 'util';

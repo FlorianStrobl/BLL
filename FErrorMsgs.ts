@@ -8,6 +8,10 @@
   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error
 */
 
+// TODO
+
+// TODO, what if invalid lexemes like #[0], which is internally used for color coding etc.
+
 export const enum ErrorID {
   unexpectedEndOfFile = 0x0000,
   invalidCharacter = 0x0001,

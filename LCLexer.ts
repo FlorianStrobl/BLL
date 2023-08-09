@@ -3,12 +3,13 @@ export namespace Lexer {
 
   // #region constants
   const keywords: string[] = [
-    'import', // imports all public identifiers from other files
+    'use', // imports all public identifiers from other files
 
     'let', // binds a lambda term to an identifier
     'type', // binds a type to an identifier
-    'namespace', // identifier as wrapper around identifiers
-    'pub', // make an identifier public to the outside (files or namespaces)
+    "match", // expression to unwrap values of specific types
+    'group', // identifier as wrapper around identifiers
+    'pub', // make an identifier public to the outside (files or groups)
 
     'func', // introduces a function
 
@@ -19,7 +20,7 @@ export namespace Lexer {
     // types:
     'i32', // 32 bit integer
     'f32', //single precision 32 bit float after the IEEE754-2008 standard
-    'undetermined' // cannot be determined at compile time but must be done at compile time
+    'dyn' // cannot be determined at compile time but must be done at compile time
   ];
 
   const symbols: string[] = [
@@ -54,11 +55,11 @@ export namespace Lexer {
     ':', // type annotation
     ';', // end of let or type statement/empty statement
     ',', // seperator for arguments
-    '.', // accessing public functions from namespaces
+    '.', // accessing public functions from groups
 
     '(', // grouping, function calls, function arguments/parameters
     ')',
-    '{', // namespaces
+    '{', // groups or match expressions
     '}',
     '[', // generic type annotations
     ']'
@@ -799,8 +800,8 @@ let num: i32 /* signed */ = + 5.5_3e+2; // an integer
       ],
       [
         `
-import std;
-// import my_libs/./wrong_lib/../math_lib/./my_math_lib.bl l;
+use std;
+// use my_libs/./wrong_lib/../math_lib/./my_math_lib.bl l;
 
 let num1 = 5;
 let num2 = 0x5;
@@ -938,7 +939,8 @@ _
       ['0.0e-0', 1],
       ['0e0', 1],
       ['5.3.2', 3],
-      [`type test {
+      [
+        `type test {
         t1,
         t2(a.x)
       }
@@ -953,10 +955,12 @@ _
       }
 
       let f = func (x: test): optional[a] ->
-        match(x) {
-          case test.t1 -> optional.Nonel;
-          case test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
-        };`, 96],
+        match(x): optional[a] {
+          test.t1 -> optional.None;
+          test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
+        };`,
+        96
+      ],
       ...symbols.map((e: string) => [e, 1] as [string, number]),
       ...keywords.map((e: string) => [e, 1] as [string, number])
     ];

@@ -23,9 +23,9 @@ type optional[t] {
 }
 
 let f = func (x: test): optional[a] ->
-  match(x) {
-    case test.t1 -> optional.Nonel;
-    case test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
+  match(x): optional[a] {
+    test.t1 -> optional.Nonel;
+    test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
   };
 
   // func[t] (x: t) -> t;
@@ -34,15 +34,16 @@ let f = func (x: test): optional[a] ->
 // Recursive Descent Parsing
 export namespace Parser {
   // #region types
-  type lexemT = Lexer.token;
+  type token = Lexer.token;
 
-  type importBodyT = { path: lexemT[]; semicolon: lexemT };
+  // TODO, need all idxs
+  type importBodyT = { path: token[]; semicolon: token };
 
   type funcExpressionT = {
-    openingBracket: lexemT;
-    closingBracket: lexemT;
-    params: { args: lexemT[]; commas: lexemT[] };
-    arrow: lexemT;
+    openingBracket: token;
+    closingBracket: token;
+    params: { args: token[]; commas: token[] };
+    arrow: token;
     body: expressionT;
   };
 
@@ -50,7 +51,7 @@ export namespace Parser {
     | {
         type: 'unary';
         operator: '-' | '+' | '~' | '!';
-        operatorLex: lexemT;
+        operatorLex: token;
         body: expressionT;
       }
     | {
@@ -74,61 +75,61 @@ export namespace Parser {
           | '%'
           | '**'
           | '***';
-        operatorLex: lexemT;
+        operatorLex: token;
         left: expressionT;
         right: expressionT;
       }
     | {
         type: 'grouping';
-        openingBracket: lexemT;
+        openingBracket: token;
         value: expressionT;
-        endBracket: lexemT;
+        endBracket: token;
       }
-    | { type: 'literal'; literal: lexemT }
+    | { type: 'literal'; literal: token }
     | { type: 'identifier-path'; path: any }
-    | { type: 'identifier'; identifier: lexemT }
+    | { type: 'identifier'; identifier: token }
     | {
         type: 'functionCall';
-        functionIdentifier: lexemT;
+        functionIdentifier: token;
         callArguments: any;
-        openBrace: lexemT;
-        closingBrace: lexemT;
+        openBrace: token;
+        closingBrace: token;
       }
     | ({
         type: 'func';
-        typeLex: lexemT;
+        typeLex: token;
       } & funcExpressionT);
 
   type letStatementT = {
-    identifier: lexemT;
+    identifier: token;
     body: expressionT;
-    assigmentOperator: lexemT;
-    semicolon: lexemT;
+    assigmentOperator: token;
+    semicolon: token;
   };
 
   type namespaceStatementT = {
-    identifier: lexemT;
+    identifier: token;
     body: statementT[];
-    openingBracket: lexemT;
-    closingBracket: lexemT;
+    openingBracket: token;
+    closingBracket: token;
   };
 
   type pubStatementT =
-    | ({ type: 'let'; typeLex: lexemT } & letStatementT)
-    | ({ type: 'namespace'; typeLex: lexemT } & namespaceStatementT);
+    | ({ type: 'let'; typeLex: token } & letStatementT)
+    | ({ type: 'namespace'; typeLex: token } & namespaceStatementT);
 
   export type statementT =
     | {
         type: ';';
-        typeLex: lexemT;
+        typeLex: token;
       }
     | ({
         type: string;
-        typeLex: lexemT;
+        typeLex: token;
         public: boolean;
-        publicLex?: lexemT;
+        publicLex?: token;
       } & pubStatementT)
-    | ({ type: 'import'; typeLex: lexemT } & importBodyT);
+    | ({ type: 'import'; typeLex: token } & importBodyT);
   // #endregion
 
   let idx: number = 0; // larser
@@ -369,7 +370,7 @@ export namespace Parser {
         type: 'grouping',
         openingBracket: previous(),
         value: parseExpression(),
-        endBracket: undefined as unknown as lexemT
+        endBracket: undefined as unknown as token
       };
       if (!match(')')) throw Error('Expression wasnt closed'); // TODO
       expression.endBracket = previous();
@@ -462,9 +463,9 @@ export namespace Parser {
   }
 
   // TODO
-  function parseFuncExprArgs(): { args: lexemT[]; commas: lexemT[] } {
-    const args: lexemT[] = [];
-    const commas: lexemT[] = [];
+  function parseFuncExprArgs(): { args: token[]; commas: token[] } {
+    const args: token[] = [];
+    const commas: token[] = [];
 
     while (peek()?.lexeme !== ')') {
       if (args.length > 0) {
@@ -568,7 +569,7 @@ export namespace Parser {
       path.push(slash);
     }
 
-    let path: lexemT[] = [];
+    let path: token[] = [];
 
     if (peek()?.lexeme === '.') parseDots();
 
