@@ -163,12 +163,12 @@ export namespace Parser {
     return idx++, previous();
   }
 
-  function check(value: string): boolean {
-    if (isAtEnd()) return false;
-    return peek()?.lexeme === value; // peek() only undefined if isAtEnd() === false
-  }
-
   function match(...tokens: string[]): Lexer.token | undefined {
+    function check(value: string): boolean {
+      if (isAtEnd()) return false;
+      return peek()?.lexeme === value; // peek() only undefined if isAtEnd() === false
+    }
+
     for (const token of tokens) if (check(token)) return advance();
     return undefined;
   }
@@ -628,6 +628,9 @@ export namespace Parser {
     return program;
   }
 }
+
+const c = 'let x = 5;';
+console.log(Parser.parse(Lexer.lexe(c).tokens, 'test', 'test'));
 
 // check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#, go, rustc, py
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
