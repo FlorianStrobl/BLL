@@ -10,13 +10,16 @@ export namespace Parser {
   // part which handles the lexer
   class Larser {
     code: string;
+    filename: string;
+
     lexer: Generator<Lexer.nextToken>;
 
     currentToken: Lexer.token;
     eof: boolean = false;
 
-    constructor(code: string) {
+    constructor(code: string, filename: string) {
       this.code = code;
+      this.filename = filename;
       this.lexer = Lexer.lexeNextTokenIter(code);
 
       const lexerNext = this.lexer.next();
@@ -57,7 +60,11 @@ export namespace Parser {
 
     errorHandling(): never {
       const tokens = Lexer.lexe(this.code);
-      throw new Error(tokens === undefined ? 'no tokens' : tokens.toString());
+      throw new Error(
+        this.filename +
+          ': ' +
+          (tokens === undefined ? 'no tokens' : tokens.toString())
+      );
     }
   }
 
@@ -89,7 +96,7 @@ export namespace Parser {
   // #endregion
 
   export function parse(code: string, filename: string): statement[] {
-    larser = new Larser(code);
+    larser = new Larser(code, filename);
     const statements: statement[] = [];
 
     while (!isAtEnd()) {
@@ -101,4 +108,4 @@ export namespace Parser {
   }
 }
 
-Parser.parse(' let   abc a ', 'test');
+Parser.parse('let x: i32 = 5;', 'test');
