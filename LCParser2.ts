@@ -64,7 +64,6 @@ export namespace Parser {
   class Larser {
     private code: string;
     private filename: string;
-
     private lexer: Generator<Lexer.nextToken>;
 
     private currentToken: Lexer.token;
@@ -75,15 +74,17 @@ export namespace Parser {
       this.filename = filename;
       this.lexer = Lexer.lexeNextTokenIter(code);
 
+      // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
       const lexerNext = this.lexer.next();
+      const lexerIsNotDone: boolean = lexerNext.done === false;
       if (
-        lexerNext.done === false &&
+        lexerIsNotDone &&
         !lexerNext.value.valid &&
         lexerNext.value.value.type === 'eof'
       ) {
         this.eof = true;
-        this.currentToken = {} as any;
-      } else if (lexerNext.done === false && lexerNext.value.valid) {
+        this.currentToken = {} as never;
+      } else if (lexerIsNotDone && lexerNext.value.valid) {
         this.currentToken = lexerNext.value.value;
       } else this.errorHandling();
     }
@@ -103,17 +104,21 @@ export namespace Parser {
 
     // assertion: not eof
     public advanceToken(): void {
-      if (this.isEof()) return;
+      if (this.isEof())
+        throw new Error(
+          'Internal error while parsing. Tried advancing to next token, even tho the code is eof.'
+        );
 
       // this.previousToken = this.currentToken;
       const lexerNext = this.lexer.next();
+      const lexerIsNotDone: boolean = lexerNext.done === false;
 
       this.eof =
-        lexerNext.done === false &&
+        lexerIsNotDone &&
         !lexerNext.value.valid &&
         lexerNext.value.value.type === 'eof';
 
-      if (lexerNext.done === false && lexerNext.value.valid)
+      if (lexerIsNotDone && lexerNext.value.valid)
         this.currentToken = lexerNext.value.value;
       else if (!this.eof) this.errorHandling();
     }
@@ -141,29 +146,21 @@ export namespace Parser {
   function advance(): Lexer.token | undefined {
     if (isAtEnd()) return undefined;
 
-    const cur = peek();
+    const currentToken = peek();
     larser.advanceToken();
-    return cur;
+    return currentToken;
   }
 
   function match(...tokens: string[]): boolean {
     if (isAtEnd()) return false;
-
-    const cur = peek();
-    for (const token of tokens)
-      if (cur !== undefined && cur.lexeme === token) return true;
-
-    return false;
+    const currentToken = peek();
+    return currentToken !== undefined && tokens.includes(currentToken.lexeme);
   }
 
   function matchType(...tokenTypes: Lexer.tokenType[]): boolean {
     if (isAtEnd()) return false;
-
-    const cur = peek();
-    for (const tokenType of tokenTypes)
-      if (cur !== undefined && cur.type === tokenType) return true;
-
-    return false;
+    const currentToken = peek();
+    return currentToken !== undefined && tokenTypes.includes(currentToken.type);
   }
   // #endregion
 
@@ -678,14 +675,15 @@ export namespace Parser {
 
 // TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
 
+console.time('t');
+const parsed = Parser.parse(
+  'pub group test { let x = 5 + 2 * (func () -> 5).a.6(); }',
+  'test'
+);
+console.timeEnd('t');
+
 console.log(
-  inspect(
-    Parser.parse(
-      'pub group test { let x = 5 + 2 * (func () -> 5).a.6(); }',
-      'test'
-    ),
-    {
-      depth: 999
-    }
-  )
+  inspect(parsed, {
+    depth: 999
+  })
 );
