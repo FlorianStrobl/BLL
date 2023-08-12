@@ -9,6 +9,9 @@ const test: string =
 const idx = array.indexOf(test);
 
 // function call benchmark
+function callme(): boolean {
+  return array.includes(test);
+}
 
 for (let i = 0; i < iterCount; ++i) {
   console.time('a');
@@ -22,15 +25,16 @@ for (let i = 0; i < iterCount; ++i) {
   //array.forEach((s) => (answer = !answer && s === test ? true : answer));
 
   // fast and same speed:
+  let answer = callme();
   //let answer = array.includes(test);
   //let answer = array.indexOf(test) !== -1;
   //let answer = array.lastIndexOf(test) !== -1; // always slower when not found
 
   // slow and same speed
-  let answer = array.findIndex((s) => s === test);
+  //let answer = array.findIndex((s) => s === test) !== -1;
   //let answer = array.some((s) => s === test);
   //let answer = !array.every(s => s !== test);
-  //let answer = array.find((s) => s === test);
+  //let answer = array.find((s) => s === test) !== undefined;
   //let answer = array.filter((s) => s === test).length !== 0; // no optimization after found
 
   //let answer = array.map((s) => s);
