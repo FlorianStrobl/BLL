@@ -8,8 +8,6 @@ import { Lexer } from './LCLexer';
 // TODO
 
 export namespace prettier {
-  type lexemT = Lexer.token;
-
   function printExpression(expression: Parser.expressionT): string {
     // if two identifiers or operators are following one each other, put a space in between!!
     switch (expression.type) {
@@ -36,7 +34,7 @@ export namespace prettier {
   }
 
   function printStatement(statement: Parser.statementT): string {
-    function printImportStatement(path: lexemT[]): string {
+    function printImportStatement(path: Lexer.token[]): string {
       let str = '';
       for (const p of path) str += p.lexeme;
       return str;
