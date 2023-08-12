@@ -16,7 +16,8 @@ function callme(): boolean {
 for (let i = 0; i < iterCount; ++i) {
   console.time('a');
 
-  // let answer = false;
+  //let answer = false;
+  //for (const t of array) answer = !answer && t === test ? true : answer;
   //for (let i = len - 1; i >= 0; --i)
   //for (let i = 0; i < len; ++i)
   //  answer = !answer && array[i] === test ? true : answer;
