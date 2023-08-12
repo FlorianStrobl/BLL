@@ -26,8 +26,8 @@ for (let i = 0; i < iterCount; ++i) {
   //array.forEach((s) => (answer = !answer && s === test ? true : answer));
 
   // fast and same speed:
-  let answer = callme();
-  //let answer = array.includes(test);
+  //let answer = callme();
+  let answer = array.includes(test);
   //let answer = array.indexOf(test) !== -1;
   //let answer = array.lastIndexOf(test) !== -1; // always slower when not found
 
@@ -39,6 +39,14 @@ for (let i = 0; i < iterCount; ++i) {
   //let answer = array.filter((s) => s === test).length !== 0; // no optimization after found
 
   //let answer = array.map((s) => s);
+
+  //let answer = array.length;
+  //let answer = array[0];
+  //let answer = array[Math.floor(len/2)];
+  //let answer = array[len - 1];
+  //let answer = array.at(0);
+  //let answer = array.at(Math.floor(len/2));
+  //let answer = array.at(len - 1);
 
   console.timeEnd('a');
   console.log(answer, idx);
