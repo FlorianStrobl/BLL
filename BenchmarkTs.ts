@@ -27,7 +27,7 @@ for (let i = 0; i < iterCount; ++i) {
 
   // fast and same speed:
   //let answer = callme();
-  let answer = array.includes(test);
+  //let answer = array.includes(test);
   //let answer = array.indexOf(test) !== -1;
   //let answer = array.lastIndexOf(test) !== -1; // always slower when not found
 
@@ -38,7 +38,12 @@ for (let i = 0; i < iterCount; ++i) {
   //let answer = array.find((s) => s === test) !== undefined;
   //let answer = array.filter((s) => s === test).length !== 0; // no optimization after found
 
+  //let answer = array.slice(0, len);
+  //let answer = array.filter(() => true);
   //let answer = array.map((s) => s);
+  //let answer = [...array];
+
+  //let answer = array.copyWithin(0, len);
 
   //let answer = array.length;
   //let answer = array[0];
@@ -49,5 +54,5 @@ for (let i = 0; i < iterCount; ++i) {
   //let answer = array.at(len - 1);
 
   console.timeEnd('a');
-  console.log(answer, idx);
+  console.log(idx /*, answer*/);
 }
