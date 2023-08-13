@@ -25,6 +25,15 @@ export namespace Parser {
         pubToken: Lexer.token;
       }
     | { isPub: false };
+  type hasExplicitType =
+    | {
+        hasExplicitType: true;
+        doublePointToken: Lexer.token;
+        typeExpression: typeExpression;
+      }
+    | {
+        hasExplicitType: false;
+      };
   type useStatement = {
     useToken: Lexer.token;
     path: Lexer.token[];
@@ -32,14 +41,14 @@ export namespace Parser {
   } & comment;
   type pubStatements = comment &
     (
-      | {
+      | ({
           type: 'let';
           letToken: Lexer.token;
           identifierToken: Lexer.token;
           equalsToken: Lexer.token;
           semicolonToken: Lexer.token;
           body: expression;
-        }
+        } & hasExplicitType)
       | { type: 'type=' }
       | { type: 'type{' }
       | {
@@ -165,6 +174,11 @@ export namespace Parser {
   // #endregion
 
   // #region parser
+  function parseTypeExpression(): typeExpression {
+    // TODO
+    return {} as any;
+  }
+
   function parseExpression(): expression {
     function parseExprLvl0(): expression {
       let left: expression = parseExprLvl1();
@@ -385,9 +399,9 @@ export namespace Parser {
         // @ts-expect-error
         expression.endBracket = advance()!;
         return expression;
-      } else if (peek()!.type === Lexer.tokenType.literal) {
+      } else if (matchType(Lexer.tokenType.literal)) {
         return { type: 'literal', literal: advance()! } as any;
-      } else if (peek()!.type === Lexer.tokenType.identifier) {
+      } else if (matchType(Lexer.tokenType.identifier)) {
         // TODO do not do () because of (x.y).z
         // TODO, x, x(), x.y, x.y() but not x.y().z
         let identifier = advance()!;
@@ -481,12 +495,12 @@ export namespace Parser {
     }
 
     function consumeComments(commentArr: Lexer.token[]): void {
-      if (isAtEnd()) return;
       while (!isAtEnd() && matchType(Lexer.tokenType.comment))
         commentArr.push(advance()!);
     }
 
     function parseUseBody(): useStatement {
+      // TODO
       const useToken: Lexer.token = advance()!;
       const path: Lexer.token[] = [];
       const comments: Lexer.token[] = [];
@@ -494,19 +508,25 @@ export namespace Parser {
       if (isAtEnd()) return invalidEof('no use body in use statement');
 
       while (!isAtEnd() && !match(';')) {
-        if (matchType(Lexer.tokenType.comment)) comments.push(advance()!);
-        else if (matchType(Lexer.tokenType.identifier)) path.push(advance()!);
-        else if (match('.')) path.push(advance()!);
+        // TODO
+        consumeComments(comments);
+
+        if (isAtEnd() || match(';')) break;
+
+        if (matchType(Lexer.tokenType.identifier) || match('.'))
+          path.push(advance()!);
         else
           throw new Error(
             'TODO invalid use body statement while parsing code.'
           );
       }
 
-      const semicolonToken = advance()!;
-      // TODO
-      if (semicolonToken.lexeme !== ';' && isAtEnd())
-        return invalidEof('use body was not correctly finished');
+      if (isAtEnd())
+        return invalidEof('unexpected eof in use statement: missing semicolon');
+
+      const semicolonToken = match(';')
+        ? advance()!
+        : newParseError('TOOD did not get semicolon in a use statement');
 
       return {
         semicolonToken,
@@ -518,8 +538,8 @@ export namespace Parser {
     // #endregion
 
     if (isAtEnd()) return invalidEof('no statement parsed');
-    const comments: Lexer.token[] = [];
 
+    const comments: Lexer.token[] = [];
     if (matchType(Lexer.tokenType.comment)) {
       consumeComments(comments);
       return { comments };
@@ -617,8 +637,24 @@ export namespace Parser {
 
       if (isAtEnd())
         return invalidEof(
-          'unexpected eof in let statement after the identifier'
+          'unexpected eof in let statement after asuming an identifier'
         );
+
+      const doublePointToken: Lexer.token | undefined = match(':')
+        ? advance()!
+        : undefined;
+
+      consumeComments(comments);
+
+      if (doublePointToken !== undefined && isAtEnd())
+        return invalidEof('unexpected eof in let statement after getting ":"');
+
+      const typeAnnotation: typeExpression | undefined =
+        doublePointToken !== undefined ? parseTypeExpression() : undefined;
+
+      consumeComments(comments);
+
+      if (isAtEnd()) return invalidEof('unexpected eof in let statement TODO');
 
       const equalsToken: Lexer.token = match('=')
         ? advance()!
@@ -649,7 +685,16 @@ export namespace Parser {
         equalsToken,
         semicolonToken,
         body,
-        comments
+        comments,
+        ...(doublePointToken === undefined
+          ? {
+              hasExplicitType: false
+            }
+          : {
+              hasExplicitType: true,
+              doublePointToken,
+              typeExpression: typeAnnotation
+            })
       };
     } else if (match('type')) {
       // TODO type{ and type=
@@ -677,7 +722,7 @@ export namespace Parser {
 
 console.time('t');
 const parsed = Parser.parse(
-  'pub group test { let x = 5 + 2 * (func () -> 5).a.6(); }',
+  'pub group test { let x = 5 + 2 * (func () -> 5).a.6() + nan + inf + 3e-3; }',
   'test'
 );
 console.timeEnd('t');

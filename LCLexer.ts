@@ -6,13 +6,15 @@ export namespace Lexer {
   const keywords: string[] = [
     'use', // imports all public identifiers from other files
 
+    // statements:
+    'pub', // make an identifier public to the outside (files or groups)
     'let', // binds a lambda term to an identifier
     'type', // binds a type to an identifier
-    'match', // expression to unwrap values of specific types
     'group', // identifier as wrapper around identifiers
-    'pub', // make an identifier public to the outside (files or groups)
 
-    'func', // introduces a function
+    // expressions:
+    'func', // function expression
+    'match', // expression to unwrap values of specific types
 
     // f32 literals:
     'nan',
@@ -22,42 +24,42 @@ export namespace Lexer {
     'i32', // 32 bit integer
     'f32', // single precision 32 bit float after the IEEE754-2008 standard
     'infer', // automatically infer the type at compile time
-    'empty' // has no  type
+    'empty' // has no type (for example f())
   ];
 
   const symbols: string[] = [
     // only for same primitive types
-    '+', // add (binary, unary)
-    '-', // sub (binary, unary)
-    '*', // multiplication (binary)
-    '/', // divide (binary, for integers: rounding down)
-    '**', // exponentiation (binary)
-    '***', // root (binary)
-    '%', // remainder (binary)
+    '+', // add (binary, unary, i32/f32)
+    '-', // sub (binary, unary, i32/f32)
+    '*', // multiplication (binary, i32/f32)
+    '/', // divide (binary, f32/for i32: rounding down)
+    '**', // exponentiation (binary, i32/f32)
+    '***', // root or log (binary, i32/f32) TODO really needed?
+    '%', // remainder (binary, i32)
 
     // only ints
-    '&', // and (binary)
-    '|', // or (binary)
-    '^', // xor (binary)
-    '~', // not (unary)
-    '!', // logical not (unary, 0 -> 1, any -> 0)
-    '<<', // logical left shift (binary)
-    '>>', // logical right shift (binary)
+    '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32) TODO
+    '~', // not (unary, i32)
+    '&', // and (binary, i32)
+    '|', // or (binary, i32)
+    '^', // xor (binary, i32)
+    '<<', // logical left shift (binary, i32)
+    '>>', // logical right shift (binary, i32)
 
-    // compare only same primitive types
-    '==', // equal (binary)
-    '!=', // not equal (binary)
-    '<=', // less than or equal (binary)
-    '>=', // greater than or equal (binary)
-    '<', // less than (binary)
-    '>', // greater than (binary)
+    // compare
+    '==', // equal (binary, i32/f32)
+    '!=', // not equal (binary, i32/f32)
+    '<=', // less than or equal (binary, i32/f32)
+    '>=', // greater than or equal (binary, i32/f32)
+    '<', // less than (binary, i32/f32)
+    '>', // greater than (binary, i32/f32)
 
     '=', // assigments of values to identifiers (let and type)
     '->', // used in function definitions and match expressions
     '=>', // used for function signatures
-    ':', // type annotation
+    ':', // type annotation for func, match and let
     ';', // end of let or type statement/empty statement
-    ',', // seperator for arguments
+    ',', // seperator for arguments in funcs or calling funcs
     '.', // accessing public functions from groups
 
     '(', // grouping, function calls, function arguments/parameters
@@ -555,6 +557,14 @@ export namespace Lexer {
 
     while (idxValid(i, code) && matches(code[i], alphaNumeric))
       identifier += code[i++];
+
+    // TODO, special identifiers as float literals
+    if (identifier === 'nan' || identifier === 'inf')
+      return {
+        valid: true,
+        value: { lexeme: identifier, type: tokenType.literal, idx },
+        newidx: i
+      };
 
     return {
       valid: true,

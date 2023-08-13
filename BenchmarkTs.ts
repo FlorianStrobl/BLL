@@ -16,6 +16,7 @@ function callme(): boolean {
 // TODO: nested property access tests
 // `while` vs `for` vs `do-while` vs `foreach`
 // `if` vs `switch`
+// test string operations
 
 for (let i = 0; i < iterCount; ++i) {
   console.time('a');
