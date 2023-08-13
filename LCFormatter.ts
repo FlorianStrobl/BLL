@@ -2,13 +2,15 @@
 // + code region folding
 // takes the ast as input and returns a string with annotations for VSCode
 
+// @ts-nocheck HERE TODO
+
 import { Parser } from './LCParser';
 import { Lexer } from './LCLexer';
 
 // TODO
 
 export namespace prettier {
-  function printExpression(expression: Parser.expressionT): string {
+  function printExpression(expression: Parser.expression): string {
     // if two identifiers or operators are following one each other, put a space in between!!
     switch (expression.type) {
       case 'unary':
@@ -25,15 +27,13 @@ export namespace prettier {
         return expression.literal.lexeme;
       case 'identifier':
         return expression.identifier.lexeme;
-      case 'identifier-path':
-        return 'TODO';
       case 'functionCall':
         return 'TODO';
     }
     return '';
   }
 
-  function printStatement(statement: Parser.statementT): string {
+  function printStatement(statement: Parser.statement): string {
     function printImportStatement(path: Lexer.token[]): string {
       let str = '';
       for (const p of path) str += p.lexeme;

@@ -1,7 +1,7 @@
 import { Lexer } from './LCLexer';
 import { Parser } from './LCParser';
 import { Compiler } from './LCCompiler';
-// TODO: import { Interpreter } from './LCInterpreter';
+import { Interpreter } from './LCInterpreter';
 import { prettier } from './LCFormatter';
 import * as errs from './FErrorMsgs';
 // @ts-ignore
@@ -18,8 +18,7 @@ let my_func = func (x) -> - 2 - (x + 3);
 
 const lexemes = Lexer.lexe(code);
 if (lexemes.valid) {
-  const ast: Parser.statementT[] | undefined = Parser.parse(
-    lexemes.tokens,
+  const ast: Parser.statement[] = Parser.parse(
     code,
     filename
   );

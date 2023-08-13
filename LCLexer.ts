@@ -4,7 +4,7 @@ export namespace Lexer {
 
   // #region constants
   const keywords: string[] = [
-    'use', // imports all public identifiers from other files
+    'use', // imports all public identifiers from other files TODO really necessary?
 
     // statements:
     'pub', // make an identifier public to the outside (files or groups)

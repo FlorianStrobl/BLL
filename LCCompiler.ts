@@ -397,7 +397,7 @@ export namespace Compiler {
     }
   }
 
-  function todoCompileSimpleFunction(func: Parser.statementT): string {
+  function todoCompileSimpleFunction(func: Parser.statement): string {
     if (func.type !== 'let') return 'ERROR';
     if (func.body.type !== 'func') return 'ERROR';
 
