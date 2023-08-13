@@ -327,8 +327,7 @@ export namespace Lexer {
           break;
         }
 
-        if (matches(code[i], commentType2Stop1)) hadCommentType2Stop1 = true;
-        else hadCommentType2Stop1 = false;
+        hadCommentType2Stop1 = matches(code[i], commentType2Stop1);
 
         comment += code[i++];
       }
@@ -422,17 +421,15 @@ export namespace Lexer {
       switch (char) {
         case 'x':
           alphabet = hexDigits;
-          if (!consumeDigits()) invalidDidNotConsumDigits = true;
           break;
         case 'b':
           alphabet = binaryDigits;
-          if (!consumeDigits()) invalidDidNotConsumDigits = true;
           break;
         case 'o':
           alphabet = octalDigits;
-          if (!consumeDigits()) invalidDidNotConsumDigits = true;
           break;
       }
+      if (!consumeDigits()) invalidDidNotConsumDigits = true;
     } else consumeDigits();
 
     if (idxValid(i, code) && matches(code[i], '.')) {
@@ -623,8 +620,8 @@ export namespace Lexer {
     const stringEnd: string = string;
     const toEscapSymbols: string[] = [stringEnd, '\\', 'n', 't', 'r', 'u'];
     let lastCharWasEscape: boolean = false;
-    let escapeErrorIdxs: number[] = [];
-    let escapeErrorU: number[] = [];
+    const escapeErrorIdxs: number[] = [];
+    const escapeErrorU: number[] = [];
     while (
       idxValid(i, code) &&
       !(matches(code[i], stringEnd) && !lastCharWasEscape)
@@ -701,10 +698,7 @@ export namespace Lexer {
   // #endregion
 
   function matches(character: string, toMatch: string | string[]): boolean {
-    return (
-      (typeof toMatch === 'string' && character === toMatch) ||
-      toMatch.includes(character)
-    );
+    return character === toMatch || toMatch.includes(character);
   }
 
   function idxValid(idx: number, obj: { length: number }) {
