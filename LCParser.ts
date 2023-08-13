@@ -33,7 +33,7 @@ export namespace Parser {
   type hasExplicitType =
     | {
         hasExplicitType: true;
-        doublePointToken: Lexer.token;
+        colonToken: Lexer.token;
         typeExpression: typeExpression;
       }
     | {
@@ -61,22 +61,24 @@ export namespace Parser {
         }
     );
 
+  // TODO what about generics: func[T1, T2]
+  export type funcExpression = {
+    type: 'func';
+    funcToken: Lexer.token;
+    openingBracketToken: Lexer.token;
+    closingBracketToken: Lexer.token;
+    arrowToken: Lexer.token;
+    paramCommaTokens: Lexer.token[];
+    parameters: [Lexer.token, typeExpression][];
+    body: expression;
+  } & hasExplicitType;
+
   // match, func, "nan", "inf", literals
   // TODO
   export type expression =
     | { type: 'literal'; literalToken: Lexer.token; literal: any }
     | { type: 'identifier'; identifier: string; identifierToken: Lexer.token }
-    // TODO what about func[T]
-    | ({
-        type: 'func';
-        funcToken: Lexer.token;
-        openingBracketToken: Lexer.token;
-        closingBracketToken: Lexer.token;
-        arrowToken: Lexer.token;
-        argCommaTokens: Lexer.token[];
-        arguments: [Lexer.token, typeExpression][];
-        body: expression;
-      } & hasExplicitType)
+    | funcExpression
     | {
         type: 'grouping';
         openingBracketToken: Lexer.token;
@@ -370,17 +372,17 @@ export namespace Parser {
           'unexpected eof in let statement after asuming an identifier'
         );
 
-      const doublePointToken: Lexer.token | undefined = match(':')
+      const colonToken: Lexer.token | undefined = match(':')
         ? advance()!
         : undefined;
 
       consumeComments(comments);
 
-      if (doublePointToken !== undefined && isAtEnd())
+      if (colonToken !== undefined && isAtEnd())
         return invalidEof('unexpected eof in let statement after getting ":"');
 
       const typeAnnotation: typeExpression | undefined =
-        doublePointToken !== undefined ? parseTypeExpression() : undefined;
+        colonToken !== undefined ? parseTypeExpression() : undefined;
 
       consumeComments(comments);
 
@@ -408,11 +410,11 @@ export namespace Parser {
           );
 
       const explicitType: hasExplicitType =
-        doublePointToken === undefined
+        colonToken === undefined
           ? { hasExplicitType: false }
           : {
               hasExplicitType: true,
-              doublePointToken,
+              colonToken: colonToken,
               typeExpression: typeAnnotation!
             };
 
@@ -729,13 +731,14 @@ export namespace Parser {
         args: [Lexer.token, typeExpression][];
         commas: Lexer.token[];
       } {
+        // TODO
         const args: [Lexer.token, typeExpression][] = [];
         const commas: Lexer.token[] = [];
 
         while (peek()?.lexeme !== ')') {
           if (args.length > 0) {
             if (!match(','))
-              throw Error('argument list must have commas in between'); // TODO
+              throw Error('parameter list must have commas in between'); // TODO
             commas.push(advance()!);
 
             // TODO: warning for trailing commas
@@ -752,7 +755,7 @@ export namespace Parser {
           args.push([identifier, {} as any]);
 
           if (match(':')) {
-            let doublePoint: Lexer.token = advance()!;
+            let colon: Lexer.token = advance()!;
             function parseFuncArgExprType(): expression {
               return undefined as any;
             }
@@ -760,13 +763,15 @@ export namespace Parser {
             // @ts-expect-error
             args[args.length - 1].type = typeAnnotation;
             // @ts-expect-error
-            args[args.length - 1].doublePoint = doublePoint;
+            args[args.length - 1].colon = colon;
           }
         }
         return { args, commas };
       }
 
       const funcToken = advance()!;
+
+      // TODO generics
 
       if (!match('(')) throw Error('functions must be opend with ('); // TODO
       let openingBracketToken: Lexer.token = advance()!;
@@ -779,10 +784,27 @@ export namespace Parser {
       if (!match(')')) throw Error('functions must be closed with )'); // TODO
       let closingBracketToken: Lexer.token = advance()!;
 
+      // TODO type annotation
+      const colonToken = match(':') ? advance()! : undefined;
+      const typeExpression: typeExpression =
+        colonToken !== undefined
+          ? parseTypeExpression()
+          : (undefined as unknown as typeExpression);
+
       if (!match('->')) throw Error('functions must have a ->'); // TODO
       let arrowToken: Lexer.token = advance()!;
 
       const body: expression = parseExpression();
+
+      // TODO
+      const typeAnnotation: hasExplicitType =
+        colonToken === undefined
+          ? { hasExplicitType: false }
+          : {
+              hasExplicitType: true,
+              colonToken,
+              typeExpression
+            };
 
       return {
         type: 'func',
@@ -791,9 +813,9 @@ export namespace Parser {
         closingBracketToken,
         arrowToken,
         body,
-        argCommaTokens: params.commas, // TODO
-        arguments: params.args, // TODO
-        hasExplicitType: false // TODO
+        paramCommaTokens: params.commas, // TODO
+        parameters: params.args, // TODO
+        ...typeAnnotation
       };
     }
 
@@ -844,4 +866,4 @@ function debug() {
   );
 }
 
-// debug()
+// debug();

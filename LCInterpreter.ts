@@ -77,18 +77,20 @@ export namespace Interpreter {
     // TODO evaluate main function with argument
     const result = mainFunc.type === 'let' && evaluateExpression(mainFunc.body);
 
-    return result;
+    return result as any;
   }
 
   // number of function ptr
-  function evaluateExpression(expression: Parser.expression): number | any {
+  function evaluateExpression(
+    expression: Parser.expression
+  ): number | Parser.funcExpression {
     switch (expression.type) {
       case 'literal':
         return expression.literal;
       case 'grouping':
         return evaluateExpression(expression.body);
       case 'identifier':
-        return;
+        return '' as any;
       case 'unary':
         const expVal = evaluateExpression(expression.body);
         switch (expression.operator) {
@@ -101,62 +103,75 @@ export namespace Interpreter {
           case '!':
             return Number(!expVal);
           default:
-            return 'error';
+            return 'error' as any;
         }
       case 'binary':
+        const leftSide: any = evaluateExpression(expression.leftSide as any);
+        const rightSide: any = evaluateExpression(expression.rightSide as any);
         switch (expression.operator) {
           case '+':
-            return (
-              evaluateExpression(expression.leftSide) +
-              evaluateExpression(expression.rightSide)
-            );
+            return leftSide + rightSide;
           case '-':
-            return (
-              evaluateExpression(expression.leftSide) -
-              evaluateExpression(expression.rightSide)
-            );
+            return leftSide - rightSide;
           case '*':
-            return (
-              evaluateExpression(expression.leftSide) *
-              evaluateExpression(expression.rightSide)
-            );
+            return leftSide * rightSide;
           case '/':
-            return (
-              evaluateExpression(expression.leftSide) /
-              evaluateExpression(expression.rightSide)
-            );
+            return leftSide / rightSide;
           case '**':
-            return (
-              evaluateExpression(expression.leftSide) **
-              evaluateExpression(expression.rightSide)
-            );
+            return leftSide ** rightSide;
+          case '***':
+            return Math.log(leftSide) / Math.log(rightSide);
           case '%':
-            return (
-              evaluateExpression(expression.leftSide) %
-              evaluateExpression(expression.rightSide)
-            );
+            return leftSide % rightSide;
+          case '&':
+            return leftSide & rightSide;
+          case '|':
+            return leftSide | rightSide;
+          case '^':
+            return leftSide ^ rightSide;
+          case '<<':
+            return leftSide << rightSide;
+          case '>>':
+            return leftSide >> rightSide;
+          case '==':
+            return Number(leftSide == rightSide);
+          case '!=':
+            return Number(leftSide != rightSide);
+          case '<=':
+            return Number(leftSide <= rightSide);
+          case '>=':
+            return Number(leftSide >= rightSide);
+          case '<':
+            return Number(leftSide < rightSide);
+          case '>':
+            return Number(leftSide > rightSide);
+          default:
+            // TODO
+            return NaN;
         }
-      case 'functionCall':
       case 'func':
+        return expression;
+      case 'functionCall':
+        // take function, safe the arg names and position + replace them with the calles arg list and then interpret the code as usual
+        const func: Parser.funcExpression = evaluateExpression(
+          expression.function
+        ) as any;
+        const args = expression.arguments.map((exp) => evaluateExpression(exp));
+        // TODO
+        return 12;
       case 'propertyAccess':
       case 'match':
       default:
-        return;
+        return 'TODO' as any;
     }
   }
 }
 
 function debug() {
   const code = `
-let x = 5;
-let main = 5 + 3 - 1;
+pub let x = func () -> 5;
 
-group Test {
-  group Hey {
-    let g = 7;
-  }
-  pub let z = 3;
-}
+let main = x();
   `;
   console.log(
     inspect(Interpreter.interpret(code, '', 5), {
