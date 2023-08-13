@@ -15,7 +15,7 @@ export namespace Parser {
   type comment = { comments: Lexer.token[] };
 
   export type statement =
-    | comment
+    | ({ type: 'comment' } & comment)
     | ({ type: 'empty'; semicolonToken: Lexer.token } & comment)
     | ({
         type: 'import';
@@ -241,7 +241,7 @@ export namespace Parser {
     const comments: Lexer.token[] = [];
     if (matchType(Lexer.tokenType.comment)) {
       consumeComments(comments);
-      return { comments };
+      return { type: 'comment', comments };
     }
 
     if (match(';')) {
@@ -407,6 +407,15 @@ export namespace Parser {
             "TODO let statements must be finished with a ';' symbol"
           );
 
+      const explicitType: hasExplicitType =
+        doublePointToken === undefined
+          ? { hasExplicitType: false }
+          : {
+              hasExplicitType: true,
+              doublePointToken,
+              typeExpression: typeAnnotation!
+            };
+
       return {
         ...isPub,
         type: 'let',
@@ -416,15 +425,7 @@ export namespace Parser {
         semicolonToken,
         body,
         comments,
-        ...(doublePointToken === undefined
-          ? {
-              hasExplicitType: false
-            }
-          : {
-              hasExplicitType: true,
-              doublePointToken,
-              typeExpression: typeAnnotation
-            })
+        ...explicitType
       };
     } else if (match('type')) {
       // TODO type{ and type=
@@ -809,7 +810,10 @@ export namespace Parser {
   }
   // #endregion
 
-  export function parse(code: string, filename: string): statement[] {
+  export function parse(
+    code: string,
+    filename: string
+  ): statement[] | undefined {
     larser = new Larser(code, filename);
 
     const statements: statement[] = [];
@@ -819,22 +823,25 @@ export namespace Parser {
 
     console.error(parserErrors);
     console.log(statements);
-    return 'error' as never;
   }
 }
 
 // TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
 
-console.time('t');
-// pub group test { let x = 5 + 2 * (func (x) -> x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
-// let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
-// invalid to do: `a.(b).c` but (a.b).c is ok
-// let _ = a(5+32,4)
-const parsed = Parser.parse('let _ = (func (x) -> nan * x);', 'test');
-console.timeEnd('t');
+function debug() {
+  console.time('t');
+  // pub group test { let x = 5 + 2 * (func (x) -> x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
+  // let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
+  // invalid to do: `a.(b).c` but (a.b).c is ok
+  // let _ = a(5+32,4)
+  const parsed = Parser.parse('let _ = (func (x) -> 3 * x)(5);', 'test');
+  console.timeEnd('t');
 
-console.log(
-  inspect(parsed, {
-    depth: 999
-  })
-);
+  console.log(
+    inspect(parsed, {
+      depth: 999
+    })
+  );
+}
+
+// debug()
