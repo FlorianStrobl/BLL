@@ -13,10 +13,12 @@ function callme(): boolean {
   return array.includes(test);
 }
 
-// TODO: nested property access tests
-// `while` vs `for` vs `do-while` vs `foreach`
-// `if` vs `switch`
+// TODO:
+// test nested property access tests
+// test `while` vs `for` vs `do-while` vs `foreach`
+// test `if` vs `switch`
 // test string operations
+// test toNumber() with Number()
 
 for (let i = 0; i < iterCount; ++i) {
   console.time('a');

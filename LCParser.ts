@@ -137,6 +137,15 @@ export namespace Parser {
           type: 'func';
           parameters: typeExpression[];
           returnType: typeExpression;
+          openingBracketToken: Lexer.token;
+          closingBracketToken: Lexer.token;
+          arrowToken: Lexer.token;
+        }
+      | {
+          type: 'grouping';
+          body: typeExpression;
+          openingBracketToken: Lexer.token;
+          closingBracketToken: Lexer.token;
         }
     );
   // #endregion
@@ -604,7 +613,7 @@ export namespace Parser {
       // if because precedence order
       if (match('**', '***')) {
         const operatorToken = advance()!;
-        const rightSide = parseExprLvl8(); // same level because precedence order
+        const rightSide = parseExprLvl8(); // TODO right? same level because precedence order
 
         leftSide = {
           type: 'binary',
@@ -834,9 +843,59 @@ export namespace Parser {
     return { ...parseExprLvl0(), comments };
   }
 
+  // TODO
   function parseTypeExpression(): typeExpression {
-    // TODO
-    return {} as any;
+    function parseTypeExprLvl0(): typeExpression {
+      let left: typeExpression = primary();
+
+      // TODO parameters are a list
+
+      if (match('=>')) {
+        const arrowToken = advance()!;
+        const returnType: typeExpression = parseTypeExprLvl0(); // same level because precedence order
+
+        left = {
+          type: 'func',
+          parameters: [left], // TODO
+          returnType,
+          openingBracketToken: {} as any,
+          closingBracketToken: {} as any,
+          arrowToken,
+          comments: [] // TODO
+        };
+      }
+
+      return left;
+    }
+
+    function primary(): typeExpression {
+      if (match('(')) {
+        const openingBracketToken = advance()!;
+        const body = parseTypeExpression();
+        const closingBracketToken = match(')')
+          ? advance()!
+          : newParseError(
+              'TODO did not close bracket in type-grouping expression'
+            );
+
+        return {
+          type: 'grouping',
+          body,
+          openingBracketToken,
+          closingBracketToken,
+          comments: [] // TODO
+        };
+      } else if (
+        match('i32') ||
+        match('f32') ||
+        matchType(Lexer.tokenType.identifier)
+      ) {
+        return { type: 'primitive', value: advance()!, comments: [] };
+      } else
+        throw new Error('TODO did not match any type expression statement');
+    }
+
+    return parseTypeExprLvl0();
   }
   // #endregion
 
@@ -866,6 +925,14 @@ export namespace Parser {
 
 // TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
 
+let f: (n1: number) => /* ( */ (n2: number) => number /* ) */ = function (
+  x: number
+) {
+  return function (y: number) {
+    return 5;
+  };
+};
+
 function debug() {
   console.time('t');
   // group test { let x = 5 + 2 * (func (x) -> x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
@@ -875,7 +942,10 @@ function debug() {
 
   // use std; let _ = (func (x) -> 3 * x)(5);
   console.clear();
-  const parsed = Parser.parse('let x = func (x, y z) -> 4;', 'test');
+  const parsed = Parser.parse(
+    'let x = func (x: i32 => f32 => test, y, z) -> 4;',
+    'test'
+  );
   console.timeEnd('t');
 
   console.log(
@@ -885,4 +955,4 @@ function debug() {
   );
 }
 
-// debug();
+debug();
