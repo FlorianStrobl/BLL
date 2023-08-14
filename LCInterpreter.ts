@@ -1,19 +1,26 @@
 // giving the language a runtime
 
+/*
+TODO: add full type support, to check if the stuff is even valid!!
+TODO: create a tree structure with all the namespaces/groups; then create a function which can return all accessable `let` and `type` identifiers from any point of that tree strucutre
+*/
+
 import { Parser } from './LCParser';
 // @ts-ignore
 import { inspect } from 'util';
 
 export namespace Interpreter {
-  let identifiers: any[] = [];
+  let globalIdentifiers: [string, Parser.expression][] = [];
 
+  // TODO identifiers can only be named once in the entire script. e.g. doing twice let x; is invalid
+  // even if that happens in different namespaces
   export function interpret(
     code: string,
     filename: string,
     argument: number
   ): number {
     const ast = Parser.parse(code, filename);
-    // check if ast is valid
+    // TODO: actually check if ast is valid with types (e.g. let x: i32 = 5.3; or calling function with wrong arg types) and non duplicate identifiers (not even in differnt groups)
     if (ast === undefined) throw new Error('TODO');
     return interpretAst(ast, argument);
   }
@@ -27,11 +34,11 @@ export namespace Interpreter {
       statements: Parser.statement[],
       namespacePath: string[] = []
     ): {
-      lets: [Parser.statement, string[], boolean][];
-      types: [Parser.statement, string[], boolean][];
+      lets: [Parser.statement, string[]][];
+      types: [Parser.statement, string[]][];
     } {
-      const lets: [Parser.statement, string[], boolean][] = [];
-      const types: [Parser.statement, string[], boolean][] = [];
+      const lets: [Parser.statement, string[]][] = [];
+      const types: [Parser.statement, string[]][] = [];
 
       for (const statement of statements) {
         switch (statement.type) {
@@ -45,16 +52,19 @@ export namespace Interpreter {
             types.push(...vals.types);
             break;
           case 'let':
-            lets.push([statement, [...namespacePath], statement.isPub]);
+            lets.push([statement, [...namespacePath]]);
             break;
-          case 'type=':
-            types.push([statement, [...namespacePath], statement.isPub]);
+          case 'type-allias':
+            types.push([statement, [...namespacePath]]);
             break;
-          case 'type{':
-            types.push([statement, [...namespacePath], statement.isPub]);
+          case 'complex-type':
+            types.push([statement, [...namespacePath]]);
             break;
           case 'import':
-            break; // really needed??
+            // TODO: check the identifiers locally, then replace all "_" with " " and search again, and lastly check if it is in a global scope like "%appdata%/bll/std/" or something like that
+            // then parse that file and repeat for imports, until all files are found and their full bodys are now merged into one file.
+            // but save which identifier was from which file, to do better errors
+            break;
           case 'comment':
           case 'empty':
           default:
@@ -66,33 +76,71 @@ export namespace Interpreter {
     }
 
     const val = extractValues(ast);
+    // TODO, what about groups
+    for (const l of val.lets) {
+      globalIdentifiers.push([
+        (l[0].type === 'let' && l[0].identifierToken.lexeme) as string,
+        (l[0].type === 'let' && l[0].body) as any
+      ]);
+    }
+    // TODO repeat for types aso
+
     const mainFuncIdx = val.lets.findIndex(
-      ([statement, path, isPub]) =>
+      ([statement, path]) =>
         statement.type === 'let' &&
         statement.identifierToken.lexeme === 'main' &&
         path.length === 0
     );
+    if (mainFuncIdx === -1)
+      throw new Error('TODO no `main(i32): i32` was found');
     const mainFunc = val.lets[mainFuncIdx][0];
 
     // TODO evaluate main function with argument
-    const result = mainFunc.type === 'let' && evaluateExpression(mainFunc.body);
+    const result =
+      mainFunc.type === 'let' &&
+      evaluateExpression({
+        type: 'functionCall',
+        function: mainFunc.body,
+        openingBracketToken: {} as any,
+        closingBracketToken: {} as any,
+        arguments: [
+          [
+            { type: 'literal', literal: argument, literalToken: {} as any },
+            undefined
+          ]
+        ]
+      });
 
     return result as any;
   }
 
+  // TODO or a match expr/type can be returnt
   // number of function ptr
   function evaluateExpression(
-    expression: Parser.expression
+    expression: Parser.expression,
+    localIdentifiers: [string, Parser.expression][] = []
   ): number | Parser.funcExpression {
     switch (expression.type) {
       case 'literal':
         return expression.literal;
       case 'grouping':
-        return evaluateExpression(expression.body);
+        return evaluateExpression(expression.body, localIdentifiers);
       case 'identifier':
-        return '' as any;
+        const localValue = localIdentifiers.find(
+          (id) => id[0] === expression.identifierToken.lexeme
+        );
+        if (localValue !== undefined) {
+          // TODO
+          return evaluateExpression(localValue[1], localIdentifiers);
+        }
+        return evaluateExpression(
+          globalIdentifiers.find(
+            (id) => id[0] === expression.identifierToken.lexeme
+          )![1],
+          localIdentifiers
+        );
       case 'unary':
-        const expVal = evaluateExpression(expression.body);
+        const expVal = evaluateExpression(expression.body, localIdentifiers);
         switch (expression.operator) {
           case '+':
             return expVal;
@@ -106,8 +154,14 @@ export namespace Interpreter {
             return 'error' as any;
         }
       case 'binary':
-        const leftSide: any = evaluateExpression(expression.leftSide as any);
-        const rightSide: any = evaluateExpression(expression.rightSide as any);
+        const leftSide: any = evaluateExpression(
+          expression.leftSide,
+          localIdentifiers
+        );
+        const rightSide: any = evaluateExpression(
+          expression.rightSide,
+          localIdentifiers
+        );
         switch (expression.operator) {
           case '+':
             return leftSide + rightSide;
@@ -154,11 +208,30 @@ export namespace Interpreter {
       case 'functionCall':
         // take function, safe the arg names and position + replace them with the calles arg list and then interpret the code as usual
         const func: Parser.funcExpression = evaluateExpression(
-          expression.function
+          expression.function,
+          localIdentifiers
         ) as any;
-        const args = expression.arguments.map((exp) => evaluateExpression(exp));
+        const callingArguments = expression.arguments; // TODO evaluate them first?
+        const funcParameters = func.parameters;
+        if (callingArguments.length !== funcParameters.length)
+          throw new Error(
+            'TODO called function without right amount of arguments'
+          );
+
+        for (let i = 0; i < funcParameters.length; ++i) {
+          localIdentifiers.push([
+            funcParameters[i][0].lexeme,
+            callingArguments[i][0]
+          ]);
+        }
+
+        // then call the thing body
+        const ans = evaluateExpression(func.body, localIdentifiers);
+
+        for (let i = 0; i < funcParameters.length; ++i) localIdentifiers.pop();
+
         // TODO
-        return 12;
+        return ans;
       case 'propertyAccess':
       case 'match':
       default:
@@ -169,12 +242,14 @@ export namespace Interpreter {
 
 function debug() {
   const code = `
-pub let x = func () -> 5;
+let y = 4635 + 1;
+let x = func (a, b,) -> b + y / 2 + a*2;
 
-let main = x();
+// doing main(12)
+let main = func (arg) -> x(arg, 3 + arg,) + 1;
   `;
   console.log(
-    inspect(Interpreter.interpret(code, '', 5), {
+    inspect(Interpreter.interpret(code, '', 12), {
       depth: 999
     })
   );

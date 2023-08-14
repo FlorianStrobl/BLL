@@ -4,10 +4,9 @@ export namespace Lexer {
 
   // #region constants
   const keywords: string[] = [
-    'use', // imports all public identifiers from other files TODO really necessary?
+    'use', // imports all identifiers from other file (either local file, or global file)
 
     // statements:
-    'pub', // make an identifier public to the outside (files or groups)
     'let', // binds a lambda term to an identifier
     'type', // binds a type to an identifier
     'group', // identifier as wrapper around identifiers
@@ -23,8 +22,6 @@ export namespace Lexer {
     // types:
     'i32', // 32 bit integer
     'f32', // single precision 32 bit float after the IEEE754-2008 standard
-    'infer', // automatically infer the type at compile time
-    'empty' // has no type (for example f())
   ];
 
   const symbols: string[] = [
@@ -60,7 +57,7 @@ export namespace Lexer {
     ':', // type annotation for func, match and let
     ';', // end of let or type statement/empty statement
     ',', // seperator for arguments in funcs or calling funcs
-    '.', // accessing public functions from groups
+    '.', // accessing identifiers from groups
 
     '(', // grouping, function calls, function arguments/parameters
     ')',
