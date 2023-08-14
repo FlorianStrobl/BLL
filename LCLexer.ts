@@ -21,7 +21,7 @@ export namespace Lexer {
 
     // types:
     'i32', // 32 bit integer
-    'f32', // single precision 32 bit float after the IEEE754-2008 standard
+    'f32' // single precision 32 bit float after the IEEE754-2008 standard
   ];
 
   const symbols: string[] = [
@@ -340,8 +340,8 @@ export namespace Lexer {
         return {
           valid: false,
           value: {
-            codeInvalid: true,
             type: 'eof in /* comment',
+            codeInvalid: true,
             chars: comment,
             idx
           },
@@ -351,7 +351,7 @@ export namespace Lexer {
 
     return {
       valid: true,
-      value: { lexeme: comment, type: tokenType.comment, idx },
+      value: { type: tokenType.comment, lexeme: comment, idx },
       newidx: i
     };
   }
@@ -467,8 +467,8 @@ export namespace Lexer {
         return {
           valid: false,
           value: {
-            codeInvalid: true,
             type: 'identifier connected to numeric literal',
+            codeInvalid: true,
             chars: literal + nextToken.value.lexeme,
             invalidIdentifierIdx: nextToken.value.idx,
             idx
@@ -485,9 +485,9 @@ export namespace Lexer {
       return {
         valid: false,
         value: {
+          type: 'part of numeric literal ended with underscore',
           codeInvalid: true,
           chars: literal,
-          type: 'part of numeric literal ended with underscore',
           underscores: invalidUnderscoresEnd,
           idx
         },
@@ -497,9 +497,9 @@ export namespace Lexer {
       return {
         valid: false,
         value: {
+          type: 'repeating underscores in numeric literal',
           codeInvalid: true,
           chars: literal,
-          type: 'repeating underscores in numeric literal',
           underscores: invalidDoubleUnderscore,
           idx
         },
@@ -508,41 +508,41 @@ export namespace Lexer {
     } else if (gotDotOrE && cantHaveDotOrE) {
       return {
         valid: false,
-        newidx: i,
         value: {
-          codeInvalid: true,
           type: 'got a dot or e in a numeric literal which cant have it at that place',
+          codeInvalid: true,
           chars: literal,
           idx
-        }
+        },
+        newidx: i,
       };
     } else if (invalidHadWrongAlpabet) {
       return {
         valid: false,
-        newidx: i,
         value: {
-          codeInvalid: true,
           type: 'had wrong alphabet in numeric literal',
+          codeInvalid: true,
           chars: literal,
           idx
-        }
+        },
+        newidx: i,
       };
     } else if (invalidDidNotConsumDigits) {
       return {
         valid: false,
-        newidx: i,
         value: {
-          codeInvalid: true,
           type: 'did not consume digits in numeric literal',
+          codeInvalid: true,
           chars: literal,
           idx
-        }
+        },
+        newidx: i,
       };
     }
 
     return {
       valid: true,
-      value: { lexeme: literal, type: tokenType.literal, idx },
+      value: { type: tokenType.literal,lexeme: literal,  idx },
       newidx: i
     };
   }
@@ -559,17 +559,17 @@ export namespace Lexer {
     if (identifier === 'nan' || identifier === 'inf')
       return {
         valid: true,
-        value: { lexeme: identifier, type: tokenType.literal, idx },
+        value: { type: tokenType.literal, lexeme: identifier, idx },
         newidx: i
       };
 
     return {
       valid: true,
       value: {
-        lexeme: identifier,
         type: keywords.includes(identifier)
           ? tokenType.keyword
           : tokenType.identifier,
+        lexeme: identifier,
         idx
       },
       newidx: i
@@ -598,8 +598,8 @@ export namespace Lexer {
         return {
           valid: false,
           value: {
-            codeInvalid: true,
             type: 'invalid symbol',
+            codeInvalid: true,
             chars: symbolGot,
             idx
           },
@@ -613,7 +613,7 @@ export namespace Lexer {
 
     return {
       valid: true,
-      value: { lexeme: symbol, type: tokenType.symbol, idx },
+      value: { type: tokenType.symbol, lexeme: symbol, idx },
       newidx: i
     };
   }
@@ -667,7 +667,7 @@ export namespace Lexer {
     else
       return {
         valid: false,
-        value: { codeInvalid: true, type: 'eof in string', chars: string, idx },
+        value: { type: 'eof in string', codeInvalid: true, chars: string, idx },
         newidx: i
       };
 
@@ -675,8 +675,8 @@ export namespace Lexer {
       return {
         valid: false,
         value: {
-          codeInvalid: true,
           type: 'used escape symbol not properly in string',
+          codeInvalid: true,
           chars: string,
           idxs: escapeErrorIdxs,
           idx
@@ -687,8 +687,8 @@ export namespace Lexer {
       return {
         valid: false,
         value: {
-          codeInvalid: true,
           type: 'used escape symbol with u not properly in string',
+          codeInvalid: true,
           chars: string,
           idxs: escapeErrorU,
           idx
@@ -698,7 +698,7 @@ export namespace Lexer {
 
     return {
       valid: false,
-      value: { codeInvalid: true, type: 'string used', chars: string, idx },
+      value: { type: 'string used', codeInvalid: true, chars: string, idx },
       newidx: i
     };
   }
@@ -742,12 +742,13 @@ export namespace Lexer {
     let invalidChars: string = '';
     while (idxValid(idx, code) && !matches(code[idx], validChars))
       invalidChars += code[idx++];
+
     return {
       valid: false,
       value: {
         type: 'invalid chars',
-        chars: invalidChars,
         codeInvalid: true,
+        chars: invalidChars,
         idx
       },
       newidx: idx
@@ -778,11 +779,14 @@ export namespace Lexer {
     | { valid: false; tokens: token[]; errors: errorToken[] } {
     const tokens: token[] = [];
     const errors: errorToken[] = [];
+    const softErrors: errorToken[] = [];
 
     for (const token of Lexer.lexeNextTokenIter(code))
       if (token.valid) tokens.push(token.value);
       else if (!token.valid && token.value.codeInvalid)
         errors.push(token.value);
+      else if (!token.valid && !token.value.codeInvalid)
+        softErrors.push(token.value);
 
     if (errors.length === 0) return { valid: true, tokens };
     else return { valid: false, tokens, errors };
