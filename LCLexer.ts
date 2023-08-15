@@ -35,7 +35,7 @@ export namespace Lexer {
     '%', // remainder (binary, i32)
 
     // only ints
-    '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32) TODO
+    '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32)
     '~', // not (unary, i32)
     '&', // and (binary, i32)
     '|', // or (binary, i32)
@@ -514,7 +514,7 @@ export namespace Lexer {
           chars: literal,
           idx
         },
-        newidx: i,
+        newidx: i
       };
     } else if (invalidHadWrongAlpabet) {
       return {
@@ -525,7 +525,7 @@ export namespace Lexer {
           chars: literal,
           idx
         },
-        newidx: i,
+        newidx: i
       };
     } else if (invalidDidNotConsumDigits) {
       return {
@@ -536,13 +536,13 @@ export namespace Lexer {
           chars: literal,
           idx
         },
-        newidx: i,
+        newidx: i
       };
     }
 
     return {
       valid: true,
-      value: { type: tokenType.literal,lexeme: literal,  idx },
+      value: { type: tokenType.literal, lexeme: literal, idx },
       newidx: i
     };
   }
@@ -1055,7 +1055,7 @@ _
       else successfullTests++;
     }
     for (const code of mustNotLexe) {
-      let lexed = Lexer.lexe(code);
+      const lexed = Lexer.lexe(code);
       if (lexed.valid)
         console.error(
           'error in mustNotLexe, invalid lexer for code:',

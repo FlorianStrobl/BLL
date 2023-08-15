@@ -67,6 +67,7 @@ export namespace Parser {
       }
     | {
         hasExplicitType: false;
+        typeExpression: typeExpression;
       };
 
   // TODO what about generics: func[T1, T2]
@@ -75,7 +76,7 @@ export namespace Parser {
     parameters: [
       Lexer.token /*identifier*/,
       typeExpression,
-      Lexer.token | undefined /*colon for type*/,
+      Lexer.token | undefined /*colon for type annotation*/,
       Lexer.token | undefined /*comma for next param*/
     ][];
     body: expression;
@@ -126,7 +127,7 @@ export namespace Parser {
     | { type: 'match' /*TODO*/ };
 
   // TODO generics?, wab propertAccess of complex types?
-  type typeExpression = comment &
+  export type typeExpression = comment &
     (
       | { type: 'infer' }
       | {
@@ -166,7 +167,7 @@ export namespace Parser {
       this.lexer = Lexer.lexeNextTokenIter(code);
 
       // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
-      const lexerNext = this.lexer.next();
+      const lexerNext: IteratorResult<Lexer.nextToken, any> = this.lexer.next();
       const lexerIsNotDone: boolean = lexerNext.done === false;
       if (
         lexerIsNotDone &&
@@ -201,7 +202,7 @@ export namespace Parser {
         );
 
       // this.previousToken = this.currentToken;
-      const lexerNext = this.lexer.next();
+      const lexerNext:IteratorResult<Lexer.nextToken, any> = this.lexer.next();
       const lexerIsNotDone: boolean = lexerNext.done === false;
 
       this.eof =
@@ -237,20 +238,20 @@ export namespace Parser {
   function advance(): Lexer.token | undefined {
     if (isAtEnd()) return undefined;
 
-    const currentToken = peek();
+    const currentToken: Lexer.token | undefined = peek();
     larser.advanceToken();
     return currentToken;
   }
 
   function match(...tokens: string[]): boolean {
     if (isAtEnd()) return false;
-    const currentToken = peek();
+    const currentToken: Lexer.token | undefined = peek();
     return currentToken !== undefined && tokens.includes(currentToken.lexeme);
   }
 
   function matchType(...tokenTypes: Lexer.tokenType[]): boolean {
     if (isAtEnd()) return false;
-    const currentToken = peek();
+    const currentToken: Lexer.token | undefined = peek();
     return currentToken !== undefined && tokenTypes.includes(currentToken.type);
   }
 
@@ -290,7 +291,7 @@ export namespace Parser {
 
       if (isAtEnd()) return invalidEof('no use body in use statement');
 
-      const localFileName = matchType(Lexer.tokenType.identifier)
+      const localFileName :  Lexer.token= matchType(Lexer.tokenType.identifier)
         ? advance()!
         : newParseError('TODO didnt get an identifier in use statement');
 
@@ -299,7 +300,7 @@ export namespace Parser {
       if (isAtEnd())
         return invalidEof('unexpected eof in use statement: missing semicolon');
 
-      const semicolonToken = match(';')
+      const semicolonToken: Lexer.token = match(';')
         ? advance()!
         : newParseError('TOOD did not get semicolon in a use statement');
 
@@ -420,7 +421,10 @@ export namespace Parser {
 
       const explicitType: hasExplicitType =
         colonToken === undefined
-          ? { hasExplicitType: false }
+          ? {
+              hasExplicitType: false,
+              typeExpression: { type: 'infer', comments: [] }
+            }
           : {
               hasExplicitType: true,
               typeExpression: typeAnnotation!,
@@ -431,8 +435,8 @@ export namespace Parser {
         type: 'let',
         identifierToken,
         body,
-        letToken,
         ...explicitType,
+        letToken,
         equalsToken,
         semicolonToken,
         comments
@@ -456,9 +460,9 @@ export namespace Parser {
 
       // TODO isAtEnd() and consumeComment()
       while (match('|')) {
-        const operatorToken = advance()!;
+        const operatorToken: Lexer.token = advance()!;
         consumeComments(comments);
-        const rightSide = parseExprLvl1();
+        const rightSide: expression= parseExprLvl1();
         consumeComments(comments);
 
         leftSide = {
@@ -477,8 +481,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl2();
 
       while (match('^')) {
-        const operatorToken = advance()!;
-        const rightSide = parseExprLvl2();
+        const operatorToken : Lexer.token= advance()!;
+        const rightSide:expression = parseExprLvl2();
 
         leftSide = {
           type: 'binary',
@@ -496,8 +500,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl3();
 
       while (match('&')) {
-        const operatorToken = advance()!;
-        const rightSide = parseExprLvl3();
+        const operatorToken: Lexer.token = advance()!;
+        const rightSide: expression = parseExprLvl3();
 
         leftSide = {
           type: 'binary',
@@ -515,8 +519,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl4();
 
       while (match('==', '!=')) {
-        const operatorToken = advance()!;
-        const rightSide = parseExprLvl4();
+        const operatorToken: Lexer.token = advance()!;
+        const rightSide: expression = parseExprLvl4();
 
         leftSide = {
           type: 'binary',
@@ -534,8 +538,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl5();
 
       while (match('<', '>', '<=', '>=')) {
-        const operatorToken = advance()!;
-        const rightSide = parseExprLvl5();
+        const operatorToken: Lexer.token = advance()!;
+        const rightSide: expression = parseExprLvl5();
 
         leftSide = {
           type: 'binary',
@@ -553,8 +557,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl6();
 
       while (match('<<', '>>')) {
-        const operatorToken = advance()!;
-        const rightSide = parseExprLvl6();
+        const operatorToken: Lexer.token = advance()!;
+        const rightSide: expression = parseExprLvl6();
 
         leftSide = {
           type: 'binary',
@@ -572,8 +576,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl7();
 
       while (match('-', '+')) {
-        const operatorToken = advance()!;
-        const rightSide = parseExprLvl7();
+        const operatorToken : Lexer.token= advance()!;
+        const rightSide : expression= parseExprLvl7();
 
         leftSide = {
           type: 'binary',
@@ -591,8 +595,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl8();
 
       while (match('*', '/', '%')) {
-        const operatorToken = advance()!;
-        const rightSide = parseExprLvl8();
+        const operatorToken: Lexer.token = advance()!;
+        const rightSide: expression = parseExprLvl8();
 
         leftSide = {
           type: 'binary',
@@ -612,8 +616,8 @@ export namespace Parser {
       // right to left precedence:
       // if because precedence order
       if (match('**', '***')) {
-        const operatorToken = advance()!;
-        const rightSide = parseExprLvl8(); // TODO right? same level because precedence order
+        const operatorToken: Lexer.token = advance()!;
+        const rightSide: expression = parseExprLvl8(); // TODO right? same level because precedence order
 
         leftSide = {
           type: 'binary',
@@ -630,8 +634,8 @@ export namespace Parser {
     function parseExprLvl9(): expression {
       // unary:
       if (match('!', '-', '+', '~')) {
-        const operatorToken = advance()!;
-        const body = parseExprLvl9(); // same level?? TODO
+        const operatorToken: Lexer.token = advance()!;
+        const body: expression = parseExprLvl9(); // same level?? TODO
 
         return {
           type: 'unary',
@@ -649,11 +653,11 @@ export namespace Parser {
       let left: expression = primary();
 
       while (match('(', '.')) {
-        const token = advance()!;
+        const token: Lexer.token = advance()!;
 
         if (token.lexeme === '.') {
           // f.
-          const propertyToken = matchType(Lexer.tokenType.identifier)
+          const propertyToken: Lexer.token = matchType(Lexer.tokenType.identifier)
             ? advance()!
             : newParseError('TODO invalid property access');
 
@@ -668,23 +672,25 @@ export namespace Parser {
           };
         } else {
           //   f(
+            // TODO make obj out of that?
           const args: [expression, Lexer.token | undefined][] = [];
+          // TODO what about error messages for `(5,,)`
           while (!isAtEnd() && !match(')')) {
             // if last was not comma
             if (args.length !== 0 && args[args.length - 1][1] === undefined)
               newParseError(
                 'TODO, missing comma in function call argument list'
               );
-            const expression = parseExpression();
+            const expression: expression = parseExpression();
             const commaToken: Lexer.token | undefined = match(',')
               ? advance()!
               : undefined;
             args.push([expression, commaToken]);
           }
 
-          // TODO trailling commas
-
-          const closingBracketToken = advance()!;
+          if (isAtEnd())
+            return invalidEof('Had eof in function calling expression');
+          const closingBracketToken: Lexer.token = advance()!;
           left = {
             type: 'functionCall',
             function: left,
@@ -701,9 +707,9 @@ export namespace Parser {
     // TODO, parse literals, highest precedence level
     function primary(): expression {
       if (match('(')) {
-        const openingBracketToken = advance()!;
-        const body = parseExpression();
-        const closingBracketToken = match(')')
+        const openingBracketToken: Lexer.token = advance()!;
+        const body: expression   = parseExpression();
+        const closingBracketToken: Lexer.token = match(')')
           ? advance()!
           : newParseError('TODO did not close bracket in grouping expression');
 
@@ -714,9 +720,9 @@ export namespace Parser {
           closingBracketToken
         };
       } else if (matchType(Lexer.tokenType.literal)) {
-        const literalToken = advance()!;
+        const literalToken: Lexer.token = advance()!;
         // TODO
-        const literal =
+        const literal: number =
           literalToken.lexeme === 'inf'
             ? Infinity
             : Number(literalToken.lexeme);
@@ -726,7 +732,7 @@ export namespace Parser {
           literalToken
         };
       } else if (matchType(Lexer.tokenType.identifier)) {
-        const identifierToken = advance()!;
+        const identifierToken: Lexer.token = advance()!;
 
         return {
           type: 'identifier',
@@ -742,19 +748,19 @@ export namespace Parser {
       function parseFuncExprParam(): [
         Lexer.token /*identifier*/,
         typeExpression,
-        Lexer.token | undefined /*colon for type*/,
+        Lexer.token | undefined /*colon for type annotation*/,
         Lexer.token | undefined /*comma for next param*/
       ][] {
-        // TODO
+        // TODO obj out of that??
         const params: [
           Lexer.token /*identifier*/,
           typeExpression,
-          Lexer.token | undefined /*colon for type*/,
+          Lexer.token | undefined /*colon for type annotation*/,
           Lexer.token | undefined /*comma for next param*/
         ][] = [];
 
         // TODO consumeComments() and isEof()
-        while (!match(')')) {
+        while (!isAtEnd() && !match(')')) {
           consumeComments(comments);
 
           if (params.length !== 0 && params[params.length - 1][3] === undefined)
@@ -770,7 +776,6 @@ export namespace Parser {
                 'TODO Invalid func expression: expected an identifier'
               );
 
-          // TODO type with ":"
           const colonToken: Lexer.token | undefined = match(':')
             ? advance()!
             : undefined;
@@ -793,7 +798,11 @@ export namespace Parser {
         return params;
       }
 
-      const funcToken = advance()!;
+      if (!match('func'))
+        throw new Error(
+          'Internal error, called this function, even tho here is no function'
+        );
+      const funcToken: Lexer.token = advance()!;
 
       // TODO generics
 
@@ -807,11 +816,9 @@ export namespace Parser {
         ? advance()!
         : newParseError('TODO functions must be closed with )');
 
-      const colonToken = match(':') ? advance()! : undefined;
-      const typeExpression: typeExpression =
-        colonToken !== undefined
-          ? parseTypeExpression()
-          : (undefined as unknown as typeExpression);
+      const colonToken: Lexer.token | undefined = match(':') ? advance()! : undefined;
+      const typeExpression: typeExpression | undefined =
+        colonToken !== undefined ? parseTypeExpression() : undefined;
 
       const arrowToken: Lexer.token = match('->')
         ? advance()!
@@ -819,24 +826,26 @@ export namespace Parser {
 
       const body: expression = parseExpression();
 
-      // TODO
       const typeAnnotation: hasExplicitType =
         colonToken === undefined
-          ? { hasExplicitType: false }
+          ? {
+              hasExplicitType: false,
+              typeExpression: { type: 'infer', comments: [] }
+            }
           : {
               hasExplicitType: true,
-              typeExpression,
+              typeExpression: typeExpression!,
               colonToken
             };
 
       return {
         type: 'func',
-        parameters: params, // TODO
+        parameters: params,
         body,
+        ...typeAnnotation,
         funcToken,
         openingBracketToken,
         closingBracketToken,
-        ...typeAnnotation,
         arrowToken
       };
     }
@@ -853,9 +862,10 @@ export namespace Parser {
     const comments: Lexer.token[] = [];
 
     if (match('i32') || match('f32') || matchType(Lexer.tokenType.identifier)) {
+      const value: Lexer.token = advance()!;
       const primitive: typeExpression = {
         type: 'primitive-type',
-        value: advance()!,
+        value,
         comments: []
       };
 
@@ -872,12 +882,16 @@ export namespace Parser {
         comments
       };
     } else if (match('(')) {
-      const openingBracketToken = advance()!;
+      const openingBracketToken: Lexer.token = advance()!;
+      consumeComments(comments);
+      const closingBracket: Lexer.token | undefined = match(')') ? advance()! : undefined;
+      // TODO HERE it could directly come a `)` for a `() => T` type
+
       const body: [
         typeExpression,
         Lexer.token | undefined /* comma token */
       ][] = [];
-      while (!isAtEnd() && !match(')')) {
+      while (closingBracket === undefined && !isAtEnd() && !match(')')) {
         consumeComments(comments);
 
         if (body.length !== 0 && body[body.length - 1][1] === undefined)
@@ -885,33 +899,39 @@ export namespace Parser {
             'TODO did not get a comma in last type expression, while grouping types'
           );
 
-        const type = parseTypeExpression();
+        const type: typeExpression = parseTypeExpression();
 
         consumeComments(comments);
         // TODO isAtEnd() check...
 
-        const commaToken = match(',') ? advance()! : undefined;
+        const commaToken: Lexer.token | undefined = match(',') ? advance()! : undefined;
 
         body.push([type, commaToken]);
       }
-      const closingBracketToken = match(')')
-        ? advance()!
-        : newParseError(
-            'TODO did not close bracket in type-grouping expression'
-          );
 
-      const arrowToken = match('=>') ? advance()! : undefined;
+      const closingBracketToken: Lexer.token =
+        closingBracket !== undefined
+          ? closingBracket
+          : match(')')
+          ? advance()!
+          : newParseError(
+              'TODO did not close bracket in type-grouping expression'
+            );
+
+      const arrowToken: Lexer.token | undefined = match('=>') ? advance()! : undefined;
       if (arrowToken !== undefined) {
         return {
           type: 'func-type',
           parameters: body,
           returnType: parseTypeExpression(), // same level because precedence order
-          openingBracketToken: undefined,
-          closingBracketToken: undefined,
+          openingBracketToken,
+          closingBracketToken,
           arrowToken,
           comments
         };
       } else {
+        if (closingBracket !== undefined || body.length === 0)
+          newParseError('TODO, did not get any type in group expression');
         if (body.length !== 1)
           newParseError('TODO got multiple types in a grouping expression');
         else if (body.length === 1 && body[0][1] !== undefined)
@@ -957,14 +977,6 @@ export namespace Parser {
 
 // TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
 
-let f: (n1: number) => /* ( */ (n2: number) => number /* ) */ = function (
-  x: number
-) {
-  return function (y: number) {
-    return 5;
-  };
-};
-
 function debug() {
   console.time('t');
   // group test { let x = 5 + 2 * (func (x) -> x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
@@ -974,8 +986,10 @@ function debug() {
 
   // use std; let _ = (func (x) -> 3 * x)(5);
 
+  // let x: (i32) => ((f32), (tust,) => tast => (tist)) => (test) = func (a, b, c) -> 4;
+  // TODO where are the opening brackets of tust??
   const parsed = Parser.parse(
-    'let x: (i32) => ((f32), (tust,) => tast => (tist)) => (test) = func (a, b, c) -> 4;',
+    'let x: (i32) => ((f32), (tust,) => tast => () => (tist)) => (test) = func (a, b, c) -> 4;',
     'test'
   );
   console.timeEnd('t');
