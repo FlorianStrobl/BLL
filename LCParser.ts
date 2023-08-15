@@ -871,9 +871,14 @@ export namespace Parser {
     function primary(): typeExpression {
       if (match('(')) {
         const openingBracketToken = advance()!;
-        const body = parseTypeExpression();
+        let body = parseTypeExpression();
+        while (match(",")) {
+          // TODO check if ","
+          advance()!;
+          let rest = parseTypeExpression();
+        }
         const closingBracketToken = match(')')
-          ? advance()!
+          ? advance()!  
           : newParseError(
               'TODO did not close bracket in type-grouping expression'
             );
