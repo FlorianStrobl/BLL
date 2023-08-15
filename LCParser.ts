@@ -130,15 +130,15 @@ export namespace Parser {
     (
       | { type: 'infer' }
       | {
-          type: 'primitive';
+          type: 'primitive-type';
           value: Lexer.token; // keyword like i32/f32 or generic identifier/type identifier
         }
       | {
-          type: 'func';
-          parameters: typeExpression[];
+          type: 'func-type';
+          parameters: [typeExpression, Lexer.token | undefined /* commas */][];
           returnType: typeExpression;
-          openingBracketToken: Lexer.token;
-          closingBracketToken: Lexer.token;
+          openingBracketToken: Lexer.token | undefined;
+          closingBracketToken: Lexer.token | undefined;
           arrowToken: Lexer.token;
         }
       | {
@@ -776,13 +776,18 @@ export namespace Parser {
             : undefined;
 
           const explicitType: typeExpression | undefined =
-            colonToken === undefined ? undefined : parseTypeExpression();
+            colonToken !== undefined ? parseTypeExpression() : undefined;
 
           const commaToken: Lexer.token | undefined = match(',')
             ? advance()!
             : undefined;
 
-          params.push([identifierToken, explicitType!, colonToken, commaToken]);
+          params.push([
+            identifierToken,
+            explicitType ?? { type: 'infer', comments: [] },
+            colonToken,
+            commaToken
+          ]);
         }
 
         return params;
@@ -843,64 +848,86 @@ export namespace Parser {
     return { ...parseExprLvl0(), comments };
   }
 
-  // TODO
+  // TODO isAtEnd() and consumeComments()
   function parseTypeExpression(): typeExpression {
-    function parseTypeExprLvl0(): typeExpression {
-      let left: typeExpression = primary();
+    const comments: Lexer.token[] = [];
 
-      // TODO parameters are a list
+    if (match('i32') || match('f32') || matchType(Lexer.tokenType.identifier)) {
+      const primitive: typeExpression = {
+        type: 'primitive-type',
+        value: advance()!,
+        comments: []
+      };
 
-      if (match('=>')) {
-        const arrowToken = advance()!;
-        const returnType: typeExpression = parseTypeExprLvl0(); // same level because precedence order
+      const arrowToken = match('=>') ? advance()! : undefined;
+      if (arrowToken === undefined) return primitive;
 
-        left = {
-          type: 'func',
-          parameters: [left], // TODO
-          returnType,
-          openingBracketToken: {} as any,
-          closingBracketToken: {} as any,
-          arrowToken,
-          comments: [] // TODO
-        };
+      return {
+        type: 'func-type',
+        parameters: [[primitive, undefined]],
+        returnType: parseTypeExpression(), // same level because precedence order
+        openingBracketToken: undefined,
+        closingBracketToken: undefined,
+        arrowToken,
+        comments
+      };
+    } else if (match('(')) {
+      const openingBracketToken = advance()!;
+      const body: [
+        typeExpression,
+        Lexer.token | undefined /* comma token */
+      ][] = [];
+      while (!isAtEnd() && !match(')')) {
+        consumeComments(comments);
+
+        if (body.length !== 0 && body[body.length - 1][1] === undefined)
+          newParseError(
+            'TODO did not get a comma in last type expression, while grouping types'
+          );
+
+        const type = parseTypeExpression();
+
+        consumeComments(comments);
+        // TODO isAtEnd() check...
+
+        const commaToken = match(',') ? advance()! : undefined;
+
+        body.push([type, commaToken]);
       }
+      const closingBracketToken = match(')')
+        ? advance()!
+        : newParseError(
+            'TODO did not close bracket in type-grouping expression'
+          );
 
-      return left;
-    }
-
-    function primary(): typeExpression {
-      if (match('(')) {
-        const openingBracketToken = advance()!;
-        let body = parseTypeExpression();
-        while (match(",")) {
-          // TODO check if ","
-          advance()!;
-          let rest = parseTypeExpression();
-        }
-        const closingBracketToken = match(')')
-          ? advance()!  
-          : newParseError(
-              'TODO did not close bracket in type-grouping expression'
-            );
+      const arrowToken = match('=>') ? advance()! : undefined;
+      if (arrowToken !== undefined) {
+        return {
+          type: 'func-type',
+          parameters: body,
+          returnType: parseTypeExpression(), // same level because precedence order
+          openingBracketToken: undefined,
+          closingBracketToken: undefined,
+          arrowToken,
+          comments
+        };
+      } else {
+        if (body.length !== 1)
+          newParseError('TODO got multiple types in a grouping expression');
+        else if (body.length === 1 && body[0][1] !== undefined)
+          newParseError(
+            'TODO got a trailling comma at the end of a grouping expression'
+          );
 
         return {
           type: 'grouping',
-          body,
+          body: (body[0] ?? [])[0],
           openingBracketToken,
           closingBracketToken,
-          comments: [] // TODO
+          comments
         };
-      } else if (
-        match('i32') ||
-        match('f32') ||
-        matchType(Lexer.tokenType.identifier)
-      ) {
-        return { type: 'primitive', value: advance()!, comments: [] };
-      } else
-        throw new Error('TODO did not match any type expression statement');
-    }
-
-    return parseTypeExprLvl0();
+      }
+    } else throw new Error('TODO did not match any type expression statement');
   }
   // #endregion
 
@@ -946,9 +973,9 @@ function debug() {
   // let _ = a(5+32,4)
 
   // use std; let _ = (func (x) -> 3 * x)(5);
-  console.clear();
+
   const parsed = Parser.parse(
-    'let x = func (x: i32 => f32 => test, y, z) -> 4;',
+    'let x: (i32) => ((f32), (tust,) => tast => (tist)) => (test) = func (a, b, c) -> 4;',
     'test'
   );
   console.timeEnd('t');
