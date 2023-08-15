@@ -705,7 +705,10 @@ export namespace Lexer {
   // #endregion
 
   function matches(character: string, toMatch: string | string[]): boolean {
-    return character === toMatch || toMatch.includes(character);
+    return (
+      character === toMatch ||
+      (Array.isArray(toMatch) && toMatch.includes(character))
+    );
   }
 
   function idxValid(idx: number, obj: { length: number }) {
