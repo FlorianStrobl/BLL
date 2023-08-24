@@ -10,7 +10,7 @@ import { Parser } from './LCParser';
 import { inspect } from 'util';
 
 export namespace Interpreter {
-  let globalIdentifiers: [string, Parser.expression][] = [];
+  const globalIdentifiers: [string, Parser.expression][] = [];
 
   // TODO identifiers can only be named once in the entire script. e.g. doing twice let x; is invalid
   // even if that happens in different namespaces
@@ -19,7 +19,7 @@ export namespace Interpreter {
     filename: string,
     argument: number
   ): number {
-    const ast = Parser.parse(code, filename);
+    const ast = Parser.parse(code);
     // TODO: actually check if ast is valid with types (e.g. let x: i32 = 5.3; or calling function with wrong arg types) and non duplicate identifiers (not even in differnt groups)
     if (ast === undefined) throw new Error('TODO');
     return interpretAst(ast, argument);

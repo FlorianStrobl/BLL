@@ -155,15 +155,13 @@ export namespace Parser {
   // part which handles the lexer
   class Larser {
     private code: string;
-    private filename: string;
     private lexer: Generator<Lexer.nextToken>;
 
     private currentToken: Lexer.token;
     private eof: boolean = false;
 
-    constructor(code: string, filename: string) {
+    constructor(code: string) {
       this.code = code;
-      this.filename = filename;
       this.lexer = Lexer.lexeNextTokenIter(code);
 
       // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
@@ -219,7 +217,6 @@ export namespace Parser {
       // TODO
       const tokens = Lexer.lexe(this.code);
       throw new Error(
-        this.filename +
           ': ' +
           (tokens === undefined ? 'no tokens' : tokens.toString())
       );
@@ -961,11 +958,11 @@ export namespace Parser {
   }
   // #endregion
 
+  // TODO instead of returning undefined: return parseError[]
   export function parse(
-    code: string,
-    filename: string
+    code: string
   ): statement[] | undefined {
-    larser = new Larser(code, filename);
+    larser = new Larser(code);
 
     const statements: statement[] = [];
     while (!isAtEnd()) statements.push(parseStatement());
@@ -999,8 +996,7 @@ function debug() {
   // let x: (i32) => ((f32), (tust,) => tast => (tist)) => (test) = func (a, b, c) -> 4;
   // TODO where are the opening brackets of tust??
   const parsed = Parser.parse(
-    'let x: (i32) => ((f32), (tust,) => tast => () => (tist)) => (test) = func (a, b, c) -> 4;',
-    'test'
+    'let x: (i32) => ((f32), (tust,) => tast => () => (tist)) => (test) = func (a, b, c) -> 4;'
   );
   console.timeEnd('t');
 
