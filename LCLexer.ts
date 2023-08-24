@@ -184,7 +184,7 @@ export namespace Lexer {
   const commentType2Stop2: string = '/';
 
   const stringStart: string[] = ["'", '"', '`'];
-  const escapeSymbol: string = '\\'; // only valid inside strings
+  const stringEscapeSymbol: string = '\\'; // only valid inside strings
 
   const validChars: string[] = [
     ...whitespaces,
@@ -298,7 +298,7 @@ export namespace Lexer {
     | {
         valid: true;
         value: token;
-        newidx: number;
+        newidx: number; // index of the character after the end of the lexeme
       }
     | {
         valid: false;
@@ -634,7 +634,7 @@ export namespace Lexer {
       !(matches(code[i], stringEnd) && !lastCharWasEscape)
     ) {
       if (!lastCharWasEscape) {
-        if (matches(code[i], escapeSymbol)) lastCharWasEscape = true;
+        if (matches(code[i], stringEscapeSymbol)) lastCharWasEscape = true;
         string += code[i++];
       } else {
         if (!matches(code[i], toEscapSymbols)) {
@@ -711,7 +711,7 @@ export namespace Lexer {
     );
   }
 
-  function idxValid(idx: number, obj: { length: number }) {
+  function idxValid(idx: number, obj: { length: number }): boolean {
     return idx < obj.length && idx >= 0;
   }
 
@@ -769,10 +769,8 @@ export namespace Lexer {
         throw new Error('Internal error. Could not lexe the next token.');
 
       newIdx = nToken.newidx;
-      if (nToken.value.type !== 'eof') yield nToken;
+      yield nToken;
     } while (nToken.value.type !== 'eof');
-
-    yield nToken;
   }
 
   export function lexe(
