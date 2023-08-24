@@ -202,7 +202,7 @@ export namespace Parser {
         );
 
       // this.previousToken = this.currentToken;
-      const lexerNext:IteratorResult<Lexer.nextToken, any> = this.lexer.next();
+      const lexerNext: IteratorResult<Lexer.nextToken, any> = this.lexer.next();
       const lexerIsNotDone: boolean = lexerNext.done === false;
 
       this.eof =
@@ -291,7 +291,7 @@ export namespace Parser {
 
       if (isAtEnd()) return invalidEof('no use body in use statement');
 
-      const localFileName :  Lexer.token= matchType(Lexer.tokenType.identifier)
+      const localFileName: Lexer.token = matchType(Lexer.tokenType.identifier)
         ? advance()!
         : newParseError('TODO didnt get an identifier in use statement');
 
@@ -462,7 +462,7 @@ export namespace Parser {
       while (match('|')) {
         const operatorToken: Lexer.token = advance()!;
         consumeComments(comments);
-        const rightSide: expression= parseExprLvl1();
+        const rightSide: expression = parseExprLvl1();
         consumeComments(comments);
 
         leftSide = {
@@ -481,8 +481,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl2();
 
       while (match('^')) {
-        const operatorToken : Lexer.token= advance()!;
-        const rightSide:expression = parseExprLvl2();
+        const operatorToken: Lexer.token = advance()!;
+        const rightSide: expression = parseExprLvl2();
 
         leftSide = {
           type: 'binary',
@@ -576,8 +576,8 @@ export namespace Parser {
       let leftSide: expression = parseExprLvl7();
 
       while (match('-', '+')) {
-        const operatorToken : Lexer.token= advance()!;
-        const rightSide : expression= parseExprLvl7();
+        const operatorToken: Lexer.token = advance()!;
+        const rightSide: expression = parseExprLvl7();
 
         leftSide = {
           type: 'binary',
@@ -657,7 +657,9 @@ export namespace Parser {
 
         if (token.lexeme === '.') {
           // f.
-          const propertyToken: Lexer.token = matchType(Lexer.tokenType.identifier)
+          const propertyToken: Lexer.token = matchType(
+            Lexer.tokenType.identifier
+          )
             ? advance()!
             : newParseError('TODO invalid property access');
 
@@ -672,7 +674,7 @@ export namespace Parser {
           };
         } else {
           //   f(
-            // TODO make obj out of that?
+          // TODO make obj out of that?
           const args: [expression, Lexer.token | undefined][] = [];
           // TODO what about error messages for `(5,,)`
           while (!isAtEnd() && !match(')')) {
@@ -708,7 +710,7 @@ export namespace Parser {
     function primary(): expression {
       if (match('(')) {
         const openingBracketToken: Lexer.token = advance()!;
-        const body: expression   = parseExpression();
+        const body: expression = parseExpression();
         const closingBracketToken: Lexer.token = match(')')
           ? advance()!
           : newParseError('TODO did not close bracket in grouping expression');
@@ -816,7 +818,9 @@ export namespace Parser {
         ? advance()!
         : newParseError('TODO functions must be closed with )');
 
-      const colonToken: Lexer.token | undefined = match(':') ? advance()! : undefined;
+      const colonToken: Lexer.token | undefined = match(':')
+        ? advance()!
+        : undefined;
       const typeExpression: typeExpression | undefined =
         colonToken !== undefined ? parseTypeExpression() : undefined;
 
@@ -884,7 +888,9 @@ export namespace Parser {
     } else if (match('(')) {
       const openingBracketToken: Lexer.token = advance()!;
       consumeComments(comments);
-      const closingBracket: Lexer.token | undefined = match(')') ? advance()! : undefined;
+      const closingBracket: Lexer.token | undefined = match(')')
+        ? advance()!
+        : undefined;
       // TODO HERE it could directly come a `)` for a `() => T` type
 
       const body: [
@@ -904,7 +910,9 @@ export namespace Parser {
         consumeComments(comments);
         // TODO isAtEnd() check...
 
-        const commaToken: Lexer.token | undefined = match(',') ? advance()! : undefined;
+        const commaToken: Lexer.token | undefined = match(',')
+          ? advance()!
+          : undefined;
 
         body.push([type, commaToken]);
       }
@@ -918,7 +926,9 @@ export namespace Parser {
               'TODO did not close bracket in type-grouping expression'
             );
 
-      const arrowToken: Lexer.token | undefined = match('=>') ? advance()! : undefined;
+      const arrowToken: Lexer.token | undefined = match('=>')
+        ? advance()!
+        : undefined;
       if (arrowToken !== undefined) {
         return {
           type: 'func-type',
@@ -1001,4 +1011,6 @@ function debug() {
   );
 }
 
-debug();
+// TODO invalid char in lexer step results in random error in interpreter.ts
+
+// debug();

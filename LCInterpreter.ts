@@ -255,4 +255,46 @@ let main = func (arg) -> x(arg, 3 + arg,) + 1;
   );
 }
 
-debug();
+// debug();
+
+console.log(
+  inspect(
+    Interpreter.interpret(
+      `
+/*
+type OptionalInt[T] {
+  Some(T),
+  None
+}
+
+let a: OptionalInt[i32] = OptionalInt.Some(5);
+
+let b = func (opt: OptionalInt[i32]): i32 ->
+  match (opt) {
+    case OptionalInt.Some(var) -> var,
+    case OptionalInt.None -> 0
+  };
+
+let c = b(a);
+
+let fac = func (n) -> match (n) {
+  case 0 -> 1,
+  default -> n * fac(n - 1)
+};
+*/
+
+let identity = (func (x) -> x) (3);
+
+let f = func (x) -> 2 + 3 * x;
+let g: i32 = 5;
+let h: () => i32 = func () -> 3;
+
+let main = func (arg: i32): i32 -> identity + main2(arg);
+let main2 = func (arg: i32): i32 -> (g + h()) + f(5);
+`,
+      '',
+      2
+    ),
+    { depth: 999 }
+  )
+);
