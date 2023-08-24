@@ -1010,3 +1010,5 @@ function debug() {
 // TODO invalid char in lexer step results in random error in interpreter.ts
 
 // debug();
+
+// TODO func (x: i32 = 5) -> x;

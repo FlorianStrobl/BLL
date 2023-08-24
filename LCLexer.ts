@@ -194,6 +194,8 @@ export namespace Lexer {
   ];
 
   const firstCharSymbols: string[] = symbols.map((str) => str[0]);
+
+  const floatLiterals: string[] = ['nan', 'inf'];
   // #endregion
 
   // #region types
@@ -252,6 +254,7 @@ export namespace Lexer {
         codeInvalid: true;
         type: 'did not consume digits in numeric literal';
         chars: string;
+        idxs: number[];
         idx: number;
       }
     | {
@@ -291,6 +294,7 @@ export namespace Lexer {
         codeInvalid: true;
         type: 'had wrong alphabet in numeric literal';
         chars: string;
+        idxs: number[];
         idx: number;
       };
 
@@ -321,14 +325,12 @@ export namespace Lexer {
 
       let hadCommentType2Stop1: boolean = false;
       while (idxValid(i, code)) {
-        if (hadCommentType2Stop1 && matches(code[i], commentType2Stop2)) {
-          comment += code[i++]; // /
-          break;
-        }
+        const char: string = code[i++];
+        comment += char;
 
-        hadCommentType2Stop1 = matches(code[i], commentType2Stop1);
+        if (hadCommentType2Stop1 && matches(char, commentType2Stop2)) break;
 
-        comment += code[i++];
+        hadCommentType2Stop1 = matches(char, commentType2Stop1);
       }
 
       // in case idxValid() stopped
@@ -360,13 +362,14 @@ export namespace Lexer {
   function consumeNumericLiteral(code: string, idx: number): nextToken {
     function consumeDigits(): boolean {
       let consumedSomething: boolean = false;
-      let lastCharWasDigit: boolean = false;
+      let lastCharWasDigit: boolean = false; // TODO needs both?
       let lastCharWasUnderscore: boolean = false;
 
+      const localAlphabet: string[] =
+        alphabet === hexDigits ? hexDigits : decimalDigits;
       while (
         idxValid(i, code) &&
-        (matches(code[i], alphabet === hexDigits ? hexDigits : decimalDigits) ||
-          matches(code[i], '_'))
+        (matches(code[i], localAlphabet) || matches(code[i], '_'))
       ) {
         if (matches(code[i], alphabet)) {
           consumedSomething = true;
@@ -374,6 +377,7 @@ export namespace Lexer {
           lastCharWasUnderscore = false;
           literal += code[i++];
         } else if (matches(code[i], '_')) {
+          // TODO could also be directly after a "e" or "."
           if (!lastCharWasDigit) invalidDoubleUnderscore.push(i);
 
           consumedSomething = true;
@@ -385,7 +389,7 @@ export namespace Lexer {
           matches(code[i], decimalDigits) &&
           !matches(code[i], alphabet)
         ) {
-          invalidHadWrongAlpabet = true;
+          invalidAlphabet.push(i);
           literal += code[i++];
         }
       }
@@ -402,10 +406,10 @@ export namespace Lexer {
 
     let gotDotOrE: boolean = false;
     let cantHaveDotOrE: boolean = false;
-    let invalidDidNotConsumDigits: boolean = false;
-    let invalidHadWrongAlpabet: boolean = false;
+    const invalidDidNotConsumDigits: number[] = [];
     const invalidDoubleUnderscore: number[] = [];
     const invalidUnderscoresEnd: number[] = [];
+    const invalidAlphabet: number[] = [];
 
     if (
       matches(code[i], nonDecimalLiteralStart) &&
@@ -428,15 +432,15 @@ export namespace Lexer {
           alphabet = octalDigits;
           break;
       }
-      if (!consumeDigits()) invalidDidNotConsumDigits = true;
-    } else consumeDigits();
+      if (!consumeDigits()) invalidDidNotConsumDigits.push(i);
+    } else consumeDigits(); // assertion: will have something to lexe
 
     if (idxValid(i, code) && matches(code[i], '.')) {
       gotDotOrE = true;
 
       literal += code[i++]; // .
 
-      if (!consumeDigits()) invalidDidNotConsumDigits = true;
+      if (!consumeDigits()) invalidDidNotConsumDigits.push(i);
     }
 
     if (idxValid(i, code) && matches(code[i], 'e')) {
@@ -445,7 +449,7 @@ export namespace Lexer {
       literal += code[i++]; // e
       if (matches(code[i], ['+', '-'])) literal += code[i++]; // + | -
 
-      if (!consumeDigits()) invalidDidNotConsumDigits = true;
+      if (!consumeDigits()) invalidDidNotConsumDigits.push(i);
 
       if (matches(code[i], '.')) {
         // TODO, what if it is "5e1.toString()"
@@ -516,24 +520,26 @@ export namespace Lexer {
         },
         newidx: i
       };
-    } else if (invalidHadWrongAlpabet) {
+    } else if (invalidAlphabet.length !== 0) {
       return {
         valid: false,
         value: {
           type: 'had wrong alphabet in numeric literal',
           codeInvalid: true,
           chars: literal,
+          idxs: invalidAlphabet,
           idx
         },
         newidx: i
       };
-    } else if (invalidDidNotConsumDigits) {
+    } else if (invalidDidNotConsumDigits.length !== 0) {
       return {
         valid: false,
         value: {
           type: 'did not consume digits in numeric literal',
           codeInvalid: true,
           chars: literal,
+          idxs: invalidDidNotConsumDigits,
           idx
         },
         newidx: i
@@ -555,20 +561,20 @@ export namespace Lexer {
     while (idxValid(i, code) && matches(code[i], alphaNumeric))
       identifier += code[i++];
 
-    // TODO, special identifiers as float literals
-    if (identifier === 'nan' || identifier === 'inf')
+    if (matches(identifier, floatLiterals))
       return {
         valid: true,
         value: { type: tokenType.literal, lexeme: identifier, idx },
         newidx: i
       };
 
+    const type: tokenType = keywords.includes(identifier)
+      ? tokenType.keyword
+      : tokenType.identifier;
     return {
       valid: true,
       value: {
-        type: keywords.includes(identifier)
-          ? tokenType.keyword
-          : tokenType.identifier,
+        type,
         lexeme: identifier,
         idx
       },
@@ -634,7 +640,7 @@ export namespace Lexer {
       !(matches(code[i], stringEnd) && !lastCharWasEscape)
     ) {
       if (!lastCharWasEscape) {
-        if (matches(code[i], stringEscapeSymbol)) lastCharWasEscape = true;
+        lastCharWasEscape = matches(code[i], stringEscapeSymbol);
         string += code[i++];
       } else {
         if (!matches(code[i], toEscapSymbols)) {
@@ -704,10 +710,9 @@ export namespace Lexer {
   }
   // #endregion
 
-  function matches(character: string, toMatch: string | string[]): boolean {
+  function matches(string: string, toMatch: string | string[]): boolean {
     return (
-      character === toMatch ||
-      (Array.isArray(toMatch) && toMatch.includes(character))
+      string === toMatch || (Array.isArray(toMatch) && toMatch.includes(string))
     );
   }
 
@@ -773,11 +778,14 @@ export namespace Lexer {
     } while (nToken.value.type !== 'eof');
   }
 
-  export function lexe(
-    code: string
-  ):
-    | { valid: true; tokens: token[] }
-    | { valid: false; tokens: token[]; errors: errorToken[] } {
+  export function lexe(code: string):
+    | { valid: true; tokens: token[]; softErrors: errorToken[] }
+    | {
+        valid: false;
+        tokens: token[];
+        errors: errorToken[];
+        softErrors: errorToken[];
+      } {
     const tokens: token[] = [];
     const errors: errorToken[] = [];
     const softErrors: errorToken[] = [];
@@ -789,8 +797,8 @@ export namespace Lexer {
       else if (!token.valid && !token.value.codeInvalid)
         softErrors.push(token.value);
 
-    if (errors.length === 0) return { valid: true, tokens };
-    else return { valid: false, tokens, errors };
+    if (errors.length === 0) return { valid: true, tokens, softErrors };
+    else return { valid: false, tokens, errors, softErrors };
   }
 
   function debugLexer(): void {
@@ -1004,6 +1012,8 @@ _
       '/**',
       '/** ',
       '/*/',
+      '/* * /',
+      '/*** /',
       '5.',
       '5_',
       '5_3_',
@@ -1040,7 +1050,18 @@ _
       '0o012345678',
       '"',
       '5..3',
-      '5e1e2' // TODO, why?
+      '5e1e2', // TODO, why?
+      "'\\u4zzz'",
+      "'\\u '",
+      "'\\t'",
+      "'",
+      "''",
+      '``',
+      '""',
+      "'\\\\'",
+      "'\\\\\\'",
+      "'\
+      hey'"
     ];
 
     let successfullTests: number = 0;
