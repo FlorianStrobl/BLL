@@ -18,10 +18,10 @@ let main = func (a) -> my_func(a);
 //let g = func (x, y) -> x / y;
 `;
 
-const ast: Parser.statement[] | undefined = Parser.parse(code);
-if (ast === undefined) throw new Error('could not parse the code');
+const ast = Parser.parse(code);
+if (!ast.valid) throw new Error('could not parse the code');
 // TODO add type checks and co
-const interpreter = Interpreter.interpretAst(ast, 5);
+const interpreter = Interpreter.interpretAst(ast.statements, 5);
 // const asm = Compiler.compile(ast, code, filename);
 
 console.log(interpreter);

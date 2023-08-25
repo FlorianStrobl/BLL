@@ -5,9 +5,11 @@ TODO: add full type support, to check if the stuff is even valid!!
 TODO: create a tree structure with all the namespaces/groups; then create a function which can return all accessable `let` and `type` identifiers from any point of that tree strucutre
 */
 
-import { Parser } from './LCParser';
 // @ts-ignore
 import { inspect } from 'util';
+const log = (args: any) => console.log(inspect(args, { depth: 999 }));
+
+import { Parser } from './LCParser';
 
 export namespace Interpreter {
   const globalIdentifiers: [string, Parser.expression][] = [];
@@ -22,7 +24,7 @@ export namespace Interpreter {
     const ast = Parser.parse(code);
     // TODO: actually check if ast is valid with types (e.g. let x: i32 = 5.3; or calling function with wrong arg types) and non duplicate identifiers (not even in differnt groups)
     if (ast === undefined) throw new Error('TODO');
-    return interpretAst(ast, argument);
+    return interpretAst(ast.statements, argument);
   }
 
   // TODO type checking and infering everything needed
@@ -105,7 +107,12 @@ export namespace Interpreter {
         closingBracketToken: {} as any,
         arguments: [
           [
-            { type: 'literal', literal: argument, literalToken: {} as any },
+            {
+              type: 'literal',
+              literalType: 'i32',
+              literal: argument,
+              literalToken: {} as any
+            },
             undefined
           ]
         ]
@@ -248,17 +255,14 @@ let x = func (a, b,) -> b + y / 2 + a*2;
 // doing main(12)
 let main = func (arg) -> x(arg, 3 + arg,) + 1;
   `;
-  console.log(
-    inspect(Interpreter.interpret(code, '', 12), {
-      depth: 999
-    })
-  );
+    log(Interpreter.interpret(code, '', 12))
+  ;
 }
 
 // debug();
 
-console.log(
-  inspect(
+
+  log(
     Interpreter.interpret(
       `
 /*
@@ -294,7 +298,6 @@ let main2 = func (arg: i32): i32 -> (g + h()) + f(5);
 `,
       '',
       2
-    ),
-    { depth: 999 }
-  )
+    )
+
 );

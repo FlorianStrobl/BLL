@@ -1,6 +1,18 @@
-import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
+import { Lexer } from './LCLexer';
+
+const log = (args: any) => console.log(inspect(args, { depth: 999 }));
+
+// TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
+
+// TODO invalid char in lexer step results in random error in interpreter.ts
+
+// TODO func (x: i32 = 5) -> x;
+// TODO match (number): i32 { case 0 -> 5; default /*?? maybe just "case", or just the trailling thing?? TODO HERE*/ -> 6; }
+// TODO calling integers/floats in order to add `==` support: 5(0)(1)
+
+// TODO endless loop error
 
 export namespace Parser {
   let larser: Larser;
@@ -9,6 +21,10 @@ export namespace Parser {
   function newParseError(...args: any[]): never {
     parserErrors.push(...args);
     return {} as never;
+  }
+
+  function invalidEof(...args: any[]): never {
+    return newParseError('TODO invalid eof while parsing', ...args);
   }
 
   // #region types
@@ -73,6 +89,7 @@ export namespace Parser {
   // TODO what about generics: func[T1, T2]
   export type funcExpression = {
     type: 'func';
+    // TODO Refactor parameters as obj (same with other params and tuple like structures)
     parameters: [
       Lexer.token /*identifier*/,
       typeExpression,
@@ -89,7 +106,18 @@ export namespace Parser {
   // match, func, "nan", "inf", literals
   // TODO
   export type expression =
-    | { type: 'literal'; literal: any; literalToken: Lexer.token }
+    | {
+        type: 'literal';
+        literalType: 'i32';
+        literal: number;
+        literalToken: Lexer.token;
+      }
+    | {
+        type: 'literal';
+        literalType: 'f32';
+        literal: number;
+        literalToken: Lexer.token;
+      }
     | { type: 'identifier'; identifierToken: Lexer.token }
     | funcExpression
     | {
@@ -120,6 +148,7 @@ export namespace Parser {
     | {
         type: 'functionCall';
         function: expression;
+        // TODO Tuple to obj
         arguments: [expression, Lexer.token | undefined /*comma*/][];
         openingBracketToken: Lexer.token;
         closingBracketToken: Lexer.token;
@@ -136,6 +165,7 @@ export namespace Parser {
         }
       | {
           type: 'func-type';
+          // TODO tuple to obj
           parameters: [typeExpression, Lexer.token | undefined /* commas */][];
           returnType: typeExpression;
           openingBracketToken: Lexer.token | undefined;
@@ -157,30 +187,32 @@ export namespace Parser {
     private code: string;
     private lexer: Generator<Lexer.nextToken>;
 
-    private currentToken: Lexer.token;
-    private eof: boolean = false;
+    private state:
+      | { eof: false; currentToken: Lexer.token }
+      | { eof: true; currentToken: undefined };
 
     constructor(code: string) {
       this.code = code;
       this.lexer = Lexer.lexeNextTokenIter(code);
 
       // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
-      const lexerNext: IteratorResult<Lexer.nextToken, any> = this.lexer.next();
+      const lexerNext: IteratorResult<Lexer.nextToken, Lexer.nextToken> =
+        this.lexer.next();
       const lexerIsNotDone: boolean = lexerNext.done === false;
-      if (
+
+      if (lexerIsNotDone && lexerNext.value.valid)
+        this.state = { eof: false, currentToken: lexerNext.value.value };
+      else if (
         lexerIsNotDone &&
         !lexerNext.value.valid &&
         lexerNext.value.value.type === 'eof'
-      ) {
-        this.eof = true;
-        this.currentToken = {} as never;
-      } else if (lexerIsNotDone && lexerNext.value.valid) {
-        this.currentToken = lexerNext.value.value;
-      } else this.errorHandling();
+      )
+        this.state = { eof: true, currentToken: undefined };
+      else this.errorHandling();
     }
 
     public isEof(): boolean {
-      return this.eof;
+      return this.state.eof;
     }
 
     // assertion: not eof
@@ -189,7 +221,8 @@ export namespace Parser {
         throw new Error(
           'Internal error while parsing. Tried getting the current token, even tho the code is eof.'
         );
-      return this.currentToken;
+
+      return this.state.currentToken!;
     }
 
     // assertion: not eof
@@ -200,25 +233,28 @@ export namespace Parser {
         );
 
       // this.previousToken = this.currentToken;
-      const lexerNext: IteratorResult<Lexer.nextToken, any> = this.lexer.next();
+
+      const lexerNext: IteratorResult<Lexer.nextToken, Lexer.nextToken> =
+        this.lexer.next();
       const lexerIsNotDone: boolean = lexerNext.done === false;
 
-      this.eof =
+      const eof: boolean =
         lexerIsNotDone &&
         !lexerNext.value.valid &&
         lexerNext.value.value.type === 'eof';
 
-      if (lexerIsNotDone && lexerNext.value.valid)
-        this.currentToken = lexerNext.value.value;
-      else if (!this.eof) this.errorHandling();
+      if (!eof && lexerNext.value.valid)
+        this.state = { eof: false, currentToken: lexerNext.value.value };
+      else if (eof) this.state = { eof: true, currentToken: undefined };
+      else this.errorHandling();
     }
 
     private errorHandling(): never {
-      // TODO
+      // TODO lexer error
       const tokens = Lexer.lexe(this.code);
+      console.error(tokens);
       throw new Error(
-          ': ' +
-          (tokens === undefined ? 'no tokens' : tokens.toString())
+        ': ' + (tokens === undefined ? 'no tokens' : tokens.toString())
       );
     }
   }
@@ -256,16 +292,12 @@ export namespace Parser {
     while (!isAtEnd() && matchType(Lexer.tokenType.comment))
       commentArr.push(advance()!);
   }
-
-  function invalidEof(...args: any[]): never {
-    return newParseError('TODO invalid eof while parsing', ...args);
-  }
   // #endregion
 
   // #region parser
   // TODO comments could be ANYWHERE, just aswell as a bad eof
   // TODO test with real code, but insert a comment between each and every token!
-  // TODO check everywhere isAtEnd()
+  // TODO check everywhere isAtEnd() and comments
   function parseStatement(): statement {
     if (isAtEnd()) return invalidEof('no statement parsed');
 
@@ -277,8 +309,7 @@ export namespace Parser {
 
     if (match(';')) {
       const semicolonToken: Lexer.token = advance()!;
-      consumeComments(comments);
-      return { type: 'empty', semicolonToken, comments };
+      return { type: 'empty', semicolonToken, comments: [] };
     }
 
     if (match('use')) {
@@ -443,7 +474,10 @@ export namespace Parser {
       return {} as any;
     }
 
-    throw new Error('TODO could not parse any statement properly');
+    return {
+      error: 'TODO could not parse any statement properly',
+      lastToken: advance()
+    } as never;
   }
 
   function parseExpression(): expression & comment {
@@ -725,8 +759,17 @@ export namespace Parser {
           literalToken.lexeme === 'inf'
             ? Infinity
             : Number(literalToken.lexeme);
+
+        // TODO other way of determining if a float is present
+        const literalType: 'f32' | 'i32' =
+          literalToken.lexeme.includes('.') ||
+          (!literalToken.lexeme.startsWith('0x') &&
+            literalToken.lexeme.includes('e'))
+            ? 'f32'
+            : 'i32';
         return {
           type: 'literal',
+          literalType,
           literal,
           literalToken
         };
@@ -739,8 +782,11 @@ export namespace Parser {
         };
       } else if (match('func')) return parseFuncExpression();
       else if (match('match')) return parseMatchExpression();
-      else throw new Error('could not match anything in parsing expressions!');
-      // TODO
+
+      return {
+        error: 'TODO could not match anything in parsing expressions',
+        lastToken: advance()
+      } as never;
     }
 
     function parseFuncExpression(): expression {
@@ -876,7 +922,7 @@ export namespace Parser {
       return {
         type: 'func-type',
         parameters: [[primitive, undefined]],
-        returnType: parseTypeExpression(), // same level because precedence order
+        returnType: parseTypeExpression(),
         openingBracketToken: undefined,
         closingBracketToken: undefined,
         arrowToken,
@@ -897,6 +943,7 @@ export namespace Parser {
       while (closingBracket === undefined && !isAtEnd() && !match(')')) {
         consumeComments(comments);
 
+        // TODO with obj instead of tuple way easier to read
         if (body.length !== 0 && body[body.length - 1][1] === undefined)
           newParseError(
             'TODO did not get a comma in last type expression, while grouping types'
@@ -930,7 +977,7 @@ export namespace Parser {
         return {
           type: 'func-type',
           parameters: body,
-          returnType: parseTypeExpression(), // same level because precedence order
+          returnType: parseTypeExpression(),
           openingBracketToken,
           closingBracketToken,
           arrowToken,
@@ -954,61 +1001,96 @@ export namespace Parser {
           comments
         };
       }
-    } else throw new Error('TODO did not match any type expression statement');
+    }
+
+    return {
+      error: 'TODO did not match any type expression statement',
+      lastToken: advance()
+    } as never;
   }
   // #endregion
 
   // TODO instead of returning undefined: return parseError[]
   export function parse(
     code: string
-  ): statement[] | undefined {
+  ):
+    | { valid: true; statements: statement[] }
+    | { valid: false; parserErrors: any[]; statements: statement[] } {
     larser = new Larser(code);
 
     const statements: statement[] = [];
     while (!isAtEnd()) statements.push(parseStatement());
 
-    if (parserErrors.length === 0) return statements;
+    if (parserErrors.length === 0) return { valid: true, statements };
+    return { valid: false, parserErrors, statements };
+  }
 
-    console.error(
-      inspect(parserErrors, {
-        depth: 999
-      })
+  function debugParser() {
+    const mustParse: string[] = [
+      '',
+      '// test',
+      '/* test */',
+      'use test;',
+      'let test = 5;',
+      'type test = i32;',
+      'group test {}',
+      'let test = ! ~ + - 1 + 1 - 1 * 1 / 1 ** 1 *** 1 % 1 & 1 | 1 ^ 1 << 1 >> 1 == 1 != 1 <= 1 >= 1 < 1 > 1;'
+    ];
+    const mustNotParseButLexe: string[] = [
+      'test',
+      '5',
+      'i32',
+      'f32',
+      'nan',
+      'inf',
+      'use',
+      'let',
+      'type',
+      'group',
+      'func',
+      'match',
+      '+',
+      '!',
+      'use;'
+    ];
+
+    for (const a of mustParse) {
+      // TODO
+      //const ans = parse(a);
+      //if (!ans.valid) throw new Error('could not parse: ' + ans.toString());
+    }
+
+    for (const a of mustNotParseButLexe) {
+      if (!Lexer.lexe(a).valid)
+        throw new Error('this code should be lexable: ' + a);
+
+      const ans = parse(a);
+      if (ans.valid) throw new Error('should not parse: ' + ans.toString());
+    }
+
+    console.time('t');
+    // group test { let x = 5 + 2 * (func (x) -> x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
+    // let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
+    // invalid to do: `a.(b).c` but (a.b).c is ok
+    // let _ = a(5+32,4)
+
+    // use std; let _ = (func (x) -> 3 * x)(5);
+
+    // let x: (i32) => ((f32), (tust,) => tast => (tist)) => (test) = func (a, b, c) -> 4;
+    // TODO where are the opening brackets of tust??
+    const parsed = parse(
+      'let x: (i32) => ((f32), (tust,) => tast => () => (tist)) => (test) = func (a, b, c) -> 4;'
     );
+    console.timeEnd('t');
+
     console.log(
-      inspect(statements, {
+      inspect(parsed, {
         depth: 999
       })
     );
   }
+
+  // for (let i = 0; i < 1; ++i) debugParser();
 }
 
-// TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
-
-function debug() {
-  console.time('t');
-  // group test { let x = 5 + 2 * (func (x) -> x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
-  // let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
-  // invalid to do: `a.(b).c` but (a.b).c is ok
-  // let _ = a(5+32,4)
-
-  // use std; let _ = (func (x) -> 3 * x)(5);
-
-  // let x: (i32) => ((f32), (tust,) => tast => (tist)) => (test) = func (a, b, c) -> 4;
-  // TODO where are the opening brackets of tust??
-  const parsed = Parser.parse(
-    'let x: (i32) => ((f32), (tust,) => tast => () => (tist)) => (test) = func (a, b, c) -> 4;'
-  );
-  console.timeEnd('t');
-
-  console.log(
-    inspect(parsed, {
-      depth: 999
-    })
-  );
-}
-
-// TODO invalid char in lexer step results in random error in interpreter.ts
-
-// debug();
-
-// TODO func (x: i32 = 5) -> x;
+log(Parser.parse('let x = 5;'));

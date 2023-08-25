@@ -32,9 +32,9 @@ export namespace Lexer {
     '/', // divide (binary, f32/for i32: rounding down)
     '**', // exponentiation (binary, i32/f32)
     '***', // root or log (binary, i32/f32) TODO really needed?
-    '%', // remainder (binary, i32)
 
     // only ints
+    '%', // remainder (binary, i32)
     '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32)
     '~', // not (unary, i32)
     '&', // and (binary, i32)
@@ -214,7 +214,7 @@ export namespace Lexer {
   }
 
   // TODO
-  type errorToken =
+  export type lexerErrorToken =
     | { codeInvalid: false; type: 'eof' /*reached end of file*/; idx: number }
     | {
         codeInvalid: true;
@@ -306,7 +306,7 @@ export namespace Lexer {
       }
     | {
         valid: false;
-        value: errorToken;
+        value: lexerErrorToken;
         newidx: number;
       };
   // #endregion
@@ -377,7 +377,7 @@ export namespace Lexer {
           lastCharWasUnderscore = false;
           literal += code[i++];
         } else if (matches(code[i], '_')) {
-          // TODO could also be directly after a "e" or "."
+          // TODO could also be directly after a "e" or "." aka new error
           if (!lastCharWasDigit) invalidDoubleUnderscore.push(i);
 
           consumedSomething = true;
@@ -779,16 +779,16 @@ export namespace Lexer {
   }
 
   export function lexe(code: string):
-    | { valid: true; tokens: token[]; softErrors: errorToken[] }
+    | { valid: true; tokens: token[]; softErrors: lexerErrorToken[] }
     | {
         valid: false;
         tokens: token[];
-        errors: errorToken[];
-        softErrors: errorToken[];
+        lexerErrors: lexerErrorToken[];
+        softErrors: lexerErrorToken[];
       } {
     const tokens: token[] = [];
-    const errors: errorToken[] = [];
-    const softErrors: errorToken[] = [];
+    const errors: lexerErrorToken[] = [];
+    const softErrors: lexerErrorToken[] = [];
 
     for (const token of Lexer.lexeNextTokenIter(code))
       if (token.valid) tokens.push(token.value);
@@ -798,7 +798,7 @@ export namespace Lexer {
         softErrors.push(token.value);
 
     if (errors.length === 0) return { valid: true, tokens, softErrors };
-    else return { valid: false, tokens, errors, softErrors };
+    else return { valid: false, tokens, lexerErrors: errors, softErrors };
   }
 
   function debugLexer(): void {
@@ -1061,7 +1061,8 @@ _
       "'\\\\'",
       "'\\\\\\'",
       "'\
-      hey'"
+      hey'",
+      '5e_4'
     ];
 
     let successfullTests: number = 0;
