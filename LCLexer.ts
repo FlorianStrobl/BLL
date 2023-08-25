@@ -52,8 +52,8 @@ export namespace Lexer {
     '>', // greater than (binary, i32/f32)
 
     '=', // assigments of values to identifiers (let and type)
-    '->', // used in function definitions and match expressions
-    '=>', // used for function signatures
+    '->', // used for function signatures
+    '=>', // used in function definitions and match expressions
     ':', // type annotation for func, match and let
     ';', // end of let or type statement/empty statement
     ',', // seperator for arguments in funcs or calling funcs
@@ -811,7 +811,7 @@ export namespace Lexer {
     if (c !== '') console.log(Lexer.lexe(c));
 
     const mustLexe: [string, number][] = [
-      ['let x = (func (a) -> a)(3+1);', 17],
+      ['let x = (func (a) => a)(3+1);', 17],
       [
         `
 let num: i32 /* signed */ = + 5.5_3e+2; // an integer
@@ -836,7 +836,7 @@ let b: i32 = Math.sq(a); // a ** 2, TO DO compiler/interpreter must deduce that 
 let c: i32 = IO.out(b); // prints b and assigneds b to c
 let a: i32 = 3 == 3;
 
-let d = func (x: i32) -> 5_4.1e-3;
+let d = func (x: i32) => 5_4.1e-3;
 // 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 `,
         90
@@ -885,7 +885,7 @@ _
 
 ~ & | ^ + - * / % = ( ) [ ] { } < > : ; . , !
 
-! * ** *** + - % / < > = == != <= >= << >> ~ & | ^ : ; . , -> () [] {} //
+! * ** *** + - % / < > = == != <= >= << >> ~ & | ^ : ; . , -> => () [] {} //
 
 ********
 
@@ -974,10 +974,10 @@ _
         Some(t)
       }
 
-      let f = func (x: test): optional[a] ->
+      let f = func (x: test): optional[a] =>
         match(x): optional[a] {
-          test.t1 -> optional.None;
-          test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
+          test.t1 => optional.None;
+          test.t2(aa, bb, cc) => optional.Some(a.x(aa, bb, cc));
         };`,
         99
       ],
