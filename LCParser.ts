@@ -11,8 +11,13 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 // TODO func (x: i32 = 5) => x;
 // TODO match (number): i32 { case 0 => 5; default /*?? maybe just "case", or just the trailling thing?? TODO HERE*/ => 6; }
 // TODO calling integers/floats in order to add `==` support: 5(0)(1)
-
+// TODO add generic types in funcs and types
+// TODO isAtEnd() and consumeComments(comments)
 // TODO endless loop error
+
+// TODO tuple to obj
+
+// TODO church numerals: +, -, *, **, ==, <=: <, >, >=, !=
 
 export namespace Parser {
   let larser: Larser;
@@ -89,7 +94,7 @@ export namespace Parser {
   // TODO what about generics: func[T1, T2]
   export type funcExpression = {
     type: 'func';
-    // TODO Refactor parameters as obj (same with other params and tuple like structures)
+    // TODO Refactor tuple parameters as obj (same with other params and tuple like structures)
     parameters: [
       Lexer.token /*identifier*/,
       typeExpression,
@@ -390,7 +395,9 @@ export namespace Parser {
         closingBracketToken,
         comments
       };
-    } else if (match('let')) {
+    }
+
+    if (match('let')) {
       const letToken: Lexer.token = advance()!;
 
       consumeComments(comments);
@@ -420,7 +427,9 @@ export namespace Parser {
         return invalidEof('unexpected eof in let statement after getting ":"');
 
       const typeAnnotation: typeExpression | undefined =
-        colonToken !== undefined ? parseTypeExpression() : undefined;
+        colonToken !== undefined && !match('=')
+          ? parseTypeExpression()
+          : undefined;
 
       consumeComments(comments);
 
@@ -435,7 +444,9 @@ export namespace Parser {
       if (isAtEnd())
         return invalidEof('unexpected eof in let statement after =');
 
-      const body: expression & comment = parseExpression();
+      const body: expression & comment = !match(';')
+        ? parseExpression()
+        : newParseError('TODO no body in let expression');
 
       consumeComments(comments);
 
@@ -469,7 +480,9 @@ export namespace Parser {
         semicolonToken,
         comments
       };
-    } else if (match('type')) {
+    }
+
+    if (match('type')) {
       // TODO type{ and type=
       return {} as any;
     }
@@ -480,8 +493,8 @@ export namespace Parser {
     } as never;
   }
 
+  // TODO add comments and isAtEnd() support
   function parseExpression(): expression & comment {
-    // TODO add comments and isAtEnd() support
     const comments: Lexer.token[] = [];
 
     function parseExprLvl0(): expression {
@@ -509,11 +522,15 @@ export namespace Parser {
     }
 
     function parseExprLvl1(): expression {
+      consumeComments(comments);
       let leftSide: expression = parseExprLvl2();
+      consumeComments(comments);
 
       while (match('^')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const rightSide: expression = parseExprLvl2();
+        consumeComments(comments);
 
         leftSide = {
           type: 'binary',
@@ -528,11 +545,15 @@ export namespace Parser {
     }
 
     function parseExprLvl2(): expression {
+      consumeComments(comments);
       let leftSide: expression = parseExprLvl3();
+      consumeComments(comments);
 
       while (match('&')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const rightSide: expression = parseExprLvl3();
+        consumeComments(comments);
 
         leftSide = {
           type: 'binary',
@@ -547,11 +568,15 @@ export namespace Parser {
     }
 
     function parseExprLvl3(): expression {
+      consumeComments(comments);
       let leftSide: expression = parseExprLvl4();
+      consumeComments(comments);
 
       while (match('==', '!=')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const rightSide: expression = parseExprLvl4();
+        consumeComments(comments);
 
         leftSide = {
           type: 'binary',
@@ -566,11 +591,15 @@ export namespace Parser {
     }
 
     function parseExprLvl4(): expression {
+      consumeComments(comments);
       let leftSide: expression = parseExprLvl5();
+      consumeComments(comments);
 
       while (match('<', '>', '<=', '>=')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const rightSide: expression = parseExprLvl5();
+        consumeComments(comments);
 
         leftSide = {
           type: 'binary',
@@ -585,11 +614,15 @@ export namespace Parser {
     }
 
     function parseExprLvl5(): expression {
+      consumeComments(comments);
       let leftSide: expression = parseExprLvl6();
+      consumeComments(comments);
 
       while (match('<<', '>>')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const rightSide: expression = parseExprLvl6();
+        consumeComments(comments);
 
         leftSide = {
           type: 'binary',
@@ -604,11 +637,15 @@ export namespace Parser {
     }
 
     function parseExprLvl6(): expression {
+      consumeComments(comments);
       let leftSide: expression = parseExprLvl7();
+      consumeComments(comments);
 
       while (match('-', '+')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const rightSide: expression = parseExprLvl7();
+        consumeComments(comments);
 
         leftSide = {
           type: 'binary',
@@ -623,11 +660,15 @@ export namespace Parser {
     }
 
     function parseExprLvl7(): expression {
+      consumeComments(comments);
       let leftSide: expression = parseExprLvl8();
+      consumeComments(comments);
 
       while (match('*', '/', '%')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const rightSide: expression = parseExprLvl8();
+        consumeComments(comments);
 
         leftSide = {
           type: 'binary',
@@ -642,13 +683,17 @@ export namespace Parser {
     }
 
     function parseExprLvl8(): expression {
+      consumeComments(comments);
       let leftSide: expression = parseExprLvl9();
+      consumeComments(comments);
 
       // right to left precedence:
       // if because precedence order
       if (match('**', '***')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const rightSide: expression = parseExprLvl8(); // TODO right? same level because precedence order
+        consumeComments(comments);
 
         leftSide = {
           type: 'binary',
@@ -666,7 +711,9 @@ export namespace Parser {
       // unary:
       if (match('!', '-', '+', '~')) {
         const operatorToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const body: expression = parseExprLvl9(); // same level?? TODO
+        consumeComments(comments);
 
         return {
           type: 'unary',
@@ -679,9 +726,11 @@ export namespace Parser {
       return parseExprLvl10();
     }
 
-    // TODO just to debug
+    // TODO debug and consumeComments(comments)/isAtEnd()
     function parseExprLvl10(): expression {
+      consumeComments(comments);
       let left: expression = primary();
+      consumeComments(comments);
 
       while (match('(', '.')) {
         const token: Lexer.token = advance()!;
@@ -705,7 +754,7 @@ export namespace Parser {
           };
         } else {
           //   f(
-          // TODO make obj out of that?
+          // TODO make obj from this tuple
           const args: [expression, Lexer.token | undefined][] = [];
           // TODO what about error messages for `(5,,)`
           while (!isAtEnd() && !match(')')) {
@@ -748,12 +797,18 @@ export namespace Parser {
         return Number(literal);
       }
 
+      consumeComments(comments);
+
       if (match('(')) {
         const openingBracketToken: Lexer.token = advance()!;
+        consumeComments(comments);
         const body: expression = parseExpression();
+        consumeComments(comments);
         const closingBracketToken: Lexer.token = match(')')
           ? advance()!
           : newParseError('TODO did not close bracket in grouping expression');
+
+        consumeComments(comments);
 
         return {
           type: 'grouping',
@@ -764,17 +819,18 @@ export namespace Parser {
       } else if (matchType(Lexer.tokenType.literal)) {
         const literalToken: Lexer.token = advance()!;
 
+        consumeComments(comments);
+
+        const lexeme: string = literalToken.lexeme;
         const literalType: 'i32' | 'f32' =
-          literalToken.lexeme.includes('.') ||
-          (!literalToken.lexeme.startsWith('0x') &&
-            literalToken.lexeme.includes('e'))
+          lexeme.includes('.') ||
+          (!lexeme.startsWith('0x') && lexeme.includes('e'))
             ? 'f32'
             : 'i32';
-
         const literal: number =
           literalType === 'i32'
-            ? intLiteralToInt(literalToken.lexeme)
-            : floatLiteralToFloat(literalToken.lexeme);
+            ? intLiteralToInt(lexeme)
+            : floatLiteralToFloat(lexeme);
 
         return {
           type: 'literal',
@@ -784,13 +840,15 @@ export namespace Parser {
         };
       } else if (matchType(Lexer.tokenType.identifier)) {
         const identifierToken: Lexer.token = advance()!;
-
+        consumeComments(comments);
         return {
           type: 'identifier',
           identifierToken
         };
       } else if (match('func')) return parseFuncExpression();
       else if (match('match')) return parseMatchExpression();
+
+      consumeComments(comments);
 
       return {
         error: 'TODO could not match anything in parsing expressions',
@@ -805,7 +863,7 @@ export namespace Parser {
         Lexer.token | undefined /*colon for type annotation*/,
         Lexer.token | undefined /*comma for next param*/
       ][] {
-        // TODO obj out of that??
+        // TODO obj from tuple
         const params: [
           Lexer.token /*identifier*/,
           typeExpression,
@@ -858,29 +916,46 @@ export namespace Parser {
         );
       const funcToken: Lexer.token = advance()!;
 
+      consumeComments(comments);
+
       // TODO generics
 
       const openingBracketToken: Lexer.token = match('(')
         ? advance()!
         : newParseError('TODO functions must be opend with (');
 
+      consumeComments(comments);
+
       const params = parseFuncExprParam();
+
+      consumeComments(comments);
 
       const closingBracketToken: Lexer.token = match(')')
         ? advance()!
         : newParseError('TODO functions must be closed with )');
 
+      consumeComments(comments);
+
       const colonToken: Lexer.token | undefined = match(':')
         ? advance()!
         : undefined;
+
+      consumeComments(comments);
+
       const typeExpression: typeExpression | undefined =
         colonToken !== undefined ? parseTypeExpression() : undefined;
+
+      consumeComments(comments);
 
       const arrowToken: Lexer.token = match('=>')
         ? advance()!
         : newParseError('TODO functions must have a =>');
 
+      consumeComments(comments);
+
       const body: expression = parseExpression();
+
+      consumeComments(comments);
 
       const typeAnnotation: hasExplicitType =
         colonToken === undefined
@@ -945,6 +1020,7 @@ export namespace Parser {
         : undefined;
       // TODO HERE it could directly come a `)` for a `() -> T` type
 
+      // TODO tuple to obj
       const body: [
         typeExpression,
         Lexer.token | undefined /* comma token */
@@ -1060,7 +1136,11 @@ export namespace Parser {
           case Sunday => 1;
           0; // default for the other days
         };`,
-      'let x = func (x: i32 -> i32,) => 5;'
+      'let x = func (x: i32 -> i32,) => 5;',
+      'let a = func (x: (i32) -> i32) => x(5);',
+      'let a = func (x: () -> i32) => 5;',
+      '/* comment */ let /*0*/ x /*1*/ : /*2*/ ( /*3*/ i32 /*4*/ , /*5*/ ) /*6*/ -> /*7*/ i32 /*8*/ = /*9*/ func /*10*/ ( /*11*/ x /*12*/ , /*13*/ ) /*14*/ => /*15*/ 5 /*16*/ ; /*17*/',
+      'group test /*0*/ { /*1*/ let x = 5; /*2*/ } /*3*/'
     ];
     const mustNotParseButLexe: string[] = [
       'test',
@@ -1079,7 +1159,15 @@ export namespace Parser {
       '!',
       'use;',
       'let x = func (x: i32 => i32,) => 5;',
-      'let x = func (x: i32 -> i32,) -> 5;'
+      'let x = func (x: i32 -> i32,) -> 5;',
+      'let x',
+      'let x =',
+      'let x = 5',
+      'let x = ;',
+      'let x 5 ;',
+      'let = 5 ;',
+      'x = 5 ;',
+      'let x: = 5;'
     ];
 
     for (const a of mustParse) {
@@ -1116,4 +1204,8 @@ export namespace Parser {
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
-log(Parser.parse('let a = func (x: i32 -> i32,) => x(5);'));
+log(
+  Parser.parse(
+    'group test { let a = func (x: (i32) -> i32,) => x(5,); /*type t = i32;*/ }'
+  )
+);
