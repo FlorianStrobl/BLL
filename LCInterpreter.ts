@@ -3,6 +3,7 @@
 /*
 TODO: add full type support, to check if the stuff is even valid!!
 TODO: create a tree structure with all the namespaces/groups; then create a function which can return all accessable `let` and `type` identifiers from any point of that tree strucutre
+TODO: add caching for funcs with only i32/float args or for vars which are of primitive type and not a function type in order to not evaluate them twice
 */
 
 // @ts-ignore
@@ -106,15 +107,14 @@ export namespace Interpreter {
         openingBracketToken: {} as any,
         closingBracketToken: {} as any,
         arguments: [
-          [
-            {
+          {
+            argumentExpression: {
               type: 'literal',
               literalType: 'i32',
               literal: argument,
               literalToken: {} as any
-            },
-            undefined
-          ]
+            }
+          }
         ]
       });
 
@@ -227,8 +227,8 @@ export namespace Interpreter {
 
         for (let i = 0; i < funcParameters.length; ++i) {
           localIdentifiers.push([
-            funcParameters[i][0].lexeme,
-            callingArguments[i][0]
+            funcParameters[i].identifierToken.lexeme,
+            callingArguments[i].argumentExpression
           ]);
         }
 
@@ -255,16 +255,14 @@ let x = func (a, b,) => b + y / 2 + a*2;
 // doing main(12)
 let main = func (arg) => x(arg, 3 + arg,) + 1;
   `;
-    log(Interpreter.interpret(code, '', 12))
-  ;
+  log(Interpreter.interpret(code, '', 12));
 }
 
 // debug();
 
-
-  log(
-    Interpreter.interpret(
-      `
+log(
+  Interpreter.interpret(
+    `
 /*
 type OptionalInt[T] {
   Some(T),
@@ -287,17 +285,16 @@ let fac = func (n) => match (n) {
 };
 */
 
-let identity = (func (x) => x) (3);
+let identity = (func (x) => x) (1);
 
 let f = func (x) => 2 + 3 * x;
-let g: i32 = 5;
-let h: () -> i32 = func () => 3;
+let g: i32 = 4;
+let h: () -> i32 = func () => 5;
 
 let main = func (arg: i32): i32 => identity + main2(arg);
-let main2 = func (arg: i32): i32 => (g + h()) + f(5);
+let main2 = func (arg: i32): i32 => (g + h()) + f(arg + 6);
 `,
-      '',
-      2
-    )
-
+    '',
+    7
+  )
 );
