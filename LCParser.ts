@@ -15,8 +15,6 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 // TODO isAtEnd() and consumeComments(comments)
 // TODO endless loop error
 
-// TODO tuple to obj
-
 // TODO church numerals: +, -, *, **, ==, <=: <, >, >=, !=
 
 export namespace Parser {
@@ -24,7 +22,7 @@ export namespace Parser {
   const parserErrors: any[] = [];
 
   function newParseError(...args: any[]): never {
-    parserErrors.push(...args);
+    parserErrors.push(...args, { currentToken: peek() });
     return {} as never;
   }
 
@@ -94,13 +92,12 @@ export namespace Parser {
   // TODO what about generics: func[T1, T2]
   export type funcExpression = {
     type: 'func';
-    // TODO Refactor tuple parameters as obj (same with other params and tuple like structures)
-    parameters: [
-      Lexer.token /*identifier*/,
-      typeExpression,
-      Lexer.token | undefined /*colon for type annotation*/,
-      Lexer.token | undefined /*comma for next param*/
-    ][];
+    parameters: {
+      identifierToken: Lexer.token;
+      typeExpression: typeExpression;
+      colonToken?: Lexer.token /*colon for type annotation*/;
+      commaToken?: Lexer.token /*comma for next param*/;
+    }[];
     body: expression;
     funcToken: Lexer.token;
     openingBracketToken: Lexer.token;
@@ -153,8 +150,10 @@ export namespace Parser {
     | {
         type: 'functionCall';
         function: expression;
-        // TODO Tuple to obj
-        arguments: [expression, Lexer.token | undefined /*comma*/][];
+        arguments: {
+          argumentExpression: expression;
+          commaToken?: Lexer.token;
+        }[];
         openingBracketToken: Lexer.token;
         closingBracketToken: Lexer.token;
       }
@@ -170,8 +169,10 @@ export namespace Parser {
         }
       | {
           type: 'func-type';
-          // TODO tuple to obj
-          parameters: [typeExpression, Lexer.token | undefined /* commas */][];
+          parameters: {
+            typeExpression: typeExpression;
+            commaToken?: Lexer.token;
+          }[];
           returnType: typeExpression;
           openingBracketToken: Lexer.token | undefined;
           closingBracketToken: Lexer.token | undefined;
@@ -483,6 +484,50 @@ export namespace Parser {
     }
 
     if (match('type')) {
+      // TODO
+
+      const typeToken: Lexer.token = advance()!;
+
+      consumeComments(comments);
+      // TODO isAtEnd() check
+
+      const identifierToken: Lexer.token = matchType(Lexer.tokenType.identifier)
+        ? advance()!
+        : newParseError('TODO invalid type expression: missing identifier');
+
+      consumeComments(comments);
+
+      if (match('=')) {
+        const equalsToken: Lexer.token = advance()!;
+
+        consumeComments(comments);
+
+        const typeValue: typeExpression = parseTypeExpression();
+
+        consumeComments(comments);
+        // TODO isAtEnd() checking and errors
+
+        const semicolonToken: Lexer.token = match(';')
+          ? advance()!
+          : newParseError('TODO did not finish the type expression');
+
+        return {
+          type: 'type-allias',
+          identifierToken,
+          typeValue,
+          typeToken,
+          equalsToken,
+          semicolonToken,
+          comments
+        };
+      } else if (match('{')) {
+        // TODO
+      } else {
+        newParseError(
+          'TODO invalid type expression: cannot resolve which type it should be'
+        );
+      }
+
       // TODO type{ and type=
       return {} as any;
     }
@@ -754,20 +799,32 @@ export namespace Parser {
           };
         } else {
           //   f(
-          // TODO make obj from this tuple
-          const args: [expression, Lexer.token | undefined][] = [];
+          const args: {
+            argumentExpression: expression;
+            commaToken?: Lexer.token;
+          }[] = [];
           // TODO what about error messages for `(5,,)`
           while (!isAtEnd() && !match(')')) {
             // if last was not comma
-            if (args.length !== 0 && args[args.length - 1][1] === undefined)
+            if (
+              args.length !== 0 &&
+              args[args.length - 1].commaToken === undefined
+            )
               newParseError(
                 'TODO, missing comma in function call argument list'
               );
-            const expression: expression = parseExpression();
+
+            consumeComments(comments);
+
+            const argumentExpression: expression = parseExpression();
+
+            consumeComments(comments);
+
             const commaToken: Lexer.token | undefined = match(',')
               ? advance()!
               : undefined;
-            args.push([expression, commaToken]);
+
+            args.push({ argumentExpression, commaToken });
           }
 
           if (isAtEnd())
@@ -857,25 +914,27 @@ export namespace Parser {
     }
 
     function parseFuncExpression(): expression {
-      function parseFuncExprParam(): [
-        Lexer.token /*identifier*/,
-        typeExpression,
-        Lexer.token | undefined /*colon for type annotation*/,
-        Lexer.token | undefined /*comma for next param*/
-      ][] {
-        // TODO obj from tuple
-        const params: [
-          Lexer.token /*identifier*/,
-          typeExpression,
-          Lexer.token | undefined /*colon for type annotation*/,
-          Lexer.token | undefined /*comma for next param*/
-        ][] = [];
+      function parseFuncExprParam(): {
+        identifierToken: Lexer.token;
+        typeExpression: typeExpression;
+        colonToken?: Lexer.token /*colon for type annotation*/;
+        commaToken?: Lexer.token;
+      }[] {
+        const params: {
+          identifierToken: Lexer.token;
+          typeExpression: typeExpression;
+          colonToken?: Lexer.token /*colon for type annotation*/;
+          commaToken?: Lexer.token;
+        }[] = [];
 
         // TODO consumeComments() and isEof()
         while (!isAtEnd() && !match(')')) {
           consumeComments(comments);
 
-          if (params.length !== 0 && params[params.length - 1][3] === undefined)
+          if (
+            params.length !== 0 &&
+            params[params.length - 1].commaToken === undefined
+          )
             newParseError(
               'Invalid func expression: missing comma in argument list'
             );
@@ -899,12 +958,12 @@ export namespace Parser {
             ? advance()!
             : undefined;
 
-          params.push([
+          params.push({
             identifierToken,
-            explicitType ?? { type: 'implicit', comments: [] },
+            typeExpression: explicitType ?? { type: 'implicit', comments: [] },
             colonToken,
             commaToken
-          ]);
+          });
         }
 
         return params;
@@ -1005,7 +1064,7 @@ export namespace Parser {
 
       return {
         type: 'func-type',
-        parameters: [[primitive, undefined]],
+        parameters: [{ typeExpression: primitive }],
         returnType: parseTypeExpression(),
         openingBracketToken: undefined,
         closingBracketToken: undefined,
@@ -1020,19 +1079,19 @@ export namespace Parser {
         : undefined;
       // TODO HERE it could directly come a `)` for a `() -> T` type
 
-      // TODO tuple to obj
-      const body: [
-        typeExpression,
-        Lexer.token | undefined /* comma token */
-      ][] = [];
+      const body: {
+        typeExpression: typeExpression;
+        commaToken?: Lexer.token;
+      }[] = [];
       while (closingBracket === undefined && !isAtEnd() && !match(')')) {
         consumeComments(comments);
 
-        // TODO with obj instead of tuple way easier to read
-        if (body.length !== 0 && body[body.length - 1][1] === undefined)
+        if (body.length !== 0 && body[body.length - 1].commaToken === undefined)
           newParseError(
             'TODO did not get a comma in last type expression, while grouping types'
           );
+
+        consumeComments(comments);
 
         const type: typeExpression = parseTypeExpression();
 
@@ -1043,7 +1102,7 @@ export namespace Parser {
           ? advance()!
           : undefined;
 
-        body.push([type, commaToken]);
+        body.push({ typeExpression: type, commaToken });
       }
 
       const closingBracketToken: Lexer.token =
@@ -1073,14 +1132,15 @@ export namespace Parser {
           newParseError('TODO, did not get any type in group expression');
         if (body.length !== 1)
           newParseError('TODO got multiple types in a grouping expression');
-        else if (body.length === 1 && body[0][1] !== undefined)
+        else if (body.length === 1 && body[0].commaToken !== undefined)
           newParseError(
             'TODO got a trailling comma at the end of a grouping expression'
           );
 
         return {
           type: 'grouping',
-          body: (body[0] ?? [])[0],
+          // TODO couldnt it also be undefined here??
+          body: body[0].typeExpression,
           openingBracketToken,
           closingBracketToken,
           comments
@@ -1140,7 +1200,12 @@ export namespace Parser {
       'let a = func (x: (i32) -> i32) => x(5);',
       'let a = func (x: () -> i32) => 5;',
       '/* comment */ let /*0*/ x /*1*/ : /*2*/ ( /*3*/ i32 /*4*/ , /*5*/ ) /*6*/ -> /*7*/ i32 /*8*/ = /*9*/ func /*10*/ ( /*11*/ x /*12*/ , /*13*/ ) /*14*/ => /*15*/ 5 /*16*/ ; /*17*/',
-      'group test /*0*/ { /*1*/ let x = 5; /*2*/ } /*3*/'
+      'group test /*0*/ { /*1*/ let x = 5; /*2*/ } /*3*/',
+      `group test {
+        type t = i32;
+        let a: ((t,t,) -> t,) -> t =
+          func (x: (t,t,) -> t,): t => x(5, 3,);
+      }`
     ];
     const mustNotParseButLexe: string[] = [
       'test',
@@ -1206,6 +1271,10 @@ export namespace Parser {
 
 log(
   Parser.parse(
-    'group test { let a = func (x: (i32) -> i32,) => x(5,); /*type t = i32;*/ }'
+    `group test {
+      type t = i32;
+      let a: ((t,t,) -> t,) -> t =
+        func (x: (t,t,) -> t,): t => x(5, 3,);
+    }`
   )
 );
