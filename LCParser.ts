@@ -15,7 +15,9 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 // TODO isAtEnd() and consumeComments(comments)
 // TODO endless loop error
 
-// TODO church numerals: +, -, *, **, ==, <=: <, >, >=, !=
+// TODO church numerals: +, -, *, **, ==, <=
+
+// TODO check if identifiers are used properly (in generics, types and their bodys, lets, groups, parameters in funcs, ...) + if all types alligne
 
 export namespace Parser {
   let larser: Larser;
@@ -54,7 +56,7 @@ export namespace Parser {
               semicolonToken: Lexer.token;
             } & hasExplicitType)
           | {
-              type: 'type-allias';
+              type: 'type-alias';
               identifierToken: Lexer.token;
               typeValue: typeExpression;
               typeToken: Lexer.token;
@@ -608,7 +610,7 @@ export namespace Parser {
           : newParseError('TODO did not finish the type expression');
 
         return {
-          type: 'type-allias',
+          type: 'type-alias',
           identifierToken,
           typeValue,
           typeToken,
@@ -1403,9 +1405,11 @@ export namespace Parser {
 log(
   Parser.parse(`
 type t {
-  identifier1()
-  identifier2(i32)
-  identifier3
+  identifier1(),
+  identifier2(i32),
+  identifier3,
 }
+
+type t2 = t;
 `)
 );
