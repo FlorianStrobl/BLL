@@ -33,6 +33,7 @@ export namespace Parser {
   // #region types
   type comment = { comments: Lexer.token[] };
 
+  // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
   export type statement = comment &
     (
       | { type: 'comment' }
@@ -63,7 +64,7 @@ export namespace Parser {
           | {
               type: 'complex-type';
               identifierToken: Lexer.token;
-              typeValue: any /*TODO*/;
+              typeValue: complexTypeValue[];
               typeToken: Lexer.token;
               openingBracketToken: Lexer.token;
               closingBracketToken: Lexer.token;
@@ -88,6 +89,16 @@ export namespace Parser {
         hasExplicitType: false;
         typeExpression: typeExpression;
       };
+  type complexTypeValue = {
+    identifierToken: Lexer.token;
+    parameters: {
+      typeIdentifier: Lexer.token;
+      commaToken?: Lexer.token;
+    }[]; // TODO when brackets are not present, then no parameters can be there
+    openingBracketToken?: Lexer.token;
+    closingBracketToken?: Lexer.token /*TODO if has opening bracket, then must have closing bracket or vice versa*/;
+    commaToken?: Lexer.token;
+  };
 
   // TODO what about generics: func[T1, T2]
   export type funcExpression = {
@@ -106,7 +117,7 @@ export namespace Parser {
   } & hasExplicitType;
 
   // match, func, "nan", "inf", literals
-  // TODO
+  // TODO each branch in match expression should get its own comments in the formatter/prettier
   export type expression =
     | {
         type: 'literal';
@@ -174,8 +185,8 @@ export namespace Parser {
             commaToken?: Lexer.token;
           }[];
           returnType: typeExpression;
-          openingBracketToken: Lexer.token | undefined;
-          closingBracketToken: Lexer.token | undefined;
+          openingBracketToken?: Lexer.token;
+          closingBracketToken?: Lexer.token;
           arrowToken: Lexer.token;
         }
       | {
@@ -485,8 +496,93 @@ export namespace Parser {
 
     if (match('type')) {
       // TODO
-
       const typeToken: Lexer.token = advance()!;
+
+      function parseComplexeTypeLine(): complexTypeValue {
+        consumeComments(comments);
+
+        // TODO HERE NOW
+        const identifierToken: Lexer.token = matchType(
+          Lexer.tokenType.identifier
+        )
+          ? advance()!
+          : newParseError(
+              'TODO invalid complex type statement: missing identifier'
+            );
+
+        consumeComments(comments);
+
+        const openingBracketToken: Lexer.token | undefined = match('(')
+          ? advance()!
+          : undefined;
+
+        consumeComments(comments);
+
+        const parameters: {
+          typeIdentifier: Lexer.token;
+          commaToken?: Lexer.token;
+        }[] = [];
+        // TODO endless loop because if no `)` in the code, then it wont advance further?
+        while (openingBracketToken !== undefined && !isAtEnd() && !match(')')) {
+          consumeComments(comments);
+
+          if (
+            parameters.length !== 0 &&
+            parameters[parameters.length - 1].commaToken === undefined
+          )
+            newParseError(
+              'TODO missing comma between two parameters in complex type value'
+            );
+
+          const typeIdentifier: Lexer.token =
+            matchType(Lexer.tokenType.identifier) ||
+            match('i32') ||
+            match('f32')
+              ? advance()!
+              : newParseError(
+                  'TODO invalid expression in complex type value',
+                  advance() /*TODO yeah??*/
+                );
+
+          const commaToken: Lexer.token | undefined = match(',')
+            ? advance()!
+            : undefined;
+
+          parameters.push({
+            typeIdentifier,
+            commaToken
+          });
+        }
+
+        const closingBracketToken: Lexer.token | undefined = match(')')
+          ? advance()!
+          : undefined;
+
+        consumeComments(comments);
+
+        // TODO what about `type Test { id id id, id id };`
+        if (
+          !(
+            (openingBracketToken === undefined &&
+              closingBracketToken === undefined) ||
+            (openingBracketToken !== undefined &&
+              closingBracketToken !== undefined)
+          )
+        )
+          newParseError('TODO missing brackets in complexe type');
+
+        const commaToken: Lexer.token | undefined = match(',')
+          ? advance()!
+          : undefined;
+
+        return {
+          identifierToken,
+          parameters,
+          openingBracketToken,
+          closingBracketToken,
+          commaToken
+        };
+      }
 
       consumeComments(comments);
       // TODO isAtEnd() check
@@ -521,17 +617,41 @@ export namespace Parser {
           comments
         };
       } else if (match('{')) {
-        // TODO
-      } else {
-        newParseError(
+        const openingBracketToken: Lexer.token = advance()!;
+
+        consumeComments(comments);
+
+        const body: complexTypeValue[] = [];
+        while (!isAtEnd() && !match('}')) {
+          consumeComments(comments);
+
+          if (
+            body.length !== 0 &&
+            body[body.length - 1].commaToken === undefined
+          )
+            newParseError('TODO, missing comma in complex type body');
+
+          body.push(parseComplexeTypeLine());
+        }
+        if (isAtEnd()) return invalidEof('eof in complex type statement');
+        const closingBracketToken: Lexer.token = advance()!;
+
+        return {
+          type: 'complex-type',
+          identifierToken,
+          typeValue: body,
+          typeToken,
+          openingBracketToken,
+          closingBracketToken,
+          comments
+        };
+      } else
+        return newParseError(
           'TODO invalid type expression: cannot resolve which type it should be'
         );
-      }
-
-      // TODO type{ and type=
-      return {} as any;
     }
 
+    newParseError('TODO could not parse any statement properly', peek());
     return {
       error: 'TODO could not parse any statement properly',
       lastToken: advance()
@@ -907,6 +1027,10 @@ export namespace Parser {
 
       consumeComments(comments);
 
+      newParseError(
+        'TODO could not match anything in parsing expressions',
+        peek()
+      );
       return {
         error: 'TODO could not match anything in parsing expressions',
         lastToken: advance()
@@ -1148,6 +1272,7 @@ export namespace Parser {
       }
     }
 
+    newParseError('TODO did not match any type expression statement', peek());
     return {
       error: 'TODO did not match any type expression statement',
       lastToken: advance()
@@ -1178,7 +1303,8 @@ export namespace Parser {
       'use test;',
       'let test = 5;',
       'type test = i32;',
-      'group test {}',
+      'type test { }',
+      'group test { }',
       'let test = ! ~ + - 1 + 1 - 1 * 1 / 1 ** 1 *** 1 % 1 & 1 | 1 ^ 1 << 1 >> 1 == 1 != 1 <= 1 >= 1 < 1 > 1;',
       `type weekdays {
         Saturday,
@@ -1232,7 +1358,12 @@ export namespace Parser {
       'let x 5 ;',
       'let = 5 ;',
       'x = 5 ;',
-      'let x: = 5;'
+      'let x: = 5;',
+      `type t {
+        identifier1()
+        identifier2(i32)
+        identifier3
+      }`
     ];
 
     for (const a of mustParse) {
@@ -1270,11 +1401,11 @@ export namespace Parser {
 }
 
 log(
-  Parser.parse(
-    `group test {
-      type t = i32;
-      let a: ((t,t,) -> t,) -> t =
-        func (x: (t,t,) -> t,): t => x(5, 3,);
-    }`
-  )
+  Parser.parse(`
+type t {
+  identifier1()
+  identifier2(i32)
+  identifier3
+}
+`)
 );
