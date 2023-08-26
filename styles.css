@@ -1,11 +1,11 @@
 body {
-  background-color: #23272E;
-  color: #FFFFFF;
-  font-family: "Menlo";
+  background-color: #23272e;
+  color: #ffffff;
+  font-family: 'Menlo';
   font-style: normal;
   font-size: large;
   text-align: center;
-  position:relative;
+  position: relative;
   /*top: 50%;*/
   /*left: 50%;*/
 }

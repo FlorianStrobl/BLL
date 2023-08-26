@@ -13,35 +13,34 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 import { Parser } from './LCParser';
 
 export namespace Interpreter {
-  const globalIdentifiers: [string, Parser.expression][] = [];
+  const globalIdentifiers: { identifier: string; expr: Parser.expression }[] =
+    [];
 
   // TODO identifiers can only be named once in the entire script. e.g. doing twice let x; is invalid
   // even if that happens in different namespaces
   export function interpret(
     code: string,
-    filename: string,
+    filename: string, // TODO for errors
     argument: number
   ): number {
     const ast = Parser.parse(code);
     // TODO: actually check if ast is valid with types (e.g. let x: i32 = 5.3; or calling function with wrong arg types) and non duplicate identifiers (not even in differnt groups)
-    if (ast === undefined) throw new Error('TODO');
+    if (ast === undefined)
+      throw new Error('TODO could not parse the code for interpreting');
     return interpretAst(ast.statements, argument);
   }
 
   // TODO type checking and infering everything needed
-  export function interpretAst(
-    ast: Parser.statement[],
-    argument: number
-  ): number {
+  function interpretAst(ast: Parser.statement[], argument: number): number {
     function extractValues(
       statements: Parser.statement[],
       namespacePath: string[] = []
     ): {
-      lets: [Parser.statement, string[]][];
-      types: [Parser.statement, string[]][];
+      lets: { statement: Parser.statement; path: string[] }[];
+      types: { type: Parser.statement; path: string[] }[];
     } {
-      const lets: [Parser.statement, string[]][] = [];
-      const types: [Parser.statement, string[]][] = [];
+      const lets: { statement: Parser.statement; path: string[] }[] = [];
+      const types: { type: Parser.statement; path: string[] }[] = [];
 
       for (const statement of statements) {
         switch (statement.type) {
@@ -55,13 +54,13 @@ export namespace Interpreter {
             types.push(...vals.types);
             break;
           case 'let':
-            lets.push([statement, [...namespacePath]]);
+            lets.push({ statement, path: [...namespacePath] });
             break;
-          case 'type-allias':
-            types.push([statement, [...namespacePath]]);
+          case 'type-alias':
+            types.push({ type: statement, path: [...namespacePath] });
             break;
           case 'complex-type':
-            types.push([statement, [...namespacePath]]);
+            types.push({ type: statement, path: [...namespacePath] });
             break;
           case 'import':
             // TODO: check the identifiers locally, then replace all "_" with " " and search again, and lastly check if it is in a global scope like "%appdata%/bll/std/" or something like that
@@ -81,22 +80,23 @@ export namespace Interpreter {
     const val = extractValues(ast);
     // TODO, what about groups
     for (const l of val.lets) {
-      globalIdentifiers.push([
-        (l[0].type === 'let' && l[0].identifierToken.lexeme) as string,
-        (l[0].type === 'let' && l[0].body) as any
-      ]);
+      globalIdentifiers.push({
+        identifier: (l.statement.type === 'let' &&
+          l.statement.identifierToken.lexeme) as string,
+        expr: (l.statement.type === 'let' && l.statement.body) as any
+      });
     }
     // TODO repeat for types aso
 
     const mainFuncIdx = val.lets.findIndex(
-      ([statement, path]) =>
-        statement.type === 'let' &&
-        statement.identifierToken.lexeme === 'main' &&
-        path.length === 0
+      (obj) =>
+        obj.statement.type === 'let' &&
+        obj.statement.identifierToken.lexeme === 'main' &&
+        obj.path.length === 0
     );
     if (mainFuncIdx === -1)
       throw new Error('TODO no `main(i32): i32` was found');
-    const mainFunc = val.lets[mainFuncIdx][0];
+    const mainFunc = val.lets[mainFuncIdx].statement;
 
     // TODO evaluate main function with argument
     const result =
@@ -142,8 +142,8 @@ export namespace Interpreter {
         }
         return evaluateExpression(
           globalIdentifiers.find(
-            (id) => id[0] === expression.identifierToken.lexeme
-          )![1],
+            (id) => id.identifier === expression.identifierToken.lexeme
+          )!.expr, // TODO invalid `!`
           localIdentifiers
         );
       case 'unary':
@@ -247,6 +247,10 @@ export namespace Interpreter {
   }
 }
 
+// TODO:
+// mustInterpret: []
+// mustNotInterpretButParse: []
+
 function debug() {
   const code = `
 let y = 4635 + 1;
@@ -291,10 +295,21 @@ let f = func (x) => 2 + 3 * x;
 let g: i32 = 4;
 let h: () -> i32 = func () => 5;
 
-let main = func (arg: i32): i32 => identity + main2(arg);
+let main = func (arg: i32): i32 => 51 == identity + main2(arg);
 let main2 = func (arg: i32): i32 => (g + h()) + f(arg + 6);
 `,
     '',
     7
   )
 );
+
+/*
+let identity = (func (x) => x) (1);
+
+let f = func (x) => 2 + 3 * x;
+let g: i32 = 4;
+let h: () -> i32 = func () => 5;
+
+let main = func (arg: i32): i32 => 51 == identity + main2(arg);
+let main2 = func (arg: i32): i32 => (g + h()) + f(arg + 6);
+*/

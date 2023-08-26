@@ -19,6 +19,16 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 // TODO check if identifiers are used properly (in generics, types and their bodys, lets, groups, parameters in funcs, ...) + if all types alligne
 
+// TODO functions as types because of `let f = func () => f;` where the type of `f` is literally: `() -> f`
+
+// TODO check this always invalid case: let f = func [T](x: T, y: T): T => x + y();
+
+// TODO generics only for `let` and `type` statements, and not in the expr things
+
+// TODO generics need to have bounds, like `i32 | f32` in order to check if all of the expressions, where a value of the generic type is used, is valid. so: `let f[T: i32 | f32] = func (x: T) => x(1, 2, 3, 4);` is invalid, if calling a `i32` or `f32` is not valid
+
+// TODO add calling `i32` and `f32` with the signature: `T => (T => T)`
+
 export namespace Parser {
   let larser: Larser;
   const parserErrors: any[] = [];
@@ -1333,7 +1343,14 @@ export namespace Parser {
         type t = i32;
         let a: ((t,t,) -> t,) -> t =
           func (x: (t,t,) -> t,): t => x(5, 3,);
-      }`
+      }`,
+      `type t {
+        identifier1(),
+        identifier2(i32),
+        identifier3,
+      }
+
+      type t2 = t;`
     ];
     const mustNotParseButLexe: string[] = [
       'test',
@@ -1402,14 +1419,42 @@ export namespace Parser {
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
-log(
-  Parser.parse(`
-type t {
-  identifier1(),
-  identifier2(i32),
-  identifier3,
-}
+// Rust: `type TypeAlias = i32;`
+// Rust: `use std;`
 
-type t2 = t;
-`)
-);
+/*
+type ZeroVariants { }
+
+type RustEnum {
+  A,
+  B(),
+  C(i32)
+}
+*/
+
+// https://doc.rust-lang.org/reference/items.html rust Statements
+
+// console.clear();
+// log(
+//   Parser.parse(`
+// type ZeroVariants { }
+
+// type RustEnum {
+//   A,
+//   B(),
+//   C(i32)
+// }
+// `)
+// );
+
+// log(
+//   Parser.parse(``omd`
+// type t {
+//   identifier1(),
+//   identifier2(i32),
+//   identifier3,
+// }
+
+// type t2 = t;
+// `)
+// );

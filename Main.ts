@@ -21,7 +21,7 @@ let main = func (a) -> my_func(a);
 const ast = Parser.parse(code);
 if (!ast.valid) throw new Error('could not parse the code');
 // TODO add type checks and co
-const interpreter = Interpreter.interpretAst(ast.statements, 5);
+const interpreter = Interpreter.interpret(code, filename, 5);
 // const asm = Compiler.compile(ast, code, filename);
 
 console.log(interpreter);
