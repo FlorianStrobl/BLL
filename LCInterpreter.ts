@@ -13,7 +13,7 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 import { Parser } from './LCParser';
 
 export namespace Interpreter {
-  const globalIdentifiers: { identifier: string; expr: Parser.expression }[] =
+  const globalLetIdentifiers: { identifier: string; expr: Parser.expression }[] =
     [];
 
   // TODO identifiers can only be named once in the entire script. e.g. doing twice let x; is invalid
@@ -80,7 +80,7 @@ export namespace Interpreter {
     const val = extractValues(ast);
     // TODO, what about groups
     for (const l of val.lets) {
-      globalIdentifiers.push({
+      globalLetIdentifiers.push({
         identifier: (l.statement.type === 'let' &&
           l.statement.identifierToken.lexeme) as string,
         expr: (l.statement.type === 'let' && l.statement.body) as any
@@ -141,7 +141,7 @@ export namespace Interpreter {
           return evaluateExpression(localValue[1], localIdentifiers);
         }
         return evaluateExpression(
-          globalIdentifiers.find(
+          globalLetIdentifiers.find(
             (id) => id.identifier === expression.identifierToken.lexeme
           )!.expr, // TODO invalid `!`
           localIdentifiers
