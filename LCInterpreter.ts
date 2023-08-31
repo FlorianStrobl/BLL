@@ -320,8 +320,9 @@ log(
   Interpreter.interpret(
     `
 // TODO this "x" is not the one from the "main" func
-let test = (func (x, y) => x + y + 1)(5, 3); // 9
-let main = func (x) => x(1, test);
+//let test = (func (x, y) => x + y + 1)(5, 3); // 9
+//let main = func (x) => x(1, test);
+let main = func (x) => (5 != 4 & 3 != 2)(1 /* returned when true */, 2 /* returned when false */);
 `,
     '',
     1
