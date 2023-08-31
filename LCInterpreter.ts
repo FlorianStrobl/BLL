@@ -319,7 +319,9 @@ let main = func (arg) => x(arg, 3 + arg,) + 1;
 log(
   Interpreter.interpret(
     `
-let main = func (x) => 4.0(1, 2);
+// TODO this "x" is not the one from the "main" func
+let test = (func (x, y) => x + y + 1)(5, 3); // 9
+let main = func (x) => x(1, test);
 `,
     '',
     1
