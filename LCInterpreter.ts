@@ -11,10 +11,13 @@ import { inspect } from 'util';
 const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 import { Parser } from './LCParser';
+import { Lexer } from './LCLexer';
 
 export namespace Interpreter {
-  const globalLetIdentifiers: { identifier: string; expr: Parser.expression }[] =
-    [];
+  const globalLetIdentifiers: {
+    identifier: string;
+    expr: Parser.expression;
+  }[] = [];
 
   // TODO identifiers can only be named once in the entire script. e.g. doing twice let x; is invalid
   // even if that happens in different namespaces
@@ -136,16 +139,16 @@ export namespace Interpreter {
         const localValue = localIdentifiers.find(
           (id) => id[0] === expression.identifierToken.lexeme
         );
-        if (localValue !== undefined) {
+        if (localValue !== undefined)
           // TODO
           return evaluateExpression(localValue[1], localIdentifiers);
-        }
-        return evaluateExpression(
-          globalLetIdentifiers.find(
-            (id) => id.identifier === expression.identifierToken.lexeme
-          )!.expr, // TODO invalid `!`
-          localIdentifiers
-        );
+        else
+          return evaluateExpression(
+            globalLetIdentifiers.find(
+              (id) => id.identifier === expression.identifierToken.lexeme
+            )!.expr, // TODO invalid `!`
+            localIdentifiers
+          );
       case 'unary':
         const expVal = evaluateExpression(expression.body, localIdentifiers);
         switch (expression.operator) {
@@ -214,10 +217,58 @@ export namespace Interpreter {
         return expression;
       case 'functionCall':
         // take function, safe the arg names and position + replace them with the calles arg list and then interpret the code as usual
-        const func: Parser.funcExpression = evaluateExpression(
+        // TODO
+        const rawValue = evaluateExpression(
           expression.function,
           localIdentifiers
-        ) as any;
+        );
+        const numberFunction: Parser.funcExpression = {
+          type: 'func',
+          parameters: [
+            {
+              identifierToken: {
+                lexeme: '$',
+                type: Lexer.tokenType.identifier,
+                idx: -1
+              },
+              typeExpression: {} as any
+            },
+            {
+              identifierToken: {
+                lexeme: '$$',
+                type: Lexer.tokenType.identifier,
+                idx: -1
+              },
+              typeExpression: {} as any
+            }
+          ],
+          body:
+            rawValue === 0
+              ? {
+                  type: 'identifier',
+                  identifierToken: {
+                    lexeme: '$',
+                    type: Lexer.tokenType.identifier,
+                    idx: -1
+                  }
+                }
+              : {
+                  type: 'identifier',
+                  identifierToken: {
+                    lexeme: '$$',
+                    type: Lexer.tokenType.identifier,
+                    idx: -1
+                  }
+                },
+          funcToken: {} as any,
+          openingBracketToken: {} as any,
+          closingBracketToken: {} as any,
+          arrowToken: {} as any,
+          hasExplicitType: false,
+          typeExpression: {} as any
+        };
+        const func: Parser.funcExpression =
+          typeof rawValue === 'number' ? numberFunction : rawValue;
         const callingArguments = expression.arguments; // TODO evaluate them first?
         const funcParameters = func.parameters;
         if (callingArguments.length !== funcParameters.length)
@@ -235,6 +286,7 @@ export namespace Interpreter {
         // then call the thing body
         const ans = evaluateExpression(func.body, localIdentifiers);
 
+        // TODO wrong thing??
         for (let i = 0; i < funcParameters.length; ++i) localIdentifiers.pop();
 
         // TODO
@@ -267,41 +319,51 @@ let main = func (arg) => x(arg, 3 + arg,) + 1;
 log(
   Interpreter.interpret(
     `
-/*
-type OptionalInt[T] {
-  Some(T),
-  None
-}
-
-let a: OptionalInt[i32] = OptionalInt.Some(5);
-
-let b = func (opt: OptionalInt[i32]): i32 =>
-  match (opt) {
-    case OptionalInt.Some(var) => var,
-    case OptionalInt.None => 0
-  };
-
-let c = b(a);
-
-let fac = func (n) => match (n) {
-  case 0 => 1,
-  default => n * fac(n - 1)
-};
-*/
-
-let identity = (func (x) => x) (1);
-
-let f = func (x) => 2 + 3 * x;
-let g: i32 = 4;
-let h: () -> i32 = func () => 5;
-
-let main = func (arg: i32): i32 => 51 == identity + main2(arg);
-let main2 = func (arg: i32): i32 => (g + h()) + f(arg + 6);
+let main = func (x) => 4.0(1, 2);
 `,
     '',
-    7
+    1
   )
 );
+
+// log(
+//   Interpreter.interpret(
+//     `
+// /*
+// type OptionalInt[T] {
+//   Some(T),
+//   None
+// }
+
+// let a: OptionalInt[i32] = OptionalInt.Some(5);
+
+// let b = func (opt: OptionalInt[i32]): i32 =>
+//   match (opt) {
+//     case OptionalInt.Some(var) => var,
+//     case OptionalInt.None => 0
+//   };
+
+// let c = b(a);
+
+// let fac = func (n) => match (n) {
+//   case 0 => 1,
+//   default => n * fac(n - 1)
+// };
+// */
+
+// let identity = (func (x) => x) (1);
+
+// let f = func (x) => 2 + 3 * x;
+// let g: i32 = 4;
+// let h: () -> i32 = func () => 5;
+
+// let main = func (arg: i32): i32 => 51 == identity + main2(arg);
+// let main2 = func (arg: i32): i32 => (g + h()) + f(arg + 6);
+// `,
+//     '',
+//     7
+//   )
+// );
 
 /*
 let identity = (func (x) => x) (1);

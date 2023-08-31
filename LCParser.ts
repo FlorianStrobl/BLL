@@ -29,6 +29,9 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 // TODO add calling `i32` and `f32` with the signature: `T => (T => T)`
 
+// TODO add map() to arrs in std
+// TODO type expressions need sometimes annotation for generics
+
 export namespace Parser {
   let larser: Larser;
   const parserErrors: any[] = [];
