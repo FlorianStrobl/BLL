@@ -283,6 +283,8 @@ export namespace Interpreter {
           ]);
         }
 
+        // TODO local identifiers are wrong this way!! calling a function, will not give all the localIdentifiers to the callee, but only some... (or even none actually??)
+
         // then call the thing body
         const ans = evaluateExpression(func.body, localIdentifiers);
 
@@ -322,10 +324,13 @@ log(
 // TODO this "x" is not the one from the "main" func
 //let test = (func (x, y) => x + y + 1)(5, 3); // 9
 //let main = func (x) => x(1, test);
-let main = func (x) => (5 != 4 & 3 != 2)(1 /* returned when true */, 2 /* returned when false */);
+// let main = func (x) => (5 != 4 & 3 != 2)(1 /* returned when true */, 2 /* returned when false */);
+
+let fac = func (n) => n(1, fac(n-1)*n);
+let main = func (arg) => fac(arg);
 `,
     '',
-    1
+    2
   )
 );
 
