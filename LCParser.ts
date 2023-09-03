@@ -32,6 +32,8 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 // TODO add map() to arrs in std
 // TODO type expressions need sometimes annotation for generics
 
+// TODO imports with `use` keyword, are not allowed inside groups but only global scope
+
 /*
   TODO
   type x[T] = T;
@@ -46,20 +48,6 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
   let f = 5; // error
   let f = 6; // error aswell! but what is the error message?
 */
-
-// TODO
-type astAsStatements = {
-  mainFunc: Parser.funcExpression;
-
-  typeAliases: Parser.typeExpression[];
-  genericTypeAliases: Parser.typeExpression[];
-
-  complexTypes: Parser.typeExpression[];
-  genericComplexTypes: Parser.typeExpression[];
-
-  lets: { data: Parser.statement; path: string[] /*TODO path for the groups*/ }[];
-  genericLets: Parser.statement[];
-};
 
 export namespace Parser {
   let larser: Larser;
