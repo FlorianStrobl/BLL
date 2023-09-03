@@ -34,11 +34,20 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 /*
   TODO
+  type x[T] = T;
+
+  // x[] must be doable in a type expression to substitute the generic types
+  let f = func (a: x[i32]): x[32] => a;
+*/
+
+/*
+  TODO
   let f = 4;
   let f = 5; // error
   let f = 6; // error aswell! but what is the error message?
 */
 
+// TODO
 type astAsStatements = {
   mainFunc: Parser.funcExpression;
 
