@@ -32,6 +32,13 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 // TODO add map() to arrs in std
 // TODO type expressions need sometimes annotation for generics
 
+/*
+  TODO
+  let f = 4;
+  let f = 5; // error
+  let f = 6; // error aswell! but what is the error message?
+*/
+
 type astAsStatements = {
   mainFunc: Parser.funcExpression;
 
