@@ -32,6 +32,19 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 // TODO add map() to arrs in std
 // TODO type expressions need sometimes annotation for generics
 
+type astAsStatements = {
+  mainFunc: Parser.funcExpression;
+
+  typeAliases: Parser.typeExpression[];
+  genericTypeAliases: Parser.typeExpression[];
+
+  complexTypes: Parser.typeExpression[];
+  genericComplexTypes: Parser.typeExpression[];
+
+  lets: { data: Parser.statement; path: string[] /*TODO path for the groups*/ }[];
+  genericLets: Parser.statement[];
+};
+
 export namespace Parser {
   let larser: Larser;
   const parserErrors: any[] = [];
