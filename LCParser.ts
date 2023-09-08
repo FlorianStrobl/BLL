@@ -34,6 +34,8 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 // TODO imports with `use` keyword, are not allowed inside groups but only global scope
 
+// TODO add `let x: thatType[itsGenericValueHere] = ...;`
+
 /*
   TODO
   type x[T] = T;
@@ -60,6 +62,12 @@ export namespace Parser {
 
   function invalidEof(...args: any[]): never {
     return newParseError('TODO invalid eof while parsing', ...args);
+  }
+
+  // TODO
+  function checkEofWithError(errorOnEof: string): void {
+    // TODO
+    if (isAtEnd()) throw invalidEof(errorOnEof);
   }
 
   // #region types
@@ -348,7 +356,7 @@ export namespace Parser {
   // TODO test with real code, but insert a comment between each and every token!
   // TODO check everywhere isAtEnd() and comments
   function parseStatement(): statement {
-    if (isAtEnd()) return invalidEof('no statement parsed');
+    checkEofWithError('no statement parsed');
 
     const comments: Lexer.token[] = [];
     if (matchType(Lexer.tokenType.comment)) {
@@ -366,7 +374,7 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd()) return invalidEof('no use body in use statement');
+      checkEofWithError('no use body in use statement');
 
       const localFileName: Lexer.token = matchType(Lexer.tokenType.identifier)
         ? advance()!
@@ -374,8 +382,7 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd())
-        return invalidEof('unexpected eof in use statement: missing semicolon');
+      checkEofWithError('unexpected eof in use statement: missing semicolon');
 
       const semicolonToken: Lexer.token = match(';')
         ? advance()!
@@ -395,7 +402,7 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd()) return invalidEof('unexpected eof in group statement');
+      checkEofWithError('unexpected eof in group statement');
 
       const identifierToken: Lexer.token = matchType(Lexer.tokenType.identifier)
         ? advance()!
@@ -405,10 +412,9 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd())
-        return invalidEof(
-          'unexpected eof in group statement after getting an identifier'
-        );
+      checkEofWithError(
+        'unexpected eof in group statement after getting an identifier'
+      );
 
       const openingBracketToken: Lexer.token = match('{')
         ? advance()!
@@ -418,14 +424,13 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd())
-        return invalidEof(
-          'unexpected eof in group statement after the opening bracket'
-        );
+      checkEofWithError(
+        'unexpected eof in group statement after the opening bracket'
+      );
 
       const body: statement[] = [];
       while (!isAtEnd() && !match('}')) body.push(parseStatement());
-      if (isAtEnd()) return invalidEof('unexpected eof in group statement');
+      checkEofWithError('unexpected eof in group statement');
       const closingBracketToken: Lexer.token = advance()!;
 
       consumeComments(comments);
@@ -446,7 +451,7 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd()) return invalidEof('unexpected eof in let statement');
+      checkEofWithError('unexpected eof in let statement');
 
       const identifierToken: Lexer.token = matchType(Lexer.tokenType.identifier)
         ? advance()!
@@ -456,10 +461,9 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd())
-        return invalidEof(
-          'unexpected eof in let statement after asuming an identifier'
-        );
+      checkEofWithError(
+        'unexpected eof in let statement after asuming an identifier'
+      );
 
       const colonToken: Lexer.token | undefined = match(':')
         ? advance()!
@@ -467,8 +471,8 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (colonToken !== undefined && isAtEnd())
-        return invalidEof('unexpected eof in let statement after getting ":"');
+      if (colonToken !== undefined)
+        checkEofWithError('unexpected eof in let statement after getting ":"');
 
       const typeAnnotation: typeExpression | undefined =
         colonToken !== undefined && !match('=')
@@ -477,7 +481,7 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd()) return invalidEof('unexpected eof in let statement TODO');
+      checkEofWithError('unexpected eof in let statement TODO');
 
       const equalsToken: Lexer.token = match('=')
         ? advance()!
@@ -485,8 +489,7 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd())
-        return invalidEof('unexpected eof in let statement after =');
+      checkEofWithError('unexpected eof in let statement after =');
 
       const body: expression & comment = !match(';')
         ? parseExpression()
@@ -494,7 +497,7 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isAtEnd()) return invalidEof('unexpected eof in let statement');
+      checkEofWithError('unexpected eof in let statement');
 
       const semicolonToken: Lexer.token = match(';')
         ? advance()!
@@ -665,7 +668,7 @@ export namespace Parser {
 
           body.push(parseComplexeTypeLine());
         }
-        if (isAtEnd()) return invalidEof('eof in complex type statement');
+        checkEofWithError('eof in complex type statement');
         const closingBracketToken: Lexer.token = advance()!;
 
         return {
@@ -979,8 +982,7 @@ export namespace Parser {
             args.push({ argumentExpression, commaToken });
           }
 
-          if (isAtEnd())
-            return invalidEof('Had eof in function calling expression');
+          checkEofWithError('Had eof in function calling expression');
           const closingBracketToken: Lexer.token = advance()!;
           left = {
             type: 'functionCall',
@@ -1467,14 +1469,16 @@ type RustEnum {
 // `)
 // );
 
-// log(
-//   Parser.parse(``omd`
-// type t {
-//   identifier1(),
-//   identifier2(i32),
-//   identifier3,
-// }
+log(
+  Parser.parse(`
+type t {
+  identifier1(),
+  identifier2(i32),
+  identifier3,
+}
 
-// type t2 = t;
-// `)
-// );
+type t2 = t;
+
+let x = func (a) => a * (t + 1) / 2.0;
+`)
+);
