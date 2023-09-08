@@ -136,6 +136,7 @@ export namespace Parser {
     openingBracketToken?: Lexer.token;
     closingBracketToken?: Lexer.token /*TODO if has opening bracket, then must have closing bracket or vice versa*/;
     commaToken?: Lexer.token;
+    // comments: Lexer.tokenType[] // TODO, add for better formatting
   };
 
   // TODO what about generics: func[T1, T2]
@@ -206,7 +207,7 @@ export namespace Parser {
         openingBracketToken: Lexer.token;
         closingBracketToken: Lexer.token;
       }
-    | { type: 'match' /*TODO*/ };
+    | { type: 'match' /*TODO, put in comments[] for each and every branch!*/ };
 
   // TODO generics?, wab propertAccess of complex types?
   export type typeExpression = comment &
@@ -352,6 +353,12 @@ export namespace Parser {
     else newParseError(error);
   }
 
+  function optionalMatchAndAdvance(
+    ...tokens: string[]
+  ): Lexer.token | undefined {
+    if (match(...tokens)) return advance()!;
+  }
+
   function consumeComments(commentArr: Lexer.token[]): void {
     while (!isAtEnd() && matchType(Lexer.tokenType.comment))
       commentArr.push(advance()!);
@@ -384,11 +391,7 @@ export namespace Parser {
 
       checkEofWithError('no use body in use statement');
 
-      const localFileName: Lexer.token = matchType(Lexer.tokenType.identifier)
-        ? advance()!
-        : newParseError('TODO didnt get an identifier in use statement');
-
-      const _localFileName: Lexer.token = matchAndAdvanceOrError(
+      const localFileName: Lexer.token = matchTypeAndAdvanceOrError(
         Lexer.tokenType.identifier,
         'did not get an identifier in use statement'
       );
@@ -397,9 +400,10 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in use statement: missing semicolon');
 
-      const semicolonToken: Lexer.token = match(';')
-        ? advance()!
-        : newParseError('TOOD did not get semicolon in a use statement');
+      const semicolonToken: Lexer.token = matchAndAdvanceOrError(
+        ';',
+        'TODO did not get semicolon in a use statement'
+      );
 
       return {
         type: 'import',
@@ -417,11 +421,10 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in group statement');
 
-      const identifierToken: Lexer.token = matchType(Lexer.tokenType.identifier)
-        ? advance()!
-        : newParseError(
-            'TODO cant have an undefined identifier for a group statement'
-          );
+      const identifierToken: Lexer.token = matchTypeAndAdvanceOrError(
+        Lexer.tokenType.identifier,
+        'TODO can not have an undefined identifier for a group statement'
+      );
 
       consumeComments(comments);
 
@@ -429,11 +432,10 @@ export namespace Parser {
         'unexpected eof in group statement after getting an identifier'
       );
 
-      const openingBracketToken: Lexer.token = match('{')
-        ? advance()!
-        : newParseError(
-            "TODO cant have a group statement without an opening brackt '{'"
-          );
+      const openingBracketToken: Lexer.token = matchAndAdvanceOrError(
+        '{',
+        "TODO cant have a group statement without an opening brackt '{'"
+      );
 
       consumeComments(comments);
 
@@ -445,8 +447,6 @@ export namespace Parser {
       while (!isAtEnd() && !match('}')) body.push(parseStatement());
       checkEofWithError('unexpected eof in group statement');
       const closingBracketToken: Lexer.token = advance()!;
-
-      consumeComments(comments);
 
       return {
         type: 'group',
@@ -466,11 +466,10 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in let statement');
 
-      const identifierToken: Lexer.token = matchType(Lexer.tokenType.identifier)
-        ? advance()!
-        : newParseError(
-            'TODO cant have an undefined identifier for a let statement'
-          );
+      const identifierToken: Lexer.token = matchTypeAndAdvanceOrError(
+        Lexer.tokenType.identifier,
+        'TODO cant have an undefined identifier for a let statement'
+      );
 
       consumeComments(comments);
 
@@ -478,9 +477,7 @@ export namespace Parser {
         'unexpected eof in let statement after asuming an identifier'
       );
 
-      const colonToken: Lexer.token | undefined = match(':')
-        ? advance()!
-        : undefined;
+      const colonToken: Lexer.token | undefined = optionalMatchAndAdvance(':');
 
       consumeComments(comments);
 
@@ -488,23 +485,32 @@ export namespace Parser {
         checkEofWithError('unexpected eof in let statement after getting ":"');
 
       const typeAnnotation: typeExpression | undefined =
-        colonToken !== undefined && !match('=')
+        colonToken !== undefined && !match('=') /*better error messages*/
           ? parseTypeExpression()
           : undefined;
 
-      consumeComments(comments);
-
-      checkEofWithError('unexpected eof in let statement TODO');
-
-      const equalsToken: Lexer.token = match('=')
-        ? advance()!
-        : newParseError("TODO cant have a let statement without a '=' symbol");
+      if (colonToken !== undefined && typeAnnotation === undefined)
+        newParseError(
+          'missing type annotation in let statement after getting a ":"'
+        );
 
       consumeComments(comments);
 
-      checkEofWithError('unexpected eof in let statement after =');
+      checkEofWithError(
+        'unexpected eof in let statement while expecting a "="'
+      );
 
-      const body: expression & comment = !match(';')
+      const equalsToken: Lexer.token = matchAndAdvanceOrError(
+        '=',
+        'TODO cant have a let statement without a "=" symbol'
+      );
+
+      consumeComments(comments);
+
+      checkEofWithError('unexpected eof in let statement after "="');
+
+      // TODO refactor, but how?
+      const body: expression & comment = !match(';') /*better error messages*/
         ? parseExpression()
         : newParseError('TODO no body in let expression');
 
@@ -512,11 +518,10 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in let statement');
 
-      const semicolonToken: Lexer.token = match(';')
-        ? advance()!
-        : newParseError(
-            "TODO let statements must be finished with a ';' symbol"
-          );
+      const semicolonToken: Lexer.token = matchAndAdvanceOrError(
+        ';',
+        'TODO let statements must be finished with a ";" symbol'
+      );
 
       const explicitType: hasExplicitType =
         colonToken === undefined
@@ -542,6 +547,7 @@ export namespace Parser {
       };
     }
 
+    // NOW
     if (match('type')) {
       // TODO
       const typeToken: Lexer.token = advance()!;
@@ -1493,3 +1499,4 @@ type RustEnum {
 // );
 
 log(Parser.parse('let a = 5;'));
+// log(Parser.parse('/*test*/ ; /*tast*/ /*ok*/'));
