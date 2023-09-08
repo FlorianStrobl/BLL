@@ -109,7 +109,7 @@ function test(ast: Parser.statement[]): astAsStatements {
 function debug(code: string): void {
   const astData = Parser.parse(code);
   if (astData.valid) log(test(astData.statements));
-  else console.error(astData.parserErrors, astData.statements);
+  else console.error(astData.parseErrors, astData.statements);
 }
 
 const testCode: string = `
