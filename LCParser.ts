@@ -249,6 +249,7 @@ export namespace Parser {
     constructor(code: string) {
       this.code = code;
       this.lexer = Lexer.lexeNextTokenIter(code);
+      // just for init
       this.state = { eof: false, currentToken: undefined as any };
 
       this.advanceToken();
@@ -294,12 +295,17 @@ export namespace Parser {
     }
 
     private errorHandling(): never {
-      // TODO lexer error
       const tokens = Lexer.lexe(this.code);
+
+      if (tokens.valid)
+        throw new Error(
+          'Internal error, parser does not accepped the valid tokens from the lexer: ' +
+            tokens.tokens?.toString()
+        );
+
+      // TODO
       console.error(tokens);
-      throw new Error(
-        ': ' + (tokens === undefined ? 'no tokens' : tokens.toString())
-      );
+      throw '';
     }
   }
 
@@ -321,15 +327,29 @@ export namespace Parser {
   }
 
   function match(...tokens: string[]): boolean {
-    if (isAtEnd()) return false;
     const currentToken: Lexer.token | undefined = peek();
     return currentToken !== undefined && tokens.includes(currentToken.lexeme);
   }
 
   function matchType(...tokenTypes: Lexer.tokenType[]): boolean {
-    if (isAtEnd()) return false;
     const currentToken: Lexer.token | undefined = peek();
     return currentToken !== undefined && tokenTypes.includes(currentToken.type);
+  }
+
+  function matchAndAdvanceOrError(
+    token: string,
+    error: parseError
+  ): Lexer.token | never {
+    if (match(token)) return advance()!;
+    else newParseError(error);
+  }
+
+  function matchTypeAndAdvanceOrError(
+    tokenType: Lexer.tokenType,
+    error: parseError
+  ): Lexer.token | never {
+    if (matchType(tokenType)) return advance()!;
+    else newParseError(error);
   }
 
   function consumeComments(commentArr: Lexer.token[]): void {
@@ -347,6 +367,7 @@ export namespace Parser {
 
     const comments: Lexer.token[] = [];
     if (matchType(Lexer.tokenType.comment)) {
+      // TODO then comments at the top will always be extra info
       consumeComments(comments);
       return { type: 'comment', comments };
     }
@@ -366,6 +387,11 @@ export namespace Parser {
       const localFileName: Lexer.token = matchType(Lexer.tokenType.identifier)
         ? advance()!
         : newParseError('TODO didnt get an identifier in use statement');
+
+      const _localFileName: Lexer.token = matchAndAdvanceOrError(
+        Lexer.tokenType.identifier,
+        'did not get an identifier in use statement'
+      );
 
       consumeComments(comments);
 
@@ -1359,6 +1385,7 @@ export namespace Parser {
     const mustNotParseButLexe: string[] = [
       'test',
       '5',
+      '5.0',
       'i32',
       'f32',
       'nan',
@@ -1372,8 +1399,8 @@ export namespace Parser {
       '+',
       '!',
       'use;',
-      'let x = func (x: i32 => i32,) => 5;',
-      'let x = func (x: i32 -> i32,) -> 5;',
+      'let x = func (x: i32 => i32) => 5;',
+      'let x = func (x: i32 -> i32) -> 5;',
       'let x',
       'let x =',
       'let x = 5',
