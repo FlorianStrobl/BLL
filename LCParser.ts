@@ -564,26 +564,33 @@ export namespace Parser {
       // TODO
       const typeToken: Lexer.token = advance()!;
 
-      // TODO comments and eof
+      // TODO NOW comments and eof
       function parseComplexeTypeLine(): complexTypeValue {
         consumeComments(comments);
 
-        // TODO HERE NOW
-        const identifierToken: Lexer.token = matchType(
-          Lexer.tokenType.identifier
-        )
-          ? advance()!
-          : newParseError(
-              'TODO invalid complex type statement: missing identifier'
-            );
+        checkEofWithError(
+          'Invalid eof while parsing a line in a complex type statement'
+        );
+
+        const identifierToken: Lexer.token = matchTypeAndAdvanceOrError(
+          Lexer.tokenType.identifier,
+          'TODO invalid complex type statement: missing identifier'
+        );
 
         consumeComments(comments);
 
-        const openingBracketToken: Lexer.token | undefined = match('(')
-          ? advance()!
-          : undefined;
+        checkEofWithError(
+          'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
+        );
+
+        const openingBracketToken: Lexer.token | undefined =
+          optionalMatchAndAdvance('(');
 
         consumeComments(comments);
+
+        checkEofWithError(
+          'Invalid eof in complex type statement after getting a "("'
+        );
 
         const parameters: {
           typeIdentifier: Lexer.token;
@@ -592,6 +599,10 @@ export namespace Parser {
         // TODO endless loop because if no `)` in the code, then it wont advance further?
         while (openingBracketToken !== undefined && !isAtEnd() && !match(')')) {
           consumeComments(comments);
+
+          checkEofWithError(
+            'TODO invalid eof while parsing arguments from a complex type line'
+          );
 
           if (
             parameters.length !== 0 &&
@@ -609,9 +620,10 @@ export namespace Parser {
               : (advance() /*TODO probably needed??*/,
                 newParseError('TODO invalid expression in complex type value'));
 
-          const commaToken: Lexer.token | undefined = match(',')
-            ? advance()!
-            : undefined;
+          consumeComments(comments);
+
+          const commaToken: Lexer.token | undefined =
+            optionalMatchAndAdvance(',');
 
           parameters.push({
             typeIdentifier,
@@ -619,11 +631,14 @@ export namespace Parser {
           });
         }
 
-        const closingBracketToken: Lexer.token | undefined = match(')')
-          ? advance()!
-          : undefined;
+        const closingBracketToken: Lexer.token | undefined =
+          optionalMatchAndAdvance(')');
 
         consumeComments(comments);
+
+        checkEofWithError(
+          'Invalid eof at the end of a complex type expression'
+        );
 
         // TODO what about `type Test { id id id, id id };`
         if (
@@ -636,9 +651,8 @@ export namespace Parser {
         )
           newParseError('TODO missing brackets in complexe type');
 
-        const commaToken: Lexer.token | undefined = match(',')
-          ? advance()!
-          : undefined;
+        const commaToken: Lexer.token | undefined =
+          optionalMatchAndAdvance(',');
 
         return {
           identifierToken,
@@ -662,19 +676,30 @@ export namespace Parser {
 
       checkEofWithError('Nothing after identifier token in type expression');
 
+      // TODO generics at this step
+
       if (match('=')) {
         const equalsToken: Lexer.token = advance()!;
 
         consumeComments(comments);
 
-        const typeValue: typeExpression = parseTypeExpression();
+        checkEofWithError('Got nothing after "=" in type expression');
+
+        // TODO refactor but how??
+        const typeValue: typeExpression | undefined = !match(';')
+          ? parseTypeExpression()
+          : undefined;
+
+        if (typeValue === undefined) newParseError('got no type expression');
 
         consumeComments(comments);
-        // TODO isAtEnd() checking and errors
 
-        const semicolonToken: Lexer.token = match(';')
-          ? advance()!
-          : newParseError('TODO did not finish the type expression');
+        checkEofWithError('TODO got nothing after type expression');
+
+        const semicolonToken: Lexer.token = matchAndAdvanceOrError(
+          ';',
+          'TODO did not finish the type expression'
+        );
 
         return {
           type: 'type-alias',
@@ -690,9 +715,14 @@ export namespace Parser {
 
         consumeComments(comments);
 
+        const localComments: [] = []; // TODO add special comments to each complex type
         const body: complexTypeValue[] = [];
         while (!isAtEnd() && !match('}')) {
           consumeComments(comments);
+
+          checkEofWithError(
+            'TODO invalid empty body in complex type expression'
+          );
 
           if (
             body.length !== 0 &&
