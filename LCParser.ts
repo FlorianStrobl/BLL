@@ -459,6 +459,7 @@ export namespace Parser {
       };
     }
 
+    // TODO add generics
     if (match('let')) {
       const letToken: Lexer.token = advance()!;
 
@@ -547,7 +548,7 @@ export namespace Parser {
       };
     }
 
-    // NOW
+    // NOW, TODO add generics
     if (match('type')) {
       // TODO
       const typeToken: Lexer.token = advance()!;
