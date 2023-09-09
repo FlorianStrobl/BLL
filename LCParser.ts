@@ -35,6 +35,7 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 // TODO imports with `use` keyword, are not allowed inside groups but only global scope
 
 // TODO add `let x: thatType[itsGenericValueHere] = ...;`
+//                          ^ property access, prob like function calling
 
 /*
   TODO
@@ -117,6 +118,15 @@ export namespace Parser {
             }
         )
     );
+  // TODO
+  type genericAnnotation = {
+    genericIdentifiers: {
+      identifier: Lexer.token;
+      commaToken?: Lexer.token;
+    }[];
+    genericOpeningBracket: Lexer.token;
+    genericClosingBracket: Lexer.token;
+  };
   type hasExplicitType =
     | {
         hasExplicitType: true;
@@ -459,7 +469,6 @@ export namespace Parser {
       };
     }
 
-    // TODO add generics
     if (match('let')) {
       const letToken: Lexer.token = advance()!;
 
@@ -477,6 +486,8 @@ export namespace Parser {
       checkEofWithError(
         'unexpected eof in let statement after asuming an identifier'
       );
+
+      // TODO generics at this step
 
       const colonToken: Lexer.token | undefined = optionalMatchAndAdvance(':');
 
@@ -553,6 +564,7 @@ export namespace Parser {
       // TODO
       const typeToken: Lexer.token = advance()!;
 
+      // TODO comments and eof
       function parseComplexeTypeLine(): complexTypeValue {
         consumeComments(comments);
 
@@ -638,13 +650,17 @@ export namespace Parser {
       }
 
       consumeComments(comments);
-      // TODO isAtEnd() check
 
-      const identifierToken: Lexer.token = matchType(Lexer.tokenType.identifier)
-        ? advance()!
-        : newParseError('TODO invalid type expression: missing identifier');
+      checkEofWithError('TODO nothing after type keyword');
+
+      const identifierToken: Lexer.token = matchTypeAndAdvanceOrError(
+        Lexer.tokenType.identifier,
+        'TODO invalid type expression: missing identifier'
+      );
 
       consumeComments(comments);
+
+      checkEofWithError('Nothing after identifier token in type expression');
 
       if (match('=')) {
         const equalsToken: Lexer.token = advance()!;
@@ -698,10 +714,16 @@ export namespace Parser {
           closingBracketToken,
           comments
         };
-      } else
-        return newParseError(
-          'TODO invalid type expression: cannot resolve which type it should be'
-        );
+      }
+
+      newParseError(
+        'TODO invalid type expression: cannot resolve which type it should be'
+      );
+      return {
+        error:
+          'TODO could not parse type statement properly because it was not followed by "=" or "{"',
+        lastToken: advance()
+      } as never;
     }
 
     newParseError('TODO could not parse any statement properly');
