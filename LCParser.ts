@@ -9,7 +9,7 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 // TODO invalid char in lexer step results in random error in interpreter.ts
 
 // TODO func (x: i32 = 5) => x;
-// TODO match (number): i32 { case 0 => 5; default /*?? maybe just "case", or just the trailling thing?? TODO HERE*/ => 6; }
+// TODO match (number): i32 { case 0 => 5; default /*?? maybe just "case", or just the trailing thing?? TODO HERE*/ => 6; }
 // TODO calling integers/floats in order to add `==` support: 5(0)(1)
 // TODO add generic types in funcs and types
 // TODO isAtEnd() and consumeComments(comments)
@@ -52,25 +52,75 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
   let f = 6; // error aswell! but what is the error message?
 */
 
+// Rust: `type TypeAlias = i32;`
+// Rust: `use std;`
+
+/*
+type ZeroVariants { }
+
+type RustEnum {
+  A,
+  B(),
+  C(i32)
+}
+*/
+
+// https://doc.rust-lang.org/reference/items.html rust Statements
+
+// console.clear();
+// log(
+//   Parser.parse(`
+// type ZeroVariants { }
+
+// type RustEnum {
+//   A,
+//   B(),
+//   C(i32)
+// }
+// `)
+// );
+
+// log(
+//   Parser.parse(`
+// type t {
+//   identifier1(),
+//   identifier2(i32),
+//   identifier3,
+// }
+
+// type t2 = t;
+
+// let x = func (a) => a * (t + 1) / 2.0;
+// `)
+// );
+
 export namespace Parser {
   let larser: Larser;
   const parseErrors: parseError[] = [];
 
   function newParseError(arg: parseError): never {
-    parseErrors.push({ arg, currentToken: peek() });
-    return parseErrors as never;
+    parseErrors.push({ type: 'error', value: arg, currentToken: peek() });
+    return { type: 'error', parserError: arg } as never;
   }
 
   function checkEofWithError(errorOnEof: string): void {
     if (isAtEnd())
-      throw newParseError('Invalid eof while parsing code: ' + errorOnEof);
+      throw (
+        (newParseError('Invalid eof while parsing code: ' + errorOnEof),
+        parseErrors)
+      );
     // TODO not throw, BUT eof is the very last thing in the code: so could now check all the errors
+
+    // should print out all errors in a formatted way, aswell as the eof error
+    // then stop the program *but* then the parser would have to import logger...
   }
 
   // #region types
   type comment = { comments: Lexer.token[] };
 
-  export type parseError = {} | any;
+  export type parseError =
+    | string
+    | { type: 'error'; value: any; currentToken: Lexer.token | undefined };
 
   // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
   export type statement = comment &
@@ -260,10 +310,13 @@ export namespace Parser {
     constructor(code: string) {
       this.code = code;
       this.lexer = Lexer.lexeNextTokenIter(code);
-      // just for init
-      this.state = { eof: false, currentToken: undefined as any };
 
+      this.state = { eof: false, currentToken: undefined as any };
       this.advanceToken();
+      if (this.state.eof === false && this.state.currentToken === undefined)
+        throw new Error(
+          'Internal error, could not lexe the very first token correctly in the parsing step.'
+        );
     }
 
     public isEof(): boolean {
@@ -291,16 +344,17 @@ export namespace Parser {
 
       const lexerNext: IteratorResult<Lexer.nextToken, Lexer.nextToken> =
         this.lexer.next();
-      const lexerIsNotDone: boolean = lexerNext.done === false;
+      const lexerNextValue: Lexer.nextToken = lexerNext.value;
 
+      const lexerIsNotDone: boolean = lexerNext.done === false;
       const eof: boolean =
         lexerIsNotDone &&
-        !lexerNext.value.valid &&
-        lexerNext.value.value.type === 'eof';
+        !lexerNextValue.valid &&
+        lexerNextValue.value.type === 'eof';
 
       // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
-      if (!eof && lexerNext.value.valid)
-        this.state = { eof: false, currentToken: lexerNext.value.value };
+      if (!eof && lexerNextValue.valid)
+        this.state = { eof: false, currentToken: lexerNextValue.value };
       else if (eof) this.state = { eof: true, currentToken: undefined };
       else this.errorHandling();
     }
@@ -324,11 +378,13 @@ export namespace Parser {
     return larser.isEof();
   }
 
+  // returns the current token
   function peek(): Lexer.token | undefined {
     if (isAtEnd()) return undefined;
     return larser.getCurrentToken();
   }
 
+  // returns the current token and advances to the next token
   function advance(): Lexer.token | undefined {
     if (isAtEnd()) return undefined;
 
@@ -337,41 +393,42 @@ export namespace Parser {
     return currentToken;
   }
 
+  // returns if the current token matches the tokens
   function match(...tokens: string[]): boolean {
     const currentToken: Lexer.token | undefined = peek();
     return currentToken !== undefined && tokens.includes(currentToken.lexeme);
   }
 
+  // returns if the current token type matches the tokenTypes
   function matchType(...tokenTypes: Lexer.tokenType[]): boolean {
     const currentToken: Lexer.token | undefined = peek();
     return currentToken !== undefined && tokenTypes.includes(currentToken.type);
   }
 
-  function matchAndAdvanceOrError(
+  // return advace on match else error
+  function matchAdvanceOrError(
     token: string,
     error: parseError
   ): Lexer.token | never {
-    if (match(token)) return advance()!;
-    else newParseError(error);
+    return match(token) ? advance()! : newParseError(error);
   }
 
-  function matchTypeAndAdvanceOrError(
+  // return advance on match type else error
+  function matchTypeAdvanceOrError(
     tokenType: Lexer.tokenType,
     error: parseError
   ): Lexer.token | never {
-    if (matchType(tokenType)) return advance()!;
-    else newParseError(error);
+    return matchType(tokenType) ? advance()! : newParseError(error);
   }
 
-  function optionalMatchAndAdvance(
-    ...tokens: string[]
-  ): Lexer.token | undefined {
-    if (match(...tokens)) return advance()!;
+  // return advance on match
+  function optionalMatchAdvance(token: string): Lexer.token | undefined {
+    return match(token) ? advance()! : undefined;
   }
 
-  function consumeComments(commentArr: Lexer.token[]): void {
+  function consumeComments(comments: Lexer.token[]): void {
     while (!isAtEnd() && matchType(Lexer.tokenType.comment))
-      commentArr.push(advance()!);
+      comments.push(advance()!);
   }
   // #endregion
 
@@ -401,7 +458,7 @@ export namespace Parser {
 
       checkEofWithError('no use body in use statement');
 
-      const localFileName: Lexer.token = matchTypeAndAdvanceOrError(
+      const localFileName: Lexer.token = matchTypeAdvanceOrError(
         Lexer.tokenType.identifier,
         'did not get an identifier in use statement'
       );
@@ -410,7 +467,7 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in use statement: missing semicolon');
 
-      const semicolonToken: Lexer.token = matchAndAdvanceOrError(
+      const semicolonToken: Lexer.token = matchAdvanceOrError(
         ';',
         'TODO did not get semicolon in a use statement'
       );
@@ -431,7 +488,7 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in group statement');
 
-      const identifierToken: Lexer.token = matchTypeAndAdvanceOrError(
+      const identifierToken: Lexer.token = matchTypeAdvanceOrError(
         Lexer.tokenType.identifier,
         'TODO can not have an undefined identifier for a group statement'
       );
@@ -442,7 +499,7 @@ export namespace Parser {
         'unexpected eof in group statement after getting an identifier'
       );
 
-      const openingBracketToken: Lexer.token = matchAndAdvanceOrError(
+      const openingBracketToken: Lexer.token = matchAdvanceOrError(
         '{',
         "TODO cant have a group statement without an opening brackt '{'"
       );
@@ -476,7 +533,7 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in let statement');
 
-      const identifierToken: Lexer.token = matchTypeAndAdvanceOrError(
+      const identifierToken: Lexer.token = matchTypeAdvanceOrError(
         Lexer.tokenType.identifier,
         'TODO cant have an undefined identifier for a let statement'
       );
@@ -489,7 +546,7 @@ export namespace Parser {
 
       // TODO generics at this step
 
-      const colonToken: Lexer.token | undefined = optionalMatchAndAdvance(':');
+      const colonToken: Lexer.token | undefined = optionalMatchAdvance(':');
 
       consumeComments(comments);
 
@@ -512,7 +569,7 @@ export namespace Parser {
         'unexpected eof in let statement while expecting a "="'
       );
 
-      const equalsToken: Lexer.token = matchAndAdvanceOrError(
+      const equalsToken: Lexer.token = matchAdvanceOrError(
         '=',
         'TODO cant have a let statement without a "=" symbol'
       );
@@ -530,7 +587,7 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in let statement');
 
-      const semicolonToken: Lexer.token = matchAndAdvanceOrError(
+      const semicolonToken: Lexer.token = matchAdvanceOrError(
         ';',
         'TODO let statements must be finished with a ";" symbol'
       );
@@ -572,7 +629,7 @@ export namespace Parser {
           'Invalid eof while parsing a line in a complex type statement'
         );
 
-        const identifierToken: Lexer.token = matchTypeAndAdvanceOrError(
+        const identifierToken: Lexer.token = matchTypeAdvanceOrError(
           Lexer.tokenType.identifier,
           'TODO invalid complex type statement: missing identifier'
         );
@@ -584,7 +641,7 @@ export namespace Parser {
         );
 
         const openingBracketToken: Lexer.token | undefined =
-          optionalMatchAndAdvance('(');
+          optionalMatchAdvance('(');
 
         consumeComments(comments);
 
@@ -622,8 +679,7 @@ export namespace Parser {
 
           consumeComments(comments);
 
-          const commaToken: Lexer.token | undefined =
-            optionalMatchAndAdvance(',');
+          const commaToken: Lexer.token | undefined = optionalMatchAdvance(',');
 
           parameters.push({
             typeIdentifier,
@@ -632,7 +688,7 @@ export namespace Parser {
         }
 
         const closingBracketToken: Lexer.token | undefined =
-          optionalMatchAndAdvance(')');
+          optionalMatchAdvance(')');
 
         consumeComments(comments);
 
@@ -651,8 +707,7 @@ export namespace Parser {
         )
           newParseError('TODO missing brackets in complexe type');
 
-        const commaToken: Lexer.token | undefined =
-          optionalMatchAndAdvance(',');
+        const commaToken: Lexer.token | undefined = optionalMatchAdvance(',');
 
         return {
           identifierToken,
@@ -667,7 +722,7 @@ export namespace Parser {
 
       checkEofWithError('TODO nothing after type keyword');
 
-      const identifierToken: Lexer.token = matchTypeAndAdvanceOrError(
+      const identifierToken: Lexer.token = matchTypeAdvanceOrError(
         Lexer.tokenType.identifier,
         'TODO invalid type expression: missing identifier'
       );
@@ -696,7 +751,7 @@ export namespace Parser {
 
         checkEofWithError('TODO got nothing after type expression');
 
-        const semicolonToken: Lexer.token = matchAndAdvanceOrError(
+        const semicolonToken: Lexer.token = matchAdvanceOrError(
           ';',
           'TODO did not finish the type expression'
         );
@@ -1359,7 +1414,7 @@ export namespace Parser {
           newParseError('TODO got multiple types in a grouping expression');
         else if (body.length === 1 && body[0].commaToken !== undefined)
           newParseError(
-            'TODO got a trailling comma at the end of a grouping expression'
+            'TODO got a trailing comma at the end of a grouping expression'
           );
 
         return {
@@ -1381,7 +1436,6 @@ export namespace Parser {
   }
   // #endregion
 
-  // TODO instead of returning undefined: return parseError[]
   export function parse(
     code: string
   ):
@@ -1392,8 +1446,9 @@ export namespace Parser {
     const statements: statement[] = [];
     while (!isAtEnd()) statements.push(parseStatement());
 
-    if (parseErrors.length === 0) return { valid: true, statements };
-    return { valid: false, parseErrors, statements };
+    return parseErrors.length === 0
+      ? { valid: true, statements }
+      : { valid: false, parseErrors, statements };
   }
 
   function debugParser() {
@@ -1401,6 +1456,7 @@ export namespace Parser {
       '',
       '// test',
       '/* test */',
+      '/*test*/ /*hey*/ ; /*tast*/ /*ok*/',
       'use test;',
       'let test = 5;',
       'type test = i32;',
@@ -1509,47 +1565,4 @@ export namespace Parser {
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
-// Rust: `type TypeAlias = i32;`
-// Rust: `use std;`
-
-/*
-type ZeroVariants { }
-
-type RustEnum {
-  A,
-  B(),
-  C(i32)
-}
-*/
-
-// https://doc.rust-lang.org/reference/items.html rust Statements
-
-// console.clear();
-// log(
-//   Parser.parse(`
-// type ZeroVariants { }
-
-// type RustEnum {
-//   A,
-//   B(),
-//   C(i32)
-// }
-// `)
-// );
-
-// log(
-//   Parser.parse(`
-// type t {
-//   identifier1(),
-//   identifier2(i32),
-//   identifier3,
-// }
-
-// type t2 = t;
-
-// let x = func (a) => a * (t + 1) / 2.0;
-// `)
-// );
-
 log(Parser.parse('let a = 5;'));
-// log(Parser.parse('/*test*/ ; /*tast*/ /*ok*/'));

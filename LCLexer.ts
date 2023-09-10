@@ -8,7 +8,7 @@ export namespace Lexer {
 
     // statements:
     'let', // binds a lambda term to an identifier
-    'type', // binds a type to an identifier
+    'type', // binds a type (alias or complex) to an identifier
     'group', // identifier as wrapper around identifiers
 
     // expressions:
@@ -29,7 +29,7 @@ export namespace Lexer {
     '+', // add (binary, unary, i32/f32)
     '-', // sub (binary, unary, i32/f32)
     '*', // multiplication (binary, i32/f32)
-    '/', // divide (binary, f32/for i32: rounding down)
+    '/', // divide (binary, f32/for i32: rounding down, TODO what about div by 0 on i32??)
     '**', // exponentiation (binary, i32/f32)
     '***', // root or log (binary, i32/f32) TODO really needed?
 
@@ -56,14 +56,14 @@ export namespace Lexer {
     '=>', // used in function definitions and match expressions
     ':', // type annotation for func, match and let
     ';', // end of let or type statement/empty statement
-    ',', // seperator for arguments in funcs or calling funcs
+    ',', // seperator for arguments in funcs or calling funcs or trailing comma
     '.', // accessing identifiers from groups
 
     '(', // grouping, function calls, function arguments/parameters
     ')',
     '{', // groups or match expressions
     '}',
-    '[', // generic type annotations
+    '[', // generic type annotations for lets and types
     ']'
   ];
 
@@ -198,7 +198,7 @@ export namespace Lexer {
   const floatLiterals: string[] = ['nan', 'inf'];
   // #endregion
 
-  // #region types
+  // #region types and enums
   export enum tokenType {
     comment = '#comment', // "//...", "/*...*/"
     literal = '#literal', // "5.3e-4", "0xFF00FF"
@@ -743,7 +743,7 @@ export namespace Lexer {
     if (matches(code[idx], decimalDigits))
       return consumeNumericLiteral(code, idx);
 
-    if (firstCharSymbols.includes(code[idx])) return consumeSymbol(code, idx);
+    if (matches(code[idx], firstCharSymbols)) return consumeSymbol(code, idx);
 
     if (matches(code[idx], stringStart)) return consumeString(code, idx);
 
@@ -771,7 +771,7 @@ export namespace Lexer {
       nToken = lexeNextToken(code, newIdx);
 
       if (nToken.value.type !== 'eof' && nToken.newidx === newIdx)
-        throw new Error('Internal error. Could not lexe the next token.');
+        throw new Error('Internal lexer error. Could not lexe the next token.');
 
       newIdx = nToken.newidx;
       yield nToken;
@@ -797,8 +797,9 @@ export namespace Lexer {
       else if (!token.valid && !token.value.codeInvalid)
         softErrors.push(token.value);
 
-    if (errors.length === 0) return { valid: true, tokens, softErrors };
-    else return { valid: false, tokens, lexerErrors: errors, softErrors };
+    return errors.length === 0
+      ? { valid: true, tokens, softErrors }
+      : { valid: false, tokens, lexerErrors: errors, softErrors };
   }
 
   function debugLexer(): void {
@@ -1108,5 +1109,5 @@ _
     if (timerAndIO) console.timeEnd(timerName);
   }
 
-  // for (let i = 0; i < 1; ++i) debugLexer();
+  for (let i = 0; i < 2; ++i) debugLexer();
 }
