@@ -6,9 +6,11 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 /*
  Check list:
- var, let, const, function, namespace
- switch, for, while, do, yield, return, enum
+ var, let, const, function, namespace, type, interface, export
+ switch, for, while, do, yield, return, enum, new
  void, any, unknown, never, null, undefined, as
+ Error, throw, try catch
+ TODO, HERE, NOW, BLL Text
 */
 
 // TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
@@ -436,7 +438,7 @@ export namespace Parser {
     return match(token) ? advance()! : undefined;
   }
 
-  function isPresent<T>(value: T | undefined): boolean {
+  function isPresent<T>(value: T | undefined): value is NonNullable<T> {
     return value !== undefined;
   }
 
@@ -658,7 +660,7 @@ export namespace Parser {
         ? {
             explicitType: true,
             typeExpression: typeAnnotation!,
-            colonToken: colonToken!
+            colonToken
           }
         : {
             explicitType: false,
@@ -748,7 +750,7 @@ export namespace Parser {
           });
         }
 
-        const closingBracketToken: Lexer.token | undefined =
+        const closingBracketToken: optional<Lexer.token> =
           optionalMatchAdvance(')');
 
         consumeComments(comments);
@@ -760,15 +762,14 @@ export namespace Parser {
         // TODO what about `type Test { id id id, id id };`
         if (
           !(
-            (openingBracketToken === undefined &&
-              closingBracketToken === undefined) ||
-            (openingBracketToken !== undefined &&
-              closingBracketToken !== undefined)
+            (isPresent(openingBracketToken) &&
+              isPresent(closingBracketToken)) ||
+            (!isPresent(openingBracketToken) && !isPresent(closingBracketToken))
           )
         )
           newParseError('TODO missing brackets in complexe type');
 
-        const commaToken: Lexer.token | undefined = optionalMatchAdvance(',');
+        const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
 
         return {
           identifierToken,
@@ -802,11 +803,11 @@ export namespace Parser {
         checkEofWithError('Got nothing after "=" in type expression');
 
         // TODO refactor but how??
-        const typeValue: typeExpression | undefined = !match(';')
+        const typeValue: typeExpression | undefined = !match(';') // better error messages
           ? parseTypeExpression()
           : undefined;
 
-        if (typeValue === undefined) newParseError('got no type expression');
+        if (!isPresent(typeValue)) newParseError('got no type expression');
 
         consumeComments(comments);
 
@@ -840,10 +841,7 @@ export namespace Parser {
             'TODO invalid empty body in complex type expression'
           );
 
-          if (
-            body.length !== 0 &&
-            body[body.length - 1].commaToken === undefined
-          )
+          if (body.length !== 0 && !isPresent(body[body.length - 1].commaToken))
             newParseError('TODO, missing comma in complex type body');
 
           body.push(parseComplexeTypeLine());
@@ -1151,7 +1149,7 @@ export namespace Parser {
             // if last was not comma
             if (
               args.length !== 0 &&
-              args[args.length - 1].commaToken === undefined
+              !isPresent(args[args.length - 1].commaToken)
             )
               newParseError(
                 'TODO, missing comma in function call argument list'
@@ -1163,9 +1161,7 @@ export namespace Parser {
 
             consumeComments(comments);
 
-            const commaToken: Lexer.token | undefined = match(',')
-              ? advance()!
-              : undefined;
+            const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
 
             args.push({ argumentExpression, commaToken });
           }
@@ -1276,7 +1272,7 @@ export namespace Parser {
 
           if (
             params.length !== 0 &&
-            params[params.length - 1].commaToken === undefined
+            !isPresent(params[params.length - 1].commaToken)
           )
             newParseError(
               'Invalid func expression: missing comma in argument list'
@@ -1290,16 +1286,14 @@ export namespace Parser {
                 'TODO Invalid func expression: expected an identifier'
               );
 
-          const colonToken: Lexer.token | undefined = match(':')
-            ? advance()!
-            : undefined;
+          const colonToken: optional<Lexer.token> = optionalMatchAdvance(':');
 
-          const explicitType: typeExpression | undefined =
-            colonToken !== undefined ? parseTypeExpression() : undefined;
+          const explicitType: optional<typeExpression> = callOnPresent(
+            colonToken,
+            () => parseTypeExpression()
+          );
 
-          const commaToken: Lexer.token | undefined = match(',')
-            ? advance()!
-            : undefined;
+          const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
 
           params.push({
             identifierToken,
@@ -1338,14 +1332,13 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      const colonToken: Lexer.token | undefined = match(':')
-        ? advance()!
-        : undefined;
-
+      const colonToken: optional<Lexer.token> = optionalMatchAdvance(':');
       consumeComments(comments);
 
-      const typeExpression: typeExpression | undefined =
-        colonToken !== undefined ? parseTypeExpression() : undefined;
+      const typeExpression: optional<typeExpression> = callOnPresent(
+        colonToken,
+        () => parseTypeExpression()
+      );
 
       consumeComments(comments);
 
@@ -1359,17 +1352,16 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      const typeAnnotation: hasExplicitType =
-        colonToken === undefined
-          ? {
-              explicitType: false,
-              typeExpression: { type: 'implicit', comments: [] }
-            }
-          : {
-              explicitType: true,
-              typeExpression: typeExpression!,
-              colonToken
-            };
+      const typeAnnotation: hasExplicitType = isPresent(colonToken)
+        ? {
+            explicitType: true,
+            typeExpression: typeExpression!,
+            colonToken
+          }
+        : {
+            explicitType: false,
+            typeExpression: { type: 'implicit', comments: [] }
+          };
 
       return {
         type: 'func',
@@ -1402,8 +1394,9 @@ export namespace Parser {
         comments: []
       };
 
-      const arrowToken = match('->') ? advance()! : undefined;
-      if (arrowToken === undefined) return primitive;
+      const arrowToken: optional<Lexer.token> = optionalMatchAdvance('->');
+
+      if (!isPresent(arrowToken)) return primitive;
 
       return {
         type: 'func-type',
@@ -1416,20 +1409,19 @@ export namespace Parser {
       };
     } else if (match('(')) {
       const openingBracketToken: Lexer.token = advance()!;
+
       consumeComments(comments);
-      const closingBracket: Lexer.token | undefined = match(')')
-        ? advance()!
-        : undefined;
-      // TODO HERE it could directly come a `)` for a `() -> T` type
+
+      const closingBracket: optional<Lexer.token> = optionalMatchAdvance(')');
 
       const body: {
         typeExpression: typeExpression;
         commaToken?: Lexer.token;
       }[] = [];
-      while (closingBracket === undefined && !isAtEnd() && !match(')')) {
+      while (!isPresent(closingBracket) && !isAtEnd() && !match(')')) {
         consumeComments(comments);
 
-        if (body.length !== 0 && body[body.length - 1].commaToken === undefined)
+        if (body.length !== 0 && !isPresent(body[body.length - 1].commaToken))
           newParseError(
             'TODO did not get a comma in last type expression, while grouping types'
           );
@@ -1441,41 +1433,40 @@ export namespace Parser {
         consumeComments(comments);
         // TODO isAtEnd() check...
 
-        const commaToken: Lexer.token | undefined = match(',')
-          ? advance()!
-          : undefined;
+        const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
+
+        // TODO what if now comes a comment??
 
         body.push({ typeExpression: type, commaToken });
       }
 
-      const closingBracketToken: Lexer.token =
-        closingBracket !== undefined
-          ? closingBracket
-          : match(')')
-          ? advance()!
-          : newParseError(
-              'TODO did not close bracket in type-grouping expression'
-            );
+      const closingBracketToken: Lexer.token = isPresent(closingBracket)
+        ? closingBracket
+        : matchAdvanceOrError(
+            ')',
+            'TODO did not close bracket in type-grouping expression'
+          );
 
-      const arrowToken: Lexer.token | undefined = match('->')
-        ? advance()!
-        : undefined;
-      if (arrowToken !== undefined) {
+      const arrowToken: optional<Lexer.token> = optionalMatchAdvance('->');
+
+      if (isPresent(arrowToken)) {
+        const returnType: typeExpression = parseTypeExpression();
+
         return {
           type: 'func-type',
           parameters: body,
-          returnType: parseTypeExpression(),
+          returnType,
           openingBracketToken,
           closingBracketToken,
           arrowToken,
           comments
         };
       } else {
-        if (closingBracket !== undefined || body.length === 0)
-          newParseError('TODO, did not get any type in group expression');
+        if (isPresent(closingBracket) || body.length === 0)
+          newParseError('TODO, did not get any type in grouping expression');
         if (body.length !== 1)
           newParseError('TODO got multiple types in a grouping expression');
-        else if (body.length === 1 && body[0].commaToken !== undefined)
+        else if (body.length === 1 && isPresent(body[0].commaToken))
           newParseError(
             'TODO got a trailing comma at the end of a grouping expression'
           );
