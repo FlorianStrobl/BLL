@@ -126,8 +126,6 @@ export namespace Parser {
   }
 
   // #region types
-  type optional<T> = T | undefined;
-
   type comment = { comments: Lexer.token[] };
 
   export type parseError =
@@ -310,6 +308,8 @@ export namespace Parser {
   // #endregion
 
   // #region helper
+  type optional<T> = T | undefined;
+
   // part which handles the lexer
   class Larser {
     private code: string;
@@ -442,6 +442,7 @@ export namespace Parser {
     return value !== undefined;
   }
 
+  // calls the callback function if and only if present is not undefined
   function callOnPresent<T, U>(
     present: undefined,
     callBack: () => T
@@ -684,6 +685,94 @@ export namespace Parser {
       // TODO
       const typeToken: Lexer.token = advance()!;
 
+      consumeComments(comments);
+
+      checkEofWithError('TODO nothing after type keyword');
+
+      const identifierToken: Lexer.token = matchTypeAdvanceOrError(
+        Lexer.tokenType.identifier,
+        'TODO invalid type expression: missing identifier'
+      );
+
+      consumeComments(comments);
+
+      checkEofWithError('Nothing after identifier token in type expression');
+
+      // TODO generics at this step
+
+      if (match('=')) {
+        const equalsToken: Lexer.token = advance()!;
+
+        consumeComments(comments);
+
+        checkEofWithError('Got nothing after "=" in type expression');
+
+        // TODO refactor but how??
+        const typeValue: typeExpression | undefined = !match(';') // better error messages
+          ? parseTypeExpression()
+          : undefined;
+
+        if (!isPresent(typeValue))
+          newParseError('got no type expression in type alias');
+
+        consumeComments(comments);
+
+        checkEofWithError('TODO got nothing after type expression');
+
+        const semicolonToken: Lexer.token = matchAdvanceOrError(
+          ';',
+          'TODO did not finish the type expression'
+        );
+
+        return {
+          type: 'type-alias',
+          identifierToken,
+          typeValue,
+          typeToken,
+          equalsToken,
+          semicolonToken,
+          comments
+        };
+      } else if (match('{')) {
+        const openingBracketToken: Lexer.token = advance()!;
+
+        consumeComments(comments);
+
+        const localComments: [] = []; // TODO add special comments to each complex type
+        const typeValue: complexTypeValue[] = [];
+        while (!isAtEnd() && !match('}')) {
+          consumeComments(comments);
+
+          checkEofWithError(
+            'TODO invalid empty body in complex type expression'
+          );
+
+          if (
+            typeValue.length !== 0 &&
+            !isPresent(typeValue[typeValue.length - 1].commaToken)
+          )
+            newParseError('TODO, missing comma in complex type body');
+
+          typeValue.push(parseComplexeTypeLine());
+        }
+        checkEofWithError('eof in complex type statement');
+        const closingBracketToken: Lexer.token = advance()!;
+
+        return {
+          type: 'complex-type',
+          identifierToken,
+          typeValue,
+          typeToken,
+          openingBracketToken,
+          closingBracketToken,
+          comments
+        };
+      }
+
+      return newParseError(
+        'TODO invalid type expression: cannot resolve which type it should be. Missing "=" or "{"'
+      );
+
       // TODO NOW comments and eof
       function parseComplexeTypeLine(): complexTypeValue {
         consumeComments(comments);
@@ -779,101 +868,13 @@ export namespace Parser {
           commaToken
         };
       }
-
-      consumeComments(comments);
-
-      checkEofWithError('TODO nothing after type keyword');
-
-      const identifierToken: Lexer.token = matchTypeAdvanceOrError(
-        Lexer.tokenType.identifier,
-        'TODO invalid type expression: missing identifier'
-      );
-
-      consumeComments(comments);
-
-      checkEofWithError('Nothing after identifier token in type expression');
-
-      // TODO generics at this step
-
-      if (match('=')) {
-        const equalsToken: Lexer.token = advance()!;
-
-        consumeComments(comments);
-
-        checkEofWithError('Got nothing after "=" in type expression');
-
-        // TODO refactor but how??
-        const typeValue: typeExpression | undefined = !match(';') // better error messages
-          ? parseTypeExpression()
-          : undefined;
-
-        if (!isPresent(typeValue)) newParseError('got no type expression');
-
-        consumeComments(comments);
-
-        checkEofWithError('TODO got nothing after type expression');
-
-        const semicolonToken: Lexer.token = matchAdvanceOrError(
-          ';',
-          'TODO did not finish the type expression'
-        );
-
-        return {
-          type: 'type-alias',
-          identifierToken,
-          typeValue,
-          typeToken,
-          equalsToken,
-          semicolonToken,
-          comments
-        };
-      } else if (match('{')) {
-        const openingBracketToken: Lexer.token = advance()!;
-
-        consumeComments(comments);
-
-        const localComments: [] = []; // TODO add special comments to each complex type
-        const body: complexTypeValue[] = [];
-        while (!isAtEnd() && !match('}')) {
-          consumeComments(comments);
-
-          checkEofWithError(
-            'TODO invalid empty body in complex type expression'
-          );
-
-          if (body.length !== 0 && !isPresent(body[body.length - 1].commaToken))
-            newParseError('TODO, missing comma in complex type body');
-
-          body.push(parseComplexeTypeLine());
-        }
-        checkEofWithError('eof in complex type statement');
-        const closingBracketToken: Lexer.token = advance()!;
-
-        return {
-          type: 'complex-type',
-          identifierToken,
-          typeValue: body,
-          typeToken,
-          openingBracketToken,
-          closingBracketToken,
-          comments
-        };
-      }
-
-      newParseError(
-        'TODO invalid type expression: cannot resolve which type it should be'
-      );
-      return {
-        error:
-          'TODO could not parse type statement properly because it was not followed by "=" or "{"',
-        lastToken: advance()
-      } as never;
     }
 
-    // if consumed comments above and no other thing matched
-    // then return the comments as its own thing
-    // probably this case: group g { /*comment*/ }
-    if (comments.length !== 0) return { type: 'comment', comments };
+    if (comments.length !== 0)
+      // if consumed comments above and no other thing matched
+      // then return the comments as its own thing
+      // probably this case: group g { /*comment*/ }
+      return { type: 'comment', comments };
 
     // TODO need to advance() maybe for not getting stuck into a loop?
     return newParseError('TODO could not parse any statement properly');
@@ -1498,7 +1499,14 @@ export namespace Parser {
     larser = new Larser(code);
 
     const statements: statement[] = [];
-    while (!isAtEnd()) statements.push(parseStatement());
+    while (!isAtEnd()) {
+      const lastToken: Lexer.token = peek()!;
+      statements.push(parseStatement());
+      if (peek() !== undefined && lastToken.idx === peek()!.idx)
+        // error handling to not create infinite loops
+        // an error should have been returned above already
+        advance();
+    }
 
     return parseErrors.length === 0
       ? { valid: true, statements }
