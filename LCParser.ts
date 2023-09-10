@@ -151,7 +151,8 @@ export namespace Parser {
               letToken: Lexer.token;
               equalsToken: Lexer.token;
               semicolonToken: Lexer.token;
-            } & hasExplicitType)
+            } & hasExplicitType &
+              genericAnnotation)
           | {
               type: 'type-alias';
               identifierToken: Lexer.token;
@@ -179,14 +180,17 @@ export namespace Parser {
         )
     );
   // TODO
-  type genericAnnotation = {
-    genericIdentifiers: {
-      identifierToken: Lexer.token;
-      commaToken?: Lexer.token;
-    }[];
-    genericOpeningBracketToken: Lexer.token;
-    genericClosingBracketToken: Lexer.token;
-  };
+  type genericAnnotation =
+    | { isGeneric: false }
+    | {
+        isGeneric: true;
+        genericIdentifiers: {
+          identifierToken: Lexer.token;
+          commaToken?: Lexer.token;
+        }[];
+        genericOpeningBracketToken: Lexer.token;
+        genericClosingBracketToken: Lexer.token;
+      };
   type hasExplicitType =
     | {
         explicitType: true;
@@ -456,6 +460,69 @@ export namespace Parser {
     return isPresent(present) ? callBack() : undefined;
   }
 
+  type argumentList<T> = {
+    data: {
+      argument: T;
+      delimiterToken: optional<Lexer.token>;
+    }[];
+    closingBracketToken: Lexer.token;
+  };
+
+  function parseArgumentList<T>(
+    closingBracket: string,
+    delimiter: string | undefined,
+    parseArgument: () => T,
+    comments: Lexer.token[],
+    missingDelimiterError: string = 'missing comma token while parsing arguments',
+    missingBracketError: string = 'missing closing bracket token while parsing arguments',
+    eofError: string = 'unexpected eof while parsing arguments'
+  ): argumentList<T> {
+    const argumentList: {
+      argument: T;
+      delimiterToken: optional<Lexer.token>;
+    }[] = [];
+
+    consumeComments(comments);
+
+    while (!isAtEnd() && !match(closingBracket)) {
+      consumeComments(comments);
+
+      checkEofWithError(eofError);
+
+      if (
+        isPresent(delimiter) &&
+        argumentList.length !== 0 &&
+        !isPresent(argumentList[argumentList.length - 1].delimiterToken)
+      )
+        newParseError(missingDelimiterError);
+
+      const argument: T = parseArgument();
+
+      consumeComments(comments);
+
+      checkEofWithError(eofError);
+
+      const delimiterToken: optional<Lexer.token> = isPresent(delimiter)
+        ? optionalMatchAdvance(delimiter)
+        : undefined;
+
+      argumentList.push({ argument, delimiterToken });
+
+      consumeComments(comments);
+
+      checkEofWithError(eofError);
+    }
+
+    checkEofWithError(eofError);
+
+    const closingBracketToken: Lexer.token = matchAdvanceOrError(
+      closingBracket,
+      missingBracketError
+    );
+
+    return { data: argumentList, closingBracketToken };
+  }
+
   function consumeComments(comments: Lexer.token[]): void {
     while (!isAtEnd() && matchType(Lexer.tokenType.comment))
       comments.push(advance()!);
@@ -582,22 +649,54 @@ export namespace Parser {
       const genericOpeningBracketToken: optional<Lexer.token> =
         optionalMatchAdvance('[');
 
+      const isGeneric: boolean = isPresent(genericOpeningBracketToken);
+
       consumeComments(comments);
 
       checkEofWithError(
         'error after getting opening bracket for generic in let statement'
       );
 
-      // TODO generics at this step
-
-      const genericClosingBracketToken: optional<Lexer.token> = callOnPresent(
-        genericOpeningBracketToken,
-        () =>
-          matchAdvanceOrError(
+      // TODO error messages aso
+      const argumentList: optional<argumentList<Lexer.token>> = !isGeneric
+        ? undefined
+        : parseArgumentList(
             ']',
-            'missing closing bracket in generic let statement declaration'
-          )
-      );
+            ',',
+            () => matchTypeAdvanceOrError(Lexer.tokenType.identifier, ''),
+            comments,
+            'missing comma token in generic let statement declaration',
+            'missing closing bracket in generic let statement declaration',
+            'unexpected eof in generic let statement'
+          );
+
+      // TODO HERE NOW generics at this step
+      const genericIdentifiers: optional<
+        {
+          identifierToken: Lexer.token;
+          commaToken?: Lexer.token;
+        }[]
+      > = !isGeneric
+        ? undefined
+        : argumentList?.data.map((e) => ({
+            identifierToken: e.argument,
+            commaToken: e.delimiterToken
+          }));
+
+      if (isGeneric && genericIdentifiers?.length === 0)
+        newParseError('missing values in generic let statement');
+
+      const genericClosingBracketToken: optional<Lexer.token> = isGeneric
+        ? argumentList?.closingBracketToken
+        : undefined;
+      // callOnPresent(
+      //   genericOpeningBracketToken,
+      //   () =>
+      //     matchAdvanceOrError(
+      //       ']',
+      //       'missing closing bracket in generic let statement declaration'
+      //     )
+      // );
 
       consumeComments(comments);
 
@@ -668,11 +767,21 @@ export namespace Parser {
             typeExpression: { type: 'implicit', comments: [] }
           };
 
+      const genericAnnotation: genericAnnotation = isGeneric
+        ? {
+            isGeneric: true,
+            genericIdentifiers: genericIdentifiers!,
+            genericOpeningBracketToken: genericOpeningBracketToken!,
+            genericClosingBracketToken: genericClosingBracketToken!
+          }
+        : { isGeneric: false };
+
       return {
         type: 'let',
         identifierToken,
         body,
         ...explicitType,
+        ...genericAnnotation,
         letToken,
         equalsToken,
         semicolonToken,
@@ -1519,6 +1628,7 @@ export namespace Parser {
       '// test',
       '/* test */',
       '/*test*/ /*hey*/ ; /*tast*/ /*ok*/',
+      'group test { let a[T, T2] = 5; let b = 3; let c = 2; }',
       'use test;',
       'let test = 5;',
       'type test = i32;',
@@ -1627,6 +1737,11 @@ export namespace Parser {
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
-const code = [`group test { let x[] = 5; /*comment*/ }`];
-log(Parser.parse(code[0]).valid);
-log(Parser.parse(code[0]).statements);
+const code = [
+  `group test { let a[] = 5; let b = 3; let c = 2; }`,
+  `let x = func (x, y, z) => 1;`
+];
+const parsedCode = Parser.parse(code[0]);
+log(parsedCode.valid);
+log(parsedCode.statements);
+if (!parsedCode.valid) log(parsedCode.parseErrors);
