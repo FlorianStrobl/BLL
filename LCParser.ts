@@ -36,6 +36,7 @@ const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 // TODO add `let x: thatType[itsGenericValueHere] = ...;`
 //                          ^ property access, prob like function calling
+// it is a substitution for a generic value in its type
 
 /*
   TODO
@@ -437,18 +438,22 @@ export namespace Parser {
   // TODO test with real code, but insert a comment between each and every token!
   // TODO check everywhere isAtEnd() and comments
   function parseStatement(): statement {
-    checkEofWithError('no statement parsed');
+    if (isAtEnd())
+      throw new Error(
+        'Internal Parser error. Tried to parse a statement at eof.'
+      );
 
     const comments: Lexer.token[] = [];
-    if (matchType(Lexer.tokenType.comment)) {
-      // TODO then comments at the top will always be extra info
-      consumeComments(comments);
+    consumeComments(comments);
+
+    if (isAtEnd() && comments.length !== 0)
       return { type: 'comment', comments };
-    }
+    // else use those comments for the next statement
+    // and if nothing matches, return these
 
     if (match(';')) {
       const semicolonToken: Lexer.token = advance()!;
-      return { type: 'empty', semicolonToken, comments: [] };
+      return { type: 'empty', semicolonToken, comments };
     }
 
     if (match('use')) {
@@ -526,6 +531,7 @@ export namespace Parser {
       };
     }
 
+    // add generics
     if (match('let')) {
       const letToken: Lexer.token = advance()!;
 
@@ -811,11 +817,13 @@ export namespace Parser {
       } as never;
     }
 
-    newParseError('TODO could not parse any statement properly');
-    return {
-      error: 'TODO could not parse any statement properly',
-      lastToken: advance()
-    } as never;
+    // if consumed comments above and no other thing matched
+    // then return the comments as its own thing
+    // probably this case: group g { /*comment*/ }
+    if (comments.length !== 0) return { type: 'comment', comments };
+
+    // TODO need to advance() maybe for not getting stuck into a loop?
+    return newParseError('TODO could not parse any statement properly');
   }
 
   // TODO add comments and isAtEnd() support
@@ -1565,4 +1573,4 @@ export namespace Parser {
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
-log(Parser.parse('let a = 5;'));
+log(Parser.parse('group test { let x = 5; /*comment*/ }'));

@@ -200,11 +200,11 @@ export namespace Lexer {
 
   // #region types and enums
   export enum tokenType {
-    comment = '#comment', // "//...", "/*...*/"
-    literal = '#literal', // "5.3e-4", "0xFF00FF"
-    keyword = '#keyword', // "let", "func"
-    identifier = '#identifier', // "_a_z_A_Z_0_9"
-    symbol = '#symbol' // "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", ",", "(", ")", "{", "}", "=", "->", "."
+    comment = '#com', // "//...", "/*...*/"
+    literal = '#lit', // "5.3e-4", "0xFF00FF"
+    keyword = '#key', // "let", "func"
+    identifier = '#id', // "_a_z_A_Z_0_9"
+    symbol = '#sym' // "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", ",", "(", ")", "{", "}", "=", "->", "."
   }
 
   export interface token {
@@ -1109,5 +1109,5 @@ _
     if (timerAndIO) console.timeEnd(timerName);
   }
 
-  for (let i = 0; i < 2; ++i) debugLexer();
+  // for (let i = 0; i < 2; ++i) debugLexer();
 }
