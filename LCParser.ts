@@ -4,6 +4,13 @@ import { Lexer } from './LCLexer';
 
 const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
+/*
+ Check list:
+ var, let, const, function, namespace
+ switch, for, while, do, yield, return, enum
+ void, any, unknown, never, null, undefined, as
+*/
+
 // TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
 
 // TODO invalid char in lexer step results in random error in interpreter.ts
@@ -117,11 +124,13 @@ export namespace Parser {
   }
 
   // #region types
+  type optional<T> = T | undefined;
+
   type comment = { comments: Lexer.token[] };
 
   export type parseError =
     | string
-    | { type: 'error'; value: any; currentToken: Lexer.token | undefined };
+    | { type: 'error'; value: any; currentToken: optional<Lexer.token> };
 
   // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
   export type statement = comment &
@@ -172,26 +181,26 @@ export namespace Parser {
   // TODO
   type genericAnnotation = {
     genericIdentifiers: {
-      identifier: Lexer.token;
+      identifierToken: Lexer.token;
       commaToken?: Lexer.token;
     }[];
-    genericOpeningBracket: Lexer.token;
-    genericClosingBracket: Lexer.token;
+    genericOpeningBracketToken: Lexer.token;
+    genericClosingBracketToken: Lexer.token;
   };
   type hasExplicitType =
     | {
-        hasExplicitType: true;
+        explicitType: true;
         typeExpression: typeExpression;
         colonToken: Lexer.token;
       }
     | {
-        hasExplicitType: false;
+        explicitType: false;
         typeExpression: typeExpression;
       };
   type complexTypeValue = {
     identifierToken: Lexer.token;
     parameters: {
-      typeIdentifier: Lexer.token;
+      typeIdentifierToken: Lexer.token;
       commaToken?: Lexer.token;
     }[]; // TODO when brackets are not present, then no parameters can be there
     openingBracketToken?: Lexer.token;
@@ -276,7 +285,7 @@ export namespace Parser {
       | { type: 'implicit' }
       | {
           type: 'primitive-type';
-          value: Lexer.token; // keyword like i32/f32 or generic identifier/type identifier
+          primitiveToken: Lexer.token; // keyword like i32/f32 or generic identifier/type identifier
         }
       | {
           type: 'func-type';
@@ -423,8 +432,25 @@ export namespace Parser {
   }
 
   // return advance on match
-  function optionalMatchAdvance(token: string): Lexer.token | undefined {
+  function optionalMatchAdvance(token: string): optional<Lexer.token> {
     return match(token) ? advance()! : undefined;
+  }
+
+  function isPresent<T>(value: T | undefined): boolean {
+    return value !== undefined;
+  }
+
+  function callOnPresent<T, U>(
+    present: undefined,
+    callBack: () => T
+  ): undefined;
+  function callOnPresent<T, U>(present: NonNullable<U>, callBack: () => T): T;
+  function callOnPresent<T, U>(present: U, callBack: () => T): optional<T>;
+  function callOnPresent<T, U>(
+    present: undefined | NonNullable<U> | U,
+    callBack: () => T
+  ): optional<T> {
+    return isPresent(present) ? callBack() : undefined;
   }
 
   function consumeComments(comments: Lexer.token[]): void {
@@ -447,9 +473,9 @@ export namespace Parser {
     consumeComments(comments);
 
     if (isAtEnd() && comments.length !== 0)
+      // else use those comments for the next statement
+      // and if nothing matches, return these
       return { type: 'comment', comments };
-    // else use those comments for the next statement
-    // and if nothing matches, return these
 
     if (match(';')) {
       const semicolonToken: Lexer.token = advance()!;
@@ -550,24 +576,54 @@ export namespace Parser {
         'unexpected eof in let statement after asuming an identifier'
       );
 
-      // TODO generics at this step
-
-      const colonToken: Lexer.token | undefined = optionalMatchAdvance(':');
+      const genericOpeningBracketToken: optional<Lexer.token> =
+        optionalMatchAdvance('[');
 
       consumeComments(comments);
 
-      if (colonToken !== undefined)
-        checkEofWithError('unexpected eof in let statement after getting ":"');
+      checkEofWithError(
+        'error after getting opening bracket for generic in let statement'
+      );
 
-      const typeAnnotation: typeExpression | undefined =
-        colonToken !== undefined && !match('=') /*better error messages*/
-          ? parseTypeExpression()
-          : undefined;
+      // TODO generics at this step
 
-      if (colonToken !== undefined && typeAnnotation === undefined)
-        newParseError(
-          'missing type annotation in let statement after getting a ":"'
-        );
+      const genericClosingBracketToken: optional<Lexer.token> = callOnPresent(
+        genericOpeningBracketToken,
+        () =>
+          matchAdvanceOrError(
+            ']',
+            'missing closing bracket in generic let statement declaration'
+          )
+      );
+
+      consumeComments(comments);
+
+      checkEofWithError(
+        'error after getting closing bracket for generic in let statement'
+      );
+
+      const colonToken: optional<Lexer.token> = optionalMatchAdvance(':');
+
+      consumeComments(comments);
+
+      callOnPresent(colonToken, () =>
+        checkEofWithError('unexpected eof in let statement after getting ":"')
+      );
+
+      const typeAnnotation: optional<typeExpression> = callOnPresent(
+        colonToken,
+        () => {
+          /*if for better error messages*/
+          if (!match('=')) return parseTypeExpression();
+        }
+      );
+
+      callOnPresent(colonToken, () => {
+        if (!isPresent(typeAnnotation))
+          newParseError(
+            'missing type annotation in let statement after getting a ":"'
+          );
+      });
 
       consumeComments(comments);
 
@@ -598,17 +654,16 @@ export namespace Parser {
         'TODO let statements must be finished with a ";" symbol'
       );
 
-      const explicitType: hasExplicitType =
-        colonToken === undefined
-          ? {
-              hasExplicitType: false,
-              typeExpression: { type: 'implicit', comments: [] }
-            }
-          : {
-              hasExplicitType: true,
-              typeExpression: typeAnnotation!,
-              colonToken: colonToken
-            };
+      const explicitType: hasExplicitType = isPresent(colonToken)
+        ? {
+            explicitType: true,
+            typeExpression: typeAnnotation!,
+            colonToken: colonToken!
+          }
+        : {
+            explicitType: false,
+            typeExpression: { type: 'implicit', comments: [] }
+          };
 
       return {
         type: 'let',
@@ -646,7 +701,7 @@ export namespace Parser {
           'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
         );
 
-        const openingBracketToken: Lexer.token | undefined =
+        const openingBracketToken: optional<Lexer.token> =
           optionalMatchAdvance('(');
 
         consumeComments(comments);
@@ -656,11 +711,11 @@ export namespace Parser {
         );
 
         const parameters: {
-          typeIdentifier: Lexer.token;
+          typeIdentifierToken: Lexer.token;
           commaToken?: Lexer.token;
         }[] = [];
         // TODO endless loop because if no `)` in the code, then it wont advance further?
-        while (openingBracketToken !== undefined && !isAtEnd() && !match(')')) {
+        while (isPresent(openingBracketToken) && !isAtEnd() && !match(')')) {
           consumeComments(comments);
 
           checkEofWithError(
@@ -669,13 +724,13 @@ export namespace Parser {
 
           if (
             parameters.length !== 0 &&
-            parameters[parameters.length - 1].commaToken === undefined
+            !isPresent(parameters[parameters.length - 1].commaToken)
           )
             newParseError(
               'TODO missing comma between two parameters in complex type value'
             );
 
-          const typeIdentifier: Lexer.token =
+          const typeIdentifierToken: Lexer.token =
             matchType(Lexer.tokenType.identifier) ||
             match('i32') ||
             match('f32')
@@ -685,10 +740,10 @@ export namespace Parser {
 
           consumeComments(comments);
 
-          const commaToken: Lexer.token | undefined = optionalMatchAdvance(',');
+          const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
 
           parameters.push({
-            typeIdentifier,
+            typeIdentifierToken,
             commaToken
           });
         }
@@ -1307,11 +1362,11 @@ export namespace Parser {
       const typeAnnotation: hasExplicitType =
         colonToken === undefined
           ? {
-              hasExplicitType: false,
+              explicitType: false,
               typeExpression: { type: 'implicit', comments: [] }
             }
           : {
-              hasExplicitType: true,
+              explicitType: true,
               typeExpression: typeExpression!,
               colonToken
             };
@@ -1343,7 +1398,7 @@ export namespace Parser {
       const value: Lexer.token = advance()!;
       const primitive: typeExpression = {
         type: 'primitive-type',
-        value,
+        primitiveToken: value,
         comments: []
       };
 
@@ -1573,4 +1628,6 @@ export namespace Parser {
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
-log(Parser.parse('group test { let x = 5; /*comment*/ }'));
+const code = [`group test { let x[] = 5; /*comment*/ }`];
+log(Parser.parse(code[0]).valid);
+log(Parser.parse(code[0]).statements);
