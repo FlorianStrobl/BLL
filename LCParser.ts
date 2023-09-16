@@ -718,6 +718,7 @@ export namespace Parser {
         () => {
           /*if for better error messages*/
           if (!match('=')) return parseTypeExpression();
+          else newParseError("TODO HERE needed??????");
         }
       );
 
@@ -1612,11 +1613,16 @@ export namespace Parser {
     const statements: statement[] = [];
     while (!isAtEnd()) {
       const lastToken: Lexer.token = peek()!;
+
       statements.push(parseStatement());
+
       if (peek() !== undefined && lastToken.idx === peek()!.idx)
         // error handling to not create infinite loops
         // an error should have been returned above already
-        advance();
+        newParseError(
+          'could not parse a statement with the following token: ' +
+            advance()?.toString()
+        );
     }
 
     return parseErrors.length === 0
