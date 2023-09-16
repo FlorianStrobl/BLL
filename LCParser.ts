@@ -126,11 +126,11 @@ export namespace Parser {
   }
 
   // #region types
-  type comment = { comments: Lexer.token[] };
-
   export type parseError =
     | string
     | { type: 'error'; value: any; currentToken: optional<Lexer.token> };
+
+  type comment = { comments: Lexer.token[] };
 
   // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
   export type statement = comment &
@@ -396,7 +396,7 @@ export namespace Parser {
 
   // returns the current token
   function peek(): Lexer.token | undefined {
-    if (isAtEnd()) return undefined;
+    if (isAtEnd()) return undefined; // TODO shouldnt it just crash if that happens? invalid internal code, same with advance()
     return larser.getCurrentToken();
   }
 
@@ -460,6 +460,7 @@ export namespace Parser {
     return isPresent(present) ? callBack() : undefined;
   }
 
+  // TODO
   type argumentList<T> = {
     data: {
       argument: T;
@@ -1607,6 +1608,7 @@ export namespace Parser {
     | { valid: false; parseErrors: parseError[]; statements: statement[] } {
     larser = new Larser(code);
 
+    // TODO swap with arg list
     const statements: statement[] = [];
     while (!isAtEnd()) {
       const lastToken: Lexer.token = peek()!;
@@ -1704,16 +1706,16 @@ export namespace Parser {
     ];
 
     for (const a of mustParse) {
-      // TODO
-      //const ans = parse(a);
-      //if (!ans.valid) throw new Error('could not parse: ' + ans.toString());
+      //   // TODO
+      //   const ans = parse(a);
+      //   if (!ans.valid) throw new Error('could not parse: ' + ans.toString());
     }
 
     for (const a of mustNotParseButLexe) {
-      //if (!Lexer.lexe(a).valid)
+      // if (!Lexer.lexe(a).valid)
       //  throw new Error('this code should be lexable: ' + a);
-      //const ans = parse(a);
-      //if (ans.valid) throw new Error('should not parse: ' + ans.toString());
+      // const ans = parse(a);
+      // if (ans.valid) throw new Error('should not parse: ' + ans.toString());
     }
 
     console.time('t');
