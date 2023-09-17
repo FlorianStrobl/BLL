@@ -135,10 +135,7 @@ export namespace Parser {
 
   type complexTypeValue = {
     identifierToken: token;
-    parameters: {
-      typeIdentifierToken: token;
-      commaToken: optToken;
-    }[]; // TODO when brackets are not present, then no parameters can be there
+    parameters: argumentList<token>; // TODO when brackets are not present, then no parameters can be there
     openingBracketToken: optToken;
     closingBracketToken: optToken /*TODO if has opening bracket, then must have closing bracket or vice versa*/;
     commaToken: optToken;
@@ -177,10 +174,7 @@ export namespace Parser {
         }
       | {
           type: 'functionCall';
-          arguments: {
-            argumentExpression: expression;
-            commaToken: optToken;
-          }[];
+          arguments: argumentList<expression>;
           function: expression;
           openingBracketToken: token;
           closingBracketToken: token;
@@ -854,10 +848,7 @@ export namespace Parser {
           'Invalid eof in complex type statement after getting a "("'
         );
 
-        const parameters: {
-          typeIdentifierToken: token;
-          commaToken: optToken;
-        }[] = [];
+        const parameters: argumentList<token> = [];
         // TODO endless loop because if no `)` in the code, then it wont advance further?
         while (isPresent(openingBracketToken) && !isAtEnd() && !match(')')) {
           const currentTokenDebug: token = peek()!;
@@ -870,7 +861,7 @@ export namespace Parser {
 
           if (
             parameters.length !== 0 &&
-            !isPresent(parameters[parameters.length - 1].commaToken)
+            !isPresent(parameters[parameters.length - 1].delimiterToken)
           )
             newParseError(
               'TODO missing comma between two parameters in complex type value'
@@ -886,8 +877,8 @@ export namespace Parser {
           const commaToken: optToken = optionalMatchAdvance(',');
 
           parameters.push({
-            typeIdentifierToken,
-            commaToken
+            argument: typeIdentifierToken,
+            delimiterToken: commaToken
           });
 
           if (!iterationAdvanced(currentTokenDebug)) break;
@@ -1207,10 +1198,7 @@ export namespace Parser {
           };
         } else {
           //   f(
-          const args: {
-            argumentExpression: expression;
-            commaToken: optToken;
-          }[] = [];
+          const args: argumentList<expression> = [];
           // TODO what about error messages for `(5,,)`
           while (!isAtEnd() && !match(')')) {
             const currentTokenDebug: token = peek()!;
@@ -1218,7 +1206,7 @@ export namespace Parser {
             // if last was not comma
             if (
               args.length !== 0 &&
-              !isPresent(args[args.length - 1].commaToken)
+              !isPresent(args[args.length - 1].delimiterToken)
             )
               newParseError(
                 'TODO, missing comma in function call argument list'
@@ -1232,7 +1220,10 @@ export namespace Parser {
 
             const commaToken: optToken = optionalMatchAdvance(',');
 
-            args.push({ argumentExpression, commaToken });
+            args.push({
+              argument: argumentExpression,
+              delimiterToken: commaToken
+            });
 
             if (!iterationAdvanced(currentTokenDebug)) break;
           }

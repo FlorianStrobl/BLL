@@ -111,14 +111,14 @@ export namespace Interpreter {
         closingBracketToken: {} as any,
         arguments: [
           {
-            argumentExpression: {
+            argument: {
               type: 'literal',
               literalType: 'i32',
               literal: argument,
               literalToken: {} as any,
               comments: []
             },
-            commaToken: undefined
+            delimiterToken: undefined
           }
         ],
         comments: []
@@ -287,7 +287,7 @@ export namespace Interpreter {
         for (let i = 0; i < funcParameters.length; ++i) {
           localIdentifiers.push([
             funcParameters[i].identifierToken.lexeme,
-            callingArguments[i].argumentExpression
+            callingArguments[i].argument
           ]);
         }
 
@@ -373,7 +373,7 @@ let f = func (x) => 2 + 3 * x;
 let constFunc5: () -> i32 = func () => 5;
 let const1 = (func (x) => x) (1);
 
-let main = func (arg: i32): i32 => 51 == const1 + g(arg);
+let main = func (arg: i32): i32 => 1 + (51 != const1 + g(arg));
 
 let g = func (arg: i32): i32 => (const4 + constFunc5()) + f(arg + 6);
 `,
