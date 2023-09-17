@@ -421,7 +421,7 @@ export namespace Parser {
       isPresent(delimiter)
         ? argumentList
         : argumentList.map((arg) => arg.argument)
-    ) as any;
+    ) as never;
   }
   // #endregion
   // #endregion
