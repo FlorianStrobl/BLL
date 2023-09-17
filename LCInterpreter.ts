@@ -116,7 +116,8 @@ export namespace Interpreter {
               literalType: 'i32',
               literal: argument,
               literalToken: {} as any
-            }
+            },
+            commaToken: undefined
           }
         ]
       });
@@ -231,7 +232,9 @@ export namespace Interpreter {
                 type: Lexer.tokenType.identifier,
                 idx: -1
               },
-              typeExpression: {} as any
+              typeExpression: {} as any,
+              colonToken: undefined,
+              commaToken: undefined
             },
             {
               identifierToken: {
@@ -239,7 +242,9 @@ export namespace Interpreter {
                 type: Lexer.tokenType.identifier,
                 idx: -1
               },
-              typeExpression: {} as any
+              typeExpression: {} as any,
+              colonToken: undefined,
+              commaToken: undefined
             }
           ],
           body:
@@ -264,7 +269,7 @@ export namespace Interpreter {
           openingBracketToken: {} as any,
           closingBracketToken: {} as any,
           arrowToken: {} as any,
-          hasExplicitType: false,
+          explicitType: false,
           typeExpression: {} as any
         };
         const func: Parser.funcExpression =
