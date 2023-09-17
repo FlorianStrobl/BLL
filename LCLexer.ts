@@ -4,16 +4,15 @@ export namespace Lexer {
 
   // #region constants
   const keywords: string[] = [
-    'use', // imports all identifiers from other file (either local file, or global file)
-
     // statements:
-    'let', // binds a lambda term to an identifier
+    'use', // imports all identifiers from other file (either local file, or global file)
+    'let', // binds a lambda term to an identifier (can be generic)
     'type', // binds a type (alias or complex) to an identifier
     'group', // identifier as wrapper around identifiers
 
     // expressions:
     'func', // function expression
-    'match', // expression to unwrap values of specific types
+    'match', // expression to unwrap values of complex-types
 
     // f32 literals:
     'nan',
@@ -21,7 +20,7 @@ export namespace Lexer {
 
     // types:
     'i32', // 32 bit integer
-    'f32' // single precision 32 bit float after the IEEE754-2008 standard
+    'f32' // single precision 32 bit float from the IEEE754-2008 standard
   ];
 
   const symbols: string[] = [
@@ -213,6 +212,18 @@ export namespace Lexer {
     idx: number; // index of the lexeme in the src code
   }
 
+  export type nextToken =
+    | {
+        valid: true;
+        value: token;
+        newidx: number; // index of the character after the end of the lexeme
+      }
+    | {
+        valid: false;
+        value: lexerErrorToken;
+        newidx: number;
+      };
+
   // TODO
   export type lexerErrorToken =
     | { codeInvalid: false; type: 'eof' /*reached end of file*/; idx: number }
@@ -297,18 +308,18 @@ export namespace Lexer {
         idxs: number[];
         idx: number;
       };
+  // #endregion
 
-  export type nextToken =
-    | {
-        valid: true;
-        value: token;
-        newidx: number; // index of the character after the end of the lexeme
-      }
-    | {
-        valid: false;
-        value: lexerErrorToken;
-        newidx: number;
-      };
+  // #region helper functions
+  function matches(string: string, toMatch: string | string[]): boolean {
+    return (
+      string === toMatch || (Array.isArray(toMatch) && toMatch.includes(string))
+    );
+  }
+
+  function idxValid(idx: number, obj: { length: number }): boolean {
+    return idx < obj.length && idx >= 0;
+  }
   // #endregion
 
   // #region consume functions
@@ -710,16 +721,7 @@ export namespace Lexer {
   }
   // #endregion
 
-  function matches(string: string, toMatch: string | string[]): boolean {
-    return (
-      string === toMatch || (Array.isArray(toMatch) && toMatch.includes(string))
-    );
-  }
-
-  function idxValid(idx: number, obj: { length: number }): boolean {
-    return idx < obj.length && idx >= 0;
-  }
-
+  // #region lexer functions
   function lexeNextToken(code: string, idx: number): nextToken {
     while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
 
@@ -801,6 +803,7 @@ export namespace Lexer {
       ? { valid: true, tokens, softErrors }
       : { valid: false, tokens, lexerErrors: errors, softErrors };
   }
+  // #endregion
 
   function debugLexer(): void {
     const timerAndIO: boolean = true;

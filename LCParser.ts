@@ -2,14 +2,17 @@
 import { inspect } from 'util';
 import { Lexer } from './LCLexer';
 
-const log = (args: any) => console.log(inspect(args, { depth: 999 }));
+const log = (args: any) =>
+  console.log(inspect(args, { depth: 999, colors: true }));
 
 /*
  Check list:
  var, let, const, function, namespace, type, interface, export
- switch, for, while, do, yield, return, enum, new
+ switch, for, while, do, yield, return, enum, new, continue, break
  void, any, unknown, never, null, undefined, as
  Error, throw, try catch
+ Infinity, NaN
+ ?:, =, {, [, ', ", !, ?
  TODO, HERE, NOW, BLL Text
 */
 
@@ -128,54 +131,54 @@ export namespace Parser {
   // #region types
   export type parseError =
     | string
-    | { type: 'error'; value: any; currentToken: optional<Lexer.token> };
+    | { type: 'error'; value: any; currentToken: optLexToken };
 
-  type comment = { comments: Lexer.token[] };
+  type comment = { comments: lexToken[] };
 
   // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
   export type statement = comment &
     (
       | { type: 'comment' }
-      | { type: 'empty'; semicolonToken: Lexer.token }
+      | { type: 'empty'; semicolonToken: lexToken }
       | {
           type: 'import';
-          localFileName: Lexer.token;
-          useToken: Lexer.token;
-          semicolonToken: Lexer.token;
+          localFileName: lexToken;
+          useToken: lexToken;
+          semicolonToken: lexToken;
         }
       | (
           | ({
               type: 'let';
-              identifierToken: Lexer.token;
+              identifierToken: lexToken;
               body: expression & comment;
-              letToken: Lexer.token;
-              equalsToken: Lexer.token;
-              semicolonToken: Lexer.token;
+              letToken: lexToken;
+              equalsToken: lexToken;
+              semicolonToken: lexToken;
             } & hasExplicitType &
               genericAnnotation)
           | {
               type: 'type-alias';
-              identifierToken: Lexer.token;
+              identifierToken: lexToken;
               typeValue: typeExpression;
-              typeToken: Lexer.token;
-              equalsToken: Lexer.token;
-              semicolonToken: Lexer.token;
+              typeToken: lexToken;
+              equalsToken: lexToken;
+              semicolonToken: lexToken;
             }
           | {
               type: 'complex-type';
-              identifierToken: Lexer.token;
+              identifierToken: lexToken;
               typeValue: complexTypeValue[];
-              typeToken: Lexer.token;
-              openingBracketToken: Lexer.token;
-              closingBracketToken: Lexer.token;
+              typeToken: lexToken;
+              openingBracketToken: lexToken;
+              closingBracketToken: lexToken;
             }
           | {
               type: 'group';
-              identifierToken: Lexer.token;
+              identifierToken: lexToken;
               body: statement[];
-              groupToken: Lexer.token;
-              openingBracketToken: Lexer.token;
-              closingBracketToken: Lexer.token;
+              groupToken: lexToken;
+              openingBracketToken: lexToken;
+              closingBracketToken: lexToken;
             }
         )
     );
@@ -185,48 +188,48 @@ export namespace Parser {
     | {
         isGeneric: true;
         genericIdentifiers: {
-          identifierToken: Lexer.token;
-          commaToken?: Lexer.token;
+          identifierToken: lexToken;
+          commaToken: optLexToken;
         }[];
-        genericOpeningBracketToken: Lexer.token;
-        genericClosingBracketToken: Lexer.token;
+        genericOpeningBracketToken: lexToken;
+        genericClosingBracketToken: lexToken;
       };
   type hasExplicitType =
     | {
         explicitType: true;
         typeExpression: typeExpression;
-        colonToken: Lexer.token;
+        colonToken: lexToken;
       }
     | {
         explicitType: false;
         typeExpression: typeExpression;
       };
   type complexTypeValue = {
-    identifierToken: Lexer.token;
+    identifierToken: lexToken;
     parameters: {
-      typeIdentifierToken: Lexer.token;
-      commaToken?: Lexer.token;
+      typeIdentifierToken: lexToken;
+      commaToken: optLexToken;
     }[]; // TODO when brackets are not present, then no parameters can be there
-    openingBracketToken?: Lexer.token;
-    closingBracketToken?: Lexer.token /*TODO if has opening bracket, then must have closing bracket or vice versa*/;
-    commaToken?: Lexer.token;
-    // comments: Lexer.tokenType[] // TODO, add for better formatting
+    openingBracketToken: optLexToken;
+    closingBracketToken: optLexToken /*TODO if has opening bracket, then must have closing bracket or vice versa*/;
+    commaToken: optLexToken;
+    // comments: lexTokenType[] // TODO, add for better formatting
   };
 
   // TODO what about generics: func[T1, T2]
   export type funcExpression = {
     type: 'func';
     parameters: {
-      identifierToken: Lexer.token;
+      identifierToken: lexToken;
       typeExpression: typeExpression;
-      colonToken?: Lexer.token /*colon for type annotation*/;
-      commaToken?: Lexer.token /*comma for next param*/;
+      colonToken: optLexToken /*colon for type annotation*/;
+      commaToken: optLexToken /*comma for next param*/;
     }[];
     body: expression;
-    funcToken: Lexer.token;
-    openingBracketToken: Lexer.token;
-    closingBracketToken: Lexer.token;
-    arrowToken: Lexer.token;
+    funcToken: lexToken;
+    openingBracketToken: lexToken;
+    closingBracketToken: lexToken;
+    arrowToken: lexToken;
   } & hasExplicitType;
 
   // match, func, "nan", "inf", literals
@@ -236,50 +239,50 @@ export namespace Parser {
         type: 'literal';
         literalType: 'i32';
         literal: number;
-        literalToken: Lexer.token;
+        literalToken: lexToken;
       }
     | {
         type: 'literal';
         literalType: 'f32';
         literal: number;
-        literalToken: Lexer.token;
+        literalToken: lexToken;
       }
-    | { type: 'identifier'; identifierToken: Lexer.token }
+    | { type: 'identifier'; identifierToken: lexToken }
     | funcExpression
     | {
         type: 'grouping';
         body: expression;
-        openingBracketToken: Lexer.token;
-        closingBracketToken: Lexer.token;
+        openingBracketToken: lexToken;
+        closingBracketToken: lexToken;
       }
     | {
         type: 'unary';
         operator: string;
         body: expression;
-        operatorToken: Lexer.token;
+        operatorToken: lexToken;
       }
     | {
         type: 'binary';
         operator: string;
         leftSide: expression;
         rightSide: expression;
-        operatorToken: Lexer.token;
+        operatorToken: lexToken;
       }
     | {
         type: 'propertyAccess';
         source: expression;
-        propertyToken: Lexer.token;
-        dotToken: Lexer.token;
+        propertyToken: lexToken;
+        dotToken: lexToken;
       }
     | {
         type: 'functionCall';
         function: expression;
         arguments: {
           argumentExpression: expression;
-          commaToken?: Lexer.token;
+          commaToken: optLexToken;
         }[];
-        openingBracketToken: Lexer.token;
-        closingBracketToken: Lexer.token;
+        openingBracketToken: lexToken;
+        closingBracketToken: lexToken;
       }
     | { type: 'match' /*TODO, put in comments[] for each and every branch!*/ };
 
@@ -289,30 +292,34 @@ export namespace Parser {
       | { type: 'implicit' }
       | {
           type: 'primitive-type';
-          primitiveToken: Lexer.token; // keyword like i32/f32 or generic identifier/type identifier
+          primitiveToken: lexToken; // keyword like i32/f32 or generic identifier/type identifier
         }
       | {
           type: 'func-type';
           parameters: {
             typeExpression: typeExpression;
-            commaToken?: Lexer.token;
+            commaToken: optLexToken;
           }[];
           returnType: typeExpression;
-          openingBracketToken?: Lexer.token;
-          closingBracketToken?: Lexer.token;
-          arrowToken: Lexer.token;
+          openingBracketToken: optLexToken;
+          closingBracketToken: optLexToken;
+          arrowToken: lexToken;
         }
       | {
           type: 'grouping';
           body: typeExpression;
-          openingBracketToken: Lexer.token;
-          closingBracketToken: Lexer.token;
+          openingBracketToken: lexToken;
+          closingBracketToken: lexToken;
         }
     );
   // #endregion
 
   // #region helper
   type optional<T> = T | undefined;
+  type lexToken = Lexer.token;
+  type optLexToken = optional<lexToken>;
+  type lexTokenType = Lexer.tokenType;
+  const lexTokenType: typeof Lexer.tokenType = Lexer.tokenType;
 
   // part which handles the lexer
   class Larser {
@@ -320,7 +327,7 @@ export namespace Parser {
     private lexer: Generator<Lexer.nextToken>;
 
     private state:
-      | { eof: false; currentToken: Lexer.token }
+      | { eof: false; currentToken: lexToken }
       | { eof: true; currentToken: undefined };
 
     constructor(code: string) {
@@ -340,7 +347,7 @@ export namespace Parser {
     }
 
     // assertion: not eof
-    public getCurrentToken(): Lexer.token {
+    public getCurrentToken(): lexToken {
       if (this.isEof())
         throw new Error(
           'Internal error while parsing. Tried getting the current token, even tho the code is eof.'
@@ -395,50 +402,50 @@ export namespace Parser {
   }
 
   // returns the current token
-  function peek(): Lexer.token | undefined {
+  function peek(): optLexToken {
     if (isAtEnd()) return undefined; // TODO shouldnt it just crash if that happens? invalid internal code, same with advance()
     return larser.getCurrentToken();
   }
 
   // returns the current token and advances to the next token
-  function advance(): Lexer.token | undefined {
+  function advance(): optLexToken {
     if (isAtEnd()) return undefined;
 
-    const currentToken: Lexer.token | undefined = peek();
+    const currentToken: optLexToken = peek();
     larser.advanceToken();
     return currentToken;
   }
 
   // returns if the current token matches the tokens
   function match(...tokens: string[]): boolean {
-    const currentToken: Lexer.token | undefined = peek();
-    return currentToken !== undefined && tokens.includes(currentToken.lexeme);
+    const currentToken: optLexToken = peek();
+    return isPresent(currentToken) && tokens.includes(currentToken.lexeme);
   }
 
   // returns if the current token type matches the tokenTypes
-  function matchType(...tokenTypes: Lexer.tokenType[]): boolean {
-    const currentToken: Lexer.token | undefined = peek();
-    return currentToken !== undefined && tokenTypes.includes(currentToken.type);
+  function matchType(...tokenTypes: lexTokenType[]): boolean {
+    const currentToken: optLexToken = peek();
+    return isPresent(currentToken) && tokenTypes.includes(currentToken.type);
   }
 
   // return advace on match else error
   function matchAdvanceOrError(
     token: string,
     error: parseError
-  ): Lexer.token | never {
+  ): lexToken | never {
     return match(token) ? advance()! : newParseError(error);
   }
 
   // return advance on match type else error
   function matchTypeAdvanceOrError(
-    tokenType: Lexer.tokenType,
+    tokenType: lexTokenType,
     error: parseError
-  ): Lexer.token | never {
+  ): lexToken | never {
     return matchType(tokenType) ? advance()! : newParseError(error);
   }
 
   // return advance on match
-  function optionalMatchAdvance(token: string): optional<Lexer.token> {
+  function optionalMatchAdvance(token: string): optLexToken {
     return match(token) ? advance()! : undefined;
   }
 
@@ -464,28 +471,31 @@ export namespace Parser {
   type argumentList<T> = {
     data: {
       argument: T;
-      delimiterToken: optional<Lexer.token>;
+      delimiterToken: optLexToken;
     }[];
-    closingBracketToken: Lexer.token;
+    closingBracketToken: lexToken;
   };
 
   function parseArgumentList<T>(
     closingBracket: string,
-    delimiter: string | undefined,
+    delimiter: optional<string>,
     parseArgument: () => T,
-    comments: Lexer.token[],
+    comments: lexToken[],
     missingDelimiterError: string = 'missing comma token while parsing arguments',
     missingBracketError: string = 'missing closing bracket token while parsing arguments',
-    eofError: string = 'unexpected eof while parsing arguments'
+    eofError: string = 'unexpected eof while parsing arguments',
+    invalidArgumentError: string = 'could not parse a valid argument'
   ): argumentList<T> {
     const argumentList: {
       argument: T;
-      delimiterToken: optional<Lexer.token>;
+      delimiterToken: optLexToken;
     }[] = [];
 
     consumeComments(comments);
 
     while (!isAtEnd() && !match(closingBracket)) {
+      const currentTokenDebug: lexToken = peek()!;
+
       consumeComments(comments);
 
       checkEofWithError(eofError);
@@ -503,7 +513,7 @@ export namespace Parser {
 
       checkEofWithError(eofError);
 
-      const delimiterToken: optional<Lexer.token> = isPresent(delimiter)
+      const delimiterToken: optLexToken = isPresent(delimiter)
         ? optionalMatchAdvance(delimiter)
         : undefined;
 
@@ -512,11 +522,13 @@ export namespace Parser {
       consumeComments(comments);
 
       checkEofWithError(eofError);
+
+      if (!iterationAdvanced(currentTokenDebug)) break;
     }
 
     checkEofWithError(eofError);
 
-    const closingBracketToken: Lexer.token = matchAdvanceOrError(
+    const closingBracketToken: lexToken = matchAdvanceOrError(
       closingBracket,
       missingBracketError
     );
@@ -524,8 +536,17 @@ export namespace Parser {
     return { data: argumentList, closingBracketToken };
   }
 
-  function consumeComments(comments: Lexer.token[]): void {
-    while (!isAtEnd() && matchType(Lexer.tokenType.comment))
+  function iterationAdvanced(
+    curTokenBeforeLoopIter: lexToken,
+    errorMsgOnSameToken: parseError = 'TODO same token'
+  ): boolean {
+    if (isPresent(peek()) && curTokenBeforeLoopIter.idx === peek()!.idx)
+      return newParseError(errorMsgOnSameToken), false;
+    return true;
+  }
+
+  function consumeComments(comments: lexToken[]): void {
+    while (!isAtEnd() && matchType(lexTokenType.comment))
       comments.push(advance()!);
   }
   // #endregion
@@ -540,7 +561,7 @@ export namespace Parser {
         'Internal Parser error. Tried to parse a statement at eof.'
       );
 
-    const comments: Lexer.token[] = [];
+    const comments: lexToken[] = [];
     consumeComments(comments);
 
     if (isAtEnd() && comments.length !== 0)
@@ -549,19 +570,19 @@ export namespace Parser {
       return { type: 'comment', comments };
 
     if (match(';')) {
-      const semicolonToken: Lexer.token = advance()!;
+      const semicolonToken: lexToken = advance()!;
       return { type: 'empty', semicolonToken, comments };
     }
 
     if (match('use')) {
-      const useToken: Lexer.token = advance()!;
+      const useToken: lexToken = advance()!;
 
       consumeComments(comments);
 
       checkEofWithError('no use body in use statement');
 
-      const localFileName: Lexer.token = matchTypeAdvanceOrError(
-        Lexer.tokenType.identifier,
+      const localFileName: lexToken = matchTypeAdvanceOrError(
+        lexTokenType.identifier,
         'did not get an identifier in use statement'
       );
 
@@ -569,7 +590,7 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in use statement: missing semicolon');
 
-      const semicolonToken: Lexer.token = matchAdvanceOrError(
+      const semicolonToken: lexToken = matchAdvanceOrError(
         ';',
         'TODO did not get semicolon in a use statement'
       );
@@ -584,14 +605,14 @@ export namespace Parser {
     }
 
     if (match('group')) {
-      const groupToken: Lexer.token = advance()!;
+      const groupToken: lexToken = advance()!;
 
       consumeComments(comments);
 
       checkEofWithError('unexpected eof in group statement');
 
-      const identifierToken: Lexer.token = matchTypeAdvanceOrError(
-        Lexer.tokenType.identifier,
+      const identifierToken: lexToken = matchTypeAdvanceOrError(
+        lexTokenType.identifier,
         'TODO can not have an undefined identifier for a group statement'
       );
 
@@ -601,9 +622,9 @@ export namespace Parser {
         'unexpected eof in group statement after getting an identifier'
       );
 
-      const openingBracketToken: Lexer.token = matchAdvanceOrError(
+      const openingBracketToken: lexToken = matchAdvanceOrError(
         '{',
-        "TODO cant have a group statement without an opening brackt '{'"
+        'TODO cant have a group statement without an opening brackt "{"'
       );
 
       consumeComments(comments);
@@ -613,9 +634,24 @@ export namespace Parser {
       );
 
       const body: statement[] = [];
-      while (!isAtEnd() && !match('}')) body.push(parseStatement());
+      while (!isAtEnd() && !match('}')) {
+        const currentTokenDebug: lexToken = peek()!;
+
+        body.push(parseStatement());
+
+        if (
+          !iterationAdvanced(
+            currentTokenDebug,
+            'TODO did not match a statement in group statement'
+          )
+        )
+          break;
+      }
       checkEofWithError('unexpected eof in group statement');
-      const closingBracketToken: Lexer.token = advance()!;
+      const closingBracketToken: lexToken = matchAdvanceOrError(
+        '}',
+        'TODO internal error, did not match what thought would have been matched'
+      );
 
       return {
         type: 'group',
@@ -630,14 +666,14 @@ export namespace Parser {
 
     // add generics
     if (match('let')) {
-      const letToken: Lexer.token = advance()!;
+      const letToken: lexToken = advance()!;
 
       consumeComments(comments);
 
       checkEofWithError('unexpected eof in let statement');
 
-      const identifierToken: Lexer.token = matchTypeAdvanceOrError(
-        Lexer.tokenType.identifier,
+      const identifierToken: lexToken = matchTypeAdvanceOrError(
+        lexTokenType.identifier,
         'TODO cant have an undefined identifier for a let statement'
       );
 
@@ -647,8 +683,7 @@ export namespace Parser {
         'unexpected eof in let statement after asuming an identifier'
       );
 
-      const genericOpeningBracketToken: optional<Lexer.token> =
-        optionalMatchAdvance('[');
+      const genericOpeningBracketToken: optLexToken = optionalMatchAdvance('[');
 
       const isGeneric: boolean = isPresent(genericOpeningBracketToken);
 
@@ -659,45 +694,45 @@ export namespace Parser {
       );
 
       // TODO error messages aso
-      const argumentList: optional<argumentList<Lexer.token>> = !isGeneric
-        ? undefined
-        : parseArgumentList(
+      const argumentList: optional<argumentList<lexToken>> = isGeneric
+        ? parseArgumentList(
             ']',
             ',',
-            () => matchTypeAdvanceOrError(Lexer.tokenType.identifier, ''),
+            () =>
+              matchTypeAdvanceOrError(
+                lexTokenType.identifier,
+                'did not match an identifier in generic let statement'
+              ),
             comments,
             'missing comma token in generic let statement declaration',
             'missing closing bracket in generic let statement declaration',
-            'unexpected eof in generic let statement'
-          );
+            'unexpected eof in generic let statement',
+            'did not match an identifier in generic let statement'
+          )
+        : undefined;
 
       // TODO HERE NOW generics at this step
       const genericIdentifiers: optional<
         {
-          identifierToken: Lexer.token;
-          commaToken?: Lexer.token;
+          identifierToken: lexToken;
+          commaToken: optLexToken;
         }[]
-      > = !isGeneric
-        ? undefined
-        : argumentList?.data.map((e) => ({
+      > = isGeneric
+        ? argumentList?.data.map((e) => ({
             identifierToken: e.argument,
             commaToken: e.delimiterToken
-          }));
+          }))
+        : undefined;
 
-      if (isGeneric && genericIdentifiers?.length === 0)
-        newParseError('missing values in generic let statement');
+      if (
+        isGeneric &&
+        (!isPresent(genericIdentifiers) || genericIdentifiers.length === 0)
+      )
+        newParseError('missing generic token values in generic let statement');
 
-      const genericClosingBracketToken: optional<Lexer.token> = isGeneric
+      const genericClosingBracketToken: optLexToken = isGeneric
         ? argumentList?.closingBracketToken
         : undefined;
-      // callOnPresent(
-      //   genericOpeningBracketToken,
-      //   () =>
-      //     matchAdvanceOrError(
-      //       ']',
-      //       'missing closing bracket in generic let statement declaration'
-      //     )
-      // );
 
       consumeComments(comments);
 
@@ -705,7 +740,7 @@ export namespace Parser {
         'error after getting closing bracket for generic in let statement'
       );
 
-      const colonToken: optional<Lexer.token> = optionalMatchAdvance(':');
+      const colonToken: optLexToken = optionalMatchAdvance(':');
 
       consumeComments(comments);
 
@@ -718,7 +753,6 @@ export namespace Parser {
         () => {
           /*if for better error messages*/
           if (!match('=')) return parseTypeExpression();
-          else newParseError("TODO HERE needed??????");
         }
       );
 
@@ -735,7 +769,7 @@ export namespace Parser {
         'unexpected eof in let statement while expecting a "="'
       );
 
-      const equalsToken: Lexer.token = matchAdvanceOrError(
+      const equalsToken: lexToken = matchAdvanceOrError(
         '=',
         'TODO cant have a let statement without a "=" symbol'
       );
@@ -744,7 +778,6 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in let statement after "="');
 
-      // TODO refactor, but how?
       const body: expression & comment = !match(';') /*better error messages*/
         ? parseExpression()
         : newParseError('TODO no body in let expression');
@@ -753,7 +786,7 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in let statement');
 
-      const semicolonToken: Lexer.token = matchAdvanceOrError(
+      const semicolonToken: lexToken = matchAdvanceOrError(
         ';',
         'TODO let statements must be finished with a ";" symbol'
       );
@@ -793,15 +826,14 @@ export namespace Parser {
 
     // NOW, TODO add generics
     if (match('type')) {
-      // TODO
-      const typeToken: Lexer.token = advance()!;
+      const typeToken: lexToken = advance()!;
 
       consumeComments(comments);
 
       checkEofWithError('TODO nothing after type keyword');
 
-      const identifierToken: Lexer.token = matchTypeAdvanceOrError(
-        Lexer.tokenType.identifier,
+      const identifierToken: lexToken = matchTypeAdvanceOrError(
+        lexTokenType.identifier,
         'TODO invalid type expression: missing identifier'
       );
 
@@ -809,10 +841,22 @@ export namespace Parser {
 
       checkEofWithError('Nothing after identifier token in type expression');
 
-      // TODO generics at this step
+      const genericOpeningBracketToken: optLexToken = optionalMatchAdvance('[');
+      const isGeneric: boolean = isPresent(genericOpeningBracketToken);
+
+      consumeComments(comments);
+      checkEofWithError('TODO');
+
+      const argumentList: any[] = [];
+
+      consumeComments(comments);
+      checkEofWithError('TODO');
+
+      // TODO add generic
+      const genericClosingBracketToken: optLexToken = undefined;
 
       if (match('=')) {
-        const equalsToken: Lexer.token = advance()!;
+        const equalsToken: lexToken = advance()!;
 
         consumeComments(comments);
 
@@ -830,7 +874,7 @@ export namespace Parser {
 
         checkEofWithError('TODO got nothing after type expression');
 
-        const semicolonToken: Lexer.token = matchAdvanceOrError(
+        const semicolonToken: lexToken = matchAdvanceOrError(
           ';',
           'TODO did not finish the type expression'
         );
@@ -845,13 +889,15 @@ export namespace Parser {
           comments
         };
       } else if (match('{')) {
-        const openingBracketToken: Lexer.token = advance()!;
+        const openingBracketToken: lexToken = advance()!;
 
         consumeComments(comments);
 
         const localComments: [] = []; // TODO add special comments to each complex type
         const typeValue: complexTypeValue[] = [];
         while (!isAtEnd() && !match('}')) {
+          const currentTokenDebug: lexToken = peek()!;
+
           consumeComments(comments);
 
           checkEofWithError(
@@ -865,9 +911,14 @@ export namespace Parser {
             newParseError('TODO, missing comma in complex type body');
 
           typeValue.push(parseComplexeTypeLine());
+
+          if (!iterationAdvanced(currentTokenDebug)) break;
         }
         checkEofWithError('eof in complex type statement');
-        const closingBracketToken: Lexer.token = advance()!;
+        const closingBracketToken: lexToken = matchAdvanceOrError(
+          '}',
+          'TODO internal error'
+        )!;
 
         return {
           type: 'complex-type',
@@ -892,8 +943,8 @@ export namespace Parser {
           'Invalid eof while parsing a line in a complex type statement'
         );
 
-        const identifierToken: Lexer.token = matchTypeAdvanceOrError(
-          Lexer.tokenType.identifier,
+        const identifierToken: lexToken = matchTypeAdvanceOrError(
+          lexTokenType.identifier,
           'TODO invalid complex type statement: missing identifier'
         );
 
@@ -903,8 +954,7 @@ export namespace Parser {
           'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
         );
 
-        const openingBracketToken: optional<Lexer.token> =
-          optionalMatchAdvance('(');
+        const openingBracketToken: optLexToken = optionalMatchAdvance('(');
 
         consumeComments(comments);
 
@@ -913,11 +963,13 @@ export namespace Parser {
         );
 
         const parameters: {
-          typeIdentifierToken: Lexer.token;
-          commaToken?: Lexer.token;
+          typeIdentifierToken: lexToken;
+          commaToken: optLexToken;
         }[] = [];
         // TODO endless loop because if no `)` in the code, then it wont advance further?
         while (isPresent(openingBracketToken) && !isAtEnd() && !match(')')) {
+          const currentTokenDebug: lexToken = peek()!;
+
           consumeComments(comments);
 
           checkEofWithError(
@@ -932,26 +984,24 @@ export namespace Parser {
               'TODO missing comma between two parameters in complex type value'
             );
 
-          const typeIdentifierToken: Lexer.token =
-            matchType(Lexer.tokenType.identifier) ||
-            match('i32') ||
-            match('f32')
+          const typeIdentifierToken: lexToken =
+            matchType(lexTokenType.identifier) || match('i32') || match('f32')
               ? advance()!
-              : (advance() /*TODO probably needed??*/,
-                newParseError('TODO invalid expression in complex type value'));
+              : newParseError('TODO invalid expression in complex type value');
 
           consumeComments(comments);
 
-          const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
+          const commaToken: optLexToken = optionalMatchAdvance(',');
 
           parameters.push({
             typeIdentifierToken,
             commaToken
           });
+
+          if (!iterationAdvanced(currentTokenDebug)) break;
         }
 
-        const closingBracketToken: optional<Lexer.token> =
-          optionalMatchAdvance(')');
+        const closingBracketToken: optLexToken = optionalMatchAdvance(')');
 
         consumeComments(comments);
 
@@ -969,7 +1019,7 @@ export namespace Parser {
         )
           newParseError('TODO missing brackets in complexe type');
 
-        const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
+        const commaToken: optLexToken = optionalMatchAdvance(',');
 
         return {
           identifierToken,
@@ -993,7 +1043,7 @@ export namespace Parser {
 
   // TODO add comments and isAtEnd() support
   function parseExpression(): expression & comment {
-    const comments: Lexer.token[] = [];
+    const comments: lexToken[] = [];
 
     function parseExprLvl0(): expression {
       consumeComments(comments);
@@ -1002,7 +1052,7 @@ export namespace Parser {
 
       // TODO isAtEnd() and consumeComment()
       while (match('|')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl1();
         consumeComments(comments);
@@ -1025,7 +1075,7 @@ export namespace Parser {
       consumeComments(comments);
 
       while (match('^')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl2();
         consumeComments(comments);
@@ -1048,7 +1098,7 @@ export namespace Parser {
       consumeComments(comments);
 
       while (match('&')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl3();
         consumeComments(comments);
@@ -1071,7 +1121,7 @@ export namespace Parser {
       consumeComments(comments);
 
       while (match('==', '!=')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl4();
         consumeComments(comments);
@@ -1094,7 +1144,7 @@ export namespace Parser {
       consumeComments(comments);
 
       while (match('<', '>', '<=', '>=')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl5();
         consumeComments(comments);
@@ -1117,7 +1167,7 @@ export namespace Parser {
       consumeComments(comments);
 
       while (match('<<', '>>')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl6();
         consumeComments(comments);
@@ -1140,7 +1190,7 @@ export namespace Parser {
       consumeComments(comments);
 
       while (match('-', '+')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl7();
         consumeComments(comments);
@@ -1163,7 +1213,7 @@ export namespace Parser {
       consumeComments(comments);
 
       while (match('*', '/', '%')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl8();
         consumeComments(comments);
@@ -1188,7 +1238,7 @@ export namespace Parser {
       // right to left precedence:
       // if because precedence order
       if (match('**', '***')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const rightSide: expression = parseExprLvl8(); // TODO right? same level because precedence order
         consumeComments(comments);
@@ -1208,7 +1258,7 @@ export namespace Parser {
     function parseExprLvl9(): expression {
       // unary:
       if (match('!', '-', '+', '~')) {
-        const operatorToken: Lexer.token = advance()!;
+        const operatorToken: lexToken = advance()!;
         consumeComments(comments);
         const body: expression = parseExprLvl9(); // same level?? TODO
         consumeComments(comments);
@@ -1231,15 +1281,14 @@ export namespace Parser {
       consumeComments(comments);
 
       while (match('(', '.')) {
-        const token: Lexer.token = advance()!;
+        const token: lexToken = advance()!;
 
         if (token.lexeme === '.') {
           // f.
-          const propertyToken: Lexer.token = matchType(
-            Lexer.tokenType.identifier
-          )
-            ? advance()!
-            : newParseError('TODO invalid property access');
+          const propertyToken: lexToken = matchTypeAdvanceOrError(
+            lexTokenType.identifier,
+            'TODO invalid property access'
+          );
 
           // TODO error: what about having e.g. just a `5` for propertyToken
           // wrong error rn...
@@ -1254,10 +1303,12 @@ export namespace Parser {
           //   f(
           const args: {
             argumentExpression: expression;
-            commaToken?: Lexer.token;
+            commaToken: optLexToken;
           }[] = [];
           // TODO what about error messages for `(5,,)`
           while (!isAtEnd() && !match(')')) {
+            const currentTokenDebug: lexToken = peek()!;
+
             // if last was not comma
             if (
               args.length !== 0 &&
@@ -1273,13 +1324,18 @@ export namespace Parser {
 
             consumeComments(comments);
 
-            const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
+            const commaToken: optLexToken = optionalMatchAdvance(',');
 
             args.push({ argumentExpression, commaToken });
+
+            if (!iterationAdvanced(currentTokenDebug)) break;
           }
 
           checkEofWithError('Had eof in function calling expression');
-          const closingBracketToken: Lexer.token = advance()!;
+          const closingBracketToken: lexToken = matchAdvanceOrError(
+            ')',
+            'TODO internal error'
+          );
           left = {
             type: 'functionCall',
             function: left,
@@ -1307,13 +1363,14 @@ export namespace Parser {
       consumeComments(comments);
 
       if (match('(')) {
-        const openingBracketToken: Lexer.token = advance()!;
+        const openingBracketToken: lexToken = advance()!;
         consumeComments(comments);
         const body: expression = parseExpression();
         consumeComments(comments);
-        const closingBracketToken: Lexer.token = match(')')
-          ? advance()!
-          : newParseError('TODO did not close bracket in grouping expression');
+        const closingBracketToken: lexToken = matchAdvanceOrError(
+          ')',
+          'TODO did not close bracket in grouping expression'
+        );
 
         consumeComments(comments);
 
@@ -1323,15 +1380,17 @@ export namespace Parser {
           openingBracketToken,
           closingBracketToken
         };
-      } else if (matchType(Lexer.tokenType.literal)) {
-        const literalToken: Lexer.token = advance()!;
+      } else if (matchType(lexTokenType.literal)) {
+        const literalToken: lexToken = advance()!;
 
         consumeComments(comments);
 
         const lexeme: string = literalToken.lexeme;
         const literalType: 'i32' | 'f32' =
           lexeme.includes('.') ||
-          (!lexeme.startsWith('0x') && lexeme.includes('e'))
+          (!lexeme.startsWith('0x') && lexeme.includes('e')) ||
+          lexeme === 'inf' ||
+          lexeme === 'nan'
             ? 'f32'
             : 'i32';
         const literal: number =
@@ -1345,8 +1404,8 @@ export namespace Parser {
           literal,
           literalToken
         };
-      } else if (matchType(Lexer.tokenType.identifier)) {
-        const identifierToken: Lexer.token = advance()!;
+      } else if (matchType(lexTokenType.identifier)) {
+        const identifierToken: lexToken = advance()!;
         consumeComments(comments);
         return {
           type: 'identifier',
@@ -1357,29 +1416,36 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      newParseError('TODO could not match anything in parsing expressions');
-      return {
-        error: 'TODO could not match anything in parsing expressions',
-        lastToken: advance()
-      } as never;
+      return newParseError(
+        'TODO could not match anything in parsing expressions'
+      );
     }
 
     function parseFuncExpression(): expression {
+      if (!match('func'))
+        throw new Error(
+          'Internal error, called this function, even tho here is no function'
+        );
+
       function parseFuncExprParam(): {
-        identifierToken: Lexer.token;
+        identifierToken: lexToken;
         typeExpression: typeExpression;
-        colonToken?: Lexer.token /*colon for type annotation*/;
-        commaToken?: Lexer.token;
+        colonToken: optLexToken /*colon for type annotation*/;
+        commaToken: optLexToken;
       }[] {
         const params: {
-          identifierToken: Lexer.token;
+          identifierToken: lexToken;
           typeExpression: typeExpression;
-          colonToken?: Lexer.token /*colon for type annotation*/;
-          commaToken?: Lexer.token;
+          colonToken: optLexToken /*colon for type annotation*/;
+          commaToken: optLexToken;
         }[] = [];
+
+        consumeComments(comments);
 
         // TODO consumeComments() and isEof()
         while (!isAtEnd() && !match(')')) {
+          const currentTokenDebug: lexToken = peek()!;
+
           consumeComments(comments);
 
           if (
@@ -1390,22 +1456,20 @@ export namespace Parser {
               'Invalid func expression: missing comma in argument list'
             );
 
-          const identifierToken: Lexer.token = matchType(
-            Lexer.tokenType.identifier
-          )
-            ? advance()!
-            : newParseError(
-                'TODO Invalid func expression: expected an identifier'
-              );
+          // TODO could also be, that the user forget a ")" and there was no identifier intended
+          const identifierToken: lexToken = matchTypeAdvanceOrError(
+            lexTokenType.identifier,
+            'TODO Invalid func expression: expected an identifier'
+          );
 
-          const colonToken: optional<Lexer.token> = optionalMatchAdvance(':');
+          const colonToken: optLexToken = optionalMatchAdvance(':');
 
           const explicitType: optional<typeExpression> = callOnPresent(
             colonToken,
             () => parseTypeExpression()
           );
 
-          const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
+          const commaToken: optLexToken = optionalMatchAdvance(',');
 
           params.push({
             identifierToken,
@@ -1413,24 +1477,23 @@ export namespace Parser {
             colonToken,
             commaToken
           });
+
+          if (!iterationAdvanced(currentTokenDebug)) break;
         }
 
         return params;
       }
 
-      if (!match('func'))
-        throw new Error(
-          'Internal error, called this function, even tho here is no function'
-        );
-      const funcToken: Lexer.token = advance()!;
+      const funcToken: lexToken = advance()!;
 
       consumeComments(comments);
 
       // TODO generics
 
-      const openingBracketToken: Lexer.token = match('(')
-        ? advance()!
-        : newParseError('TODO functions must be opend with (');
+      const openingBracketToken: lexToken = matchAdvanceOrError(
+        '(',
+        'TODO functions must be opend with ('
+      );
 
       consumeComments(comments);
 
@@ -1438,13 +1501,14 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      const closingBracketToken: Lexer.token = match(')')
-        ? advance()!
-        : newParseError('TODO functions must be closed with )');
+      const closingBracketToken: lexToken = matchAdvanceOrError(
+        ')',
+        'TODO functions must be closed with )'
+      );
 
       consumeComments(comments);
 
-      const colonToken: optional<Lexer.token> = optionalMatchAdvance(':');
+      const colonToken: optLexToken = optionalMatchAdvance(':');
       consumeComments(comments);
 
       const typeExpression: optional<typeExpression> = callOnPresent(
@@ -1454,9 +1518,10 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      const arrowToken: Lexer.token = match('=>')
-        ? advance()!
-        : newParseError('TODO functions must have a =>');
+      const arrowToken: lexToken = matchAdvanceOrError(
+        '=>',
+        'TODO functions must have a =>'
+      );
 
       consumeComments(comments);
 
@@ -1496,23 +1561,23 @@ export namespace Parser {
 
   // TODO isAtEnd() and consumeComments()
   function parseTypeExpression(): typeExpression {
-    const comments: Lexer.token[] = [];
+    const comments: lexToken[] = [];
 
-    if (match('i32') || match('f32') || matchType(Lexer.tokenType.identifier)) {
-      const value: Lexer.token = advance()!;
+    if (match('i32') || match('f32') || matchType(lexTokenType.identifier)) {
+      const value: lexToken = advance()!;
       const primitive: typeExpression = {
         type: 'primitive-type',
         primitiveToken: value,
         comments: []
       };
 
-      const arrowToken: optional<Lexer.token> = optionalMatchAdvance('->');
+      const arrowToken: optLexToken = optionalMatchAdvance('->');
 
       if (!isPresent(arrowToken)) return primitive;
 
       return {
         type: 'func-type',
-        parameters: [{ typeExpression: primitive }],
+        parameters: [{ typeExpression: primitive, commaToken: undefined }],
         returnType: parseTypeExpression(),
         openingBracketToken: undefined,
         closingBracketToken: undefined,
@@ -1520,17 +1585,19 @@ export namespace Parser {
         comments
       };
     } else if (match('(')) {
-      const openingBracketToken: Lexer.token = advance()!;
+      const openingBracketToken: lexToken = advance()!;
 
       consumeComments(comments);
 
-      const closingBracket: optional<Lexer.token> = optionalMatchAdvance(')');
+      const closingBracket: optLexToken = optionalMatchAdvance(')');
 
       const body: {
         typeExpression: typeExpression;
-        commaToken?: Lexer.token;
+        commaToken: optLexToken;
       }[] = [];
       while (!isPresent(closingBracket) && !isAtEnd() && !match(')')) {
+        const currentTokenDebug: lexToken = peek()!;
+
         consumeComments(comments);
 
         if (body.length !== 0 && !isPresent(body[body.length - 1].commaToken))
@@ -1540,26 +1607,29 @@ export namespace Parser {
 
         consumeComments(comments);
 
+        // TODO some error checking for better msgs maybe
         const type: typeExpression = parseTypeExpression();
 
         consumeComments(comments);
         // TODO isAtEnd() check...
 
-        const commaToken: optional<Lexer.token> = optionalMatchAdvance(',');
+        const commaToken: optLexToken = optionalMatchAdvance(',');
 
         // TODO what if now comes a comment??
 
         body.push({ typeExpression: type, commaToken });
+
+        if (!iterationAdvanced(currentTokenDebug)) break;
       }
 
-      const closingBracketToken: Lexer.token = isPresent(closingBracket)
+      const closingBracketToken: lexToken = isPresent(closingBracket)
         ? closingBracket
         : matchAdvanceOrError(
             ')',
             'TODO did not close bracket in type-grouping expression'
           );
 
-      const arrowToken: optional<Lexer.token> = optionalMatchAdvance('->');
+      const arrowToken: optLexToken = optionalMatchAdvance('->');
 
       if (isPresent(arrowToken)) {
         const returnType: typeExpression = parseTypeExpression();
@@ -1594,11 +1664,7 @@ export namespace Parser {
       }
     }
 
-    newParseError('TODO did not match any type expression statement');
-    return {
-      error: 'TODO did not match any type expression statement',
-      lastToken: advance()
-    } as never;
+    return newParseError('TODO did not match any type expression statement');
   }
   // #endregion
 
@@ -1612,17 +1678,19 @@ export namespace Parser {
     // TODO swap with arg list
     const statements: statement[] = [];
     while (!isAtEnd()) {
-      const lastToken: Lexer.token = peek()!;
+      const currentTokenDebug: lexToken = peek()!;
 
       statements.push(parseStatement());
 
-      if (peek() !== undefined && lastToken.idx === peek()!.idx)
-        // error handling to not create infinite loops
-        // an error should have been returned above already
-        newParseError(
-          'could not parse a statement with the following token: ' +
-            advance()?.toString()
-        );
+      // error handling to not create infinite loops
+      // an error should have been returned above already
+      if (
+        !iterationAdvanced(
+          currentTokenDebug,
+          'could not parse a statement in global scope'
+        )
+      )
+        break;
     }
 
     return parseErrors.length === 0
@@ -1675,7 +1743,32 @@ export namespace Parser {
         identifier3,
       }
 
-      type t2 = t;`
+      type t2 = t;`,
+      `
+      use file;
+
+      let i = nan;
+      let j = inf;
+      let u = i;
+      let x: i32 = 1;
+      let y: f32 = 2.0;
+      let z[A] =
+        (func (x: A): A => x) (3);
+      let f[B]: B -> i32 =
+        func (y: B): i32 => 4 + y;
+
+      type alias = f32;
+      type complex {
+        type1,
+        type2(),
+        type3(i32, f32),
+        type4
+      }
+
+      group G0 {
+        group G1 { let a = 5; }
+        let b = 6.0;
+      }`
     ];
     const mustNotParseButLexe: string[] = [
       'test',
@@ -1691,9 +1784,18 @@ export namespace Parser {
       'group',
       'func',
       'match',
+      'func (x) => x',
+      'let x = func ( => 5;',
       '+',
       '!',
       'use;',
+      'use',
+      'use test',
+      'let func',
+      'let x',
+      'let x]',
+      'let x[',
+      'let func ] =>',
       'let x = func (x: i32 => i32) => 5;',
       'let x = func (x: i32 -> i32) -> 5;',
       'let x',
@@ -1710,6 +1812,14 @@ export namespace Parser {
         identifier3
       }`
     ];
+
+    const mustParseWithComments: string[] = new Array(mustParse.length)
+      .fill(0)
+      .map((_, i) =>
+        Lexer.lexe(mustParse[i])
+          .tokens.map((t) => t.lexeme)
+          .join(`/*comment ${i}*/`)
+      );
 
     for (const a of mustParse) {
       //   // TODO
@@ -1746,10 +1856,48 @@ export namespace Parser {
 }
 
 const code = [
+  `
+  use file;
+
+  let i = nan;
+  let j = inf;
+  let u = i;
+  let x: i32 = 1;
+  let y: f32 = 2.0;
+  let z[A] =
+    (func (x: A): A => x) (3);
+  let f[B]: B -> i32 =
+    func (y: B): i32 => 4 + y;
+
+  type alias = f32;
+  type complex {
+    type1,
+    type2(),
+    type3(i32, f32),
+    type4
+  }
+
+  group G0 {
+    group G1 { let a = 5; }
+    let b = 6.0;
+  }
+  `,
+  'use test let func ;',
   `group test { let a[] = 5; let b = 3; let c = 2; }`,
   `let x = func (x, y, z) => 1;`
 ];
-const parsedCode = Parser.parse(code[0]);
-log(parsedCode.valid);
-log(parsedCode.statements);
-if (!parsedCode.valid) log(parsedCode.parseErrors);
+const codeWithComments: string =
+  '/**/' +
+  Lexer.lexe(code[0])
+    .tokens.map((t) => t.lexeme)
+    .join(' /*comment*/ ') +
+  '/**/';
+
+console.log(codeWithComments);
+const parsedCode = Parser.parse(codeWithComments);
+
+console.log('is code valid:', parsedCode.valid);
+console.log('CODE:');
+for (const stmt of parsedCode.statements) log(stmt);
+if (!parsedCode.valid) console.error('ERRORS:');
+if (!parsedCode.valid) for (const err of parsedCode.parseErrors) log(err);
