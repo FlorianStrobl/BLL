@@ -366,15 +366,15 @@ export namespace Parser {
     return isPresent(present) ? callBack() : undefined;
   }
 
-  function parseArgumentList<T>(
+  function parseArgumentList<T, U extends string | undefined>(
     closingBracket: string,
-    delimiter: optional<string>,
+    delimiter: U,
     parseArgument: () => T,
     comments: token[],
-    invalidArgumentError: string = 'could not parse a valid argument',
-    missingDelimiterError: string = 'missing comma token while parsing arguments',
-    eofError: string = 'unexpected eof while parsing arguments'
-  ): argumentList<T> {
+    invalidArgumentError: string,
+    missingDelimiterError: U extends undefined ? undefined : string,
+    eofError: string
+  ): U extends undefined ? T[] : argumentList<T> {
     const argumentList: argumentList<T> = [];
 
     consumeComments(comments);
@@ -391,7 +391,10 @@ export namespace Parser {
         argumentList.length !== 0 &&
         !isPresent(argumentList[argumentList.length - 1].delimiterToken)
       )
-        newParseError(missingDelimiterError);
+        newParseError(
+          missingDelimiterError ??
+            'missing error message for missing delimiter token while parsing an argument list'
+        );
 
       const argument: T = parseArgument();
 
@@ -414,7 +417,11 @@ export namespace Parser {
 
     checkEofWithError(eofError);
 
-    return argumentList;
+    return (
+      isPresent(delimiter)
+        ? argumentList
+        : argumentList.map((arg) => arg.argument)
+    ) as any;
   }
   // #endregion
   // #endregion
@@ -468,21 +475,18 @@ export namespace Parser {
         'unexpected eof in group statement after the opening bracket'
       );
 
-      const body: statement[] = [];
-      while (!isAtEnd() && !match('}')) {
-        const currentTokenDebug: token = peek()!;
+      const body: statement[] = parseArgumentList(
+        '}',
+        undefined,
+        () => parseStatement(),
+        comments,
+        'TODO did not match a statement in group statement',
+        undefined,
+        'unexpected eof in group statement'
+      );
 
-        body.push(parseStatement());
-
-        if (
-          !iterationAdvanced(
-            currentTokenDebug,
-            'TODO did not match a statement in group statement'
-          )
-        )
-          break;
-      }
       checkEofWithError('unexpected eof in group statement');
+
       const closingBracketToken: token = matchAdvanceOrError(
         '}',
         'TODO internal error, did not match what thought would have been matched'
