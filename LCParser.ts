@@ -423,7 +423,7 @@ export namespace Parser {
       isPresent(delimiter)
         ? argumentList
         : argumentList.map((arg) => arg.argument)
-    ) as any; // TODO
+    ) as never;
   }
   // #endregion
   // #endregion
