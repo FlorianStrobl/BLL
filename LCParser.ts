@@ -343,15 +343,6 @@ export namespace Parser {
     return matchType(tokenType) ? advance()! : newParseError(error);
   }
 
-  function iterationAdvanced(
-    tokenBeforeLoopIter: token,
-    errIfSameToken: parseError
-  ): boolean {
-    return isPresent(peek()) && tokenBeforeLoopIter.idx === peek()!.idx
-      ? (newParseError(errIfSameToken), false)
-      : true;
-  }
-
   function isPresent<T>(value: T | undefined): value is NonNullable<T> {
     return value !== undefined;
   }
@@ -366,24 +357,27 @@ export namespace Parser {
 
   // TODO what about error messages for `(5,,)`
   function parseArgumentList<T, U extends string | undefined>(
-    closingBracket: string,
+    closingBracket: optional<string>,
     delimiter: U,
     parseArgument: () => T, // assertion: does not have delimiter as valid value
-    comments: token[],
+    comments: optional<token[]>,
     invalidArgumentError: string,
     missingDelimiterError: U extends undefined ? undefined : string,
     eofError: string
   ): U extends undefined ? T[] : argumentList<T> {
     const argumentList: argumentList<T> = [];
 
-    consumeComments(comments);
+    if (isPresent(comments)) consumeComments(comments);
 
-    while (!isAtEnd() && !match(closingBracket)) {
+    while (
+      !isAtEnd() &&
+      (!isPresent(closingBracket) || !match(closingBracket))
+    ) {
       const currentTokenDebug: token = peek()!;
 
-      consumeComments(comments);
+      if (isPresent(comments)) consumeComments(comments);
 
-      checkEofWithError(eofError);
+      if (isAtEnd()) break;
 
       if (
         isPresent(delimiter) &&
@@ -396,13 +390,11 @@ export namespace Parser {
         );
 
       const argument: T =
-        isPresent(delimiter) && !match(delimiter)
+        !isPresent(delimiter) || !match(delimiter)
           ? parseArgument()
           : newParseError(invalidArgumentError);
 
-      consumeComments(comments);
-
-      checkEofWithError(eofError);
+      if (isPresent(comments)) consumeComments(comments);
 
       const delimiterToken: optToken = isPresent(delimiter)
         ? optionalMatchAdvance(delimiter)
@@ -410,14 +402,18 @@ export namespace Parser {
 
       argumentList.push({ argument, delimiterToken });
 
-      consumeComments(comments);
+      if (isPresent(comments)) consumeComments(comments);
 
-      checkEofWithError(eofError);
+      if (isAtEnd()) break;
 
-      if (!iterationAdvanced(currentTokenDebug, invalidArgumentError)) break;
+      if (isPresent(peek()) && currentTokenDebug.idx === peek()!.idx) {
+        newParseError(invalidArgumentError);
+        break;
+      }
     }
 
-    checkEofWithError(eofError);
+    if (isPresent(closingBracket)) checkEofWithError(eofError);
+    // else it can be eof, since no end was wanted
 
     return (
       isPresent(delimiter)
@@ -1472,23 +1468,15 @@ export namespace Parser {
     | { valid: false; parseErrors: parseError[]; statements: statement[] } {
     larser = new Larser(code);
 
-    // TODO swap with arg list
-    const statements: statement[] = [];
-    while (!isAtEnd()) {
-      const currentTokenDebug: token = peek()!;
-
-      statements.push(parseStatement());
-
-      // error handling to not create infinite loops
-      // an error should have been returned above already
-      if (
-        !iterationAdvanced(
-          currentTokenDebug,
-          'could not parse a statement in global scope'
-        )
-      )
-        break;
-    }
+    const statements: statement[] = parseArgumentList(
+      undefined,
+      undefined,
+      () => parseStatement(),
+      undefined,
+      'TODO could not parse a statement in global scope',
+      undefined,
+      'internal error, should not happen'
+    );
 
     return parseErrors.length === 0
       ? { valid: true, statements }
@@ -1673,8 +1661,8 @@ const code = [
   let y: f32 = 2.0;
   let z[A] =
     (func (x: A): A => x) (3);
-  let f[B]: B -> i32 =
-    func (y: B): i32 => 4 + y;
+  let f[B,]: B -> i32 =
+    func (y: B,): i32 => 4 + y;
 
   type alias = f32;
   type complex {
