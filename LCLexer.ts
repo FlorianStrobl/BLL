@@ -31,10 +31,10 @@ export namespace Lexer {
     '/', // divide (binary, f32/for i32: rounding down, TODO what about div by 0 on i32??)
     '**', // exponentiation (binary, i32/f32)
     '***', // root or log (binary, i32/f32) TODO really needed?
+    '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32)
 
     // only ints
     '%', // remainder (binary, i32)
-    '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32)
     '~', // not (unary, i32)
     '&', // and (binary, i32)
     '|', // or (binary, i32)
@@ -50,17 +50,17 @@ export namespace Lexer {
     '<', // less than (binary, i32/f32)
     '>', // greater than (binary, i32/f32)
 
-    '=', // assigments of values to identifiers (let and type)
-    '->', // used for function signatures
-    '=>', // used in function definitions and match expressions
-    ':', // type annotation for func, match and let
-    ';', // end of let or type statement/empty statement
+    '=', // assigments of values to identifiers in let and type statements
+    '->', // used for func signatures
+    '=>', // used in func definitions and match expressions
+    ':', // type annotation for let, func and match
+    ';', // end of use, let or type-alias statement/empty statement
     ',', // seperator for arguments in funcs or calling funcs or trailing comma
     '.', // accessing identifiers from groups
 
-    '(', // grouping, function calls, function arguments/parameters
+    '(', // grouping, func arguments/parameters/calls, complex type line
     ')',
-    '{', // groups or match expressions
+    '{', // groups or complex type statements, or match expressions
     '}',
     '[', // generic type annotations for lets and types
     ']'
@@ -197,7 +197,7 @@ export namespace Lexer {
   const floatLiterals: string[] = ['nan', 'inf'];
   // #endregion
 
-  // #region types and enums
+  // #region types, interfaces and enums
   export enum tokenType {
     comment = '#com', // "//...", "/*...*/"
     literal = '#lit', // "5.3e-4", "0xFF00FF"

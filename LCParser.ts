@@ -12,7 +12,7 @@ const log = (args: any) =>
  void, any, unknown, never, null, undefined, as
  Error, throw, try catch
  Infinity, NaN
- ?:, =, {, [, ', ", !, ?
+ ?:, =, {, [, ', ", `, !, ?, =>
  TODO, HERE, NOW, BLL Text
 */
 
@@ -135,75 +135,53 @@ export namespace Parser {
 
   type comment = { comments: lexToken[] };
 
-  // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
+  // #region stmt
   export type statement = comment &
     (
       | { type: 'comment' }
       | { type: 'empty'; semicolonToken: lexToken }
+      | {
+          type: 'group';
+          identifierToken: lexToken;
+          body: statement[];
+          groupToken: lexToken;
+          openingBracketToken: lexToken;
+          closingBracketToken: lexToken;
+        }
       | {
           type: 'import';
           localFileName: lexToken;
           useToken: lexToken;
           semicolonToken: lexToken;
         }
-      | (
-          | ({
-              type: 'let';
-              identifierToken: lexToken;
-              body: expression & comment;
-              letToken: lexToken;
-              equalsToken: lexToken;
-              semicolonToken: lexToken;
-            } & hasExplicitType &
-              genericAnnotation)
-          | {
-              type: 'type-alias';
-              identifierToken: lexToken;
-              typeValue: typeExpression;
-              typeToken: lexToken;
-              equalsToken: lexToken;
-              semicolonToken: lexToken;
-            }
-          | {
-              type: 'complex-type';
-              identifierToken: lexToken;
-              typeValue: complexTypeValue[];
-              typeToken: lexToken;
-              openingBracketToken: lexToken;
-              closingBracketToken: lexToken;
-            }
-          | {
-              type: 'group';
-              identifierToken: lexToken;
-              body: statement[];
-              groupToken: lexToken;
-              openingBracketToken: lexToken;
-              closingBracketToken: lexToken;
-            }
-        )
-    );
-  // TODO
-  type genericAnnotation =
-    | { isGeneric: false }
-    | {
-        isGeneric: true;
-        genericIdentifiers: {
+      | ({
+          type: 'let';
           identifierToken: lexToken;
-          commaToken: optLexToken;
-        }[];
-        genericOpeningBracketToken: lexToken;
-        genericClosingBracketToken: lexToken;
-      };
-  type hasExplicitType =
-    | {
-        explicitType: true;
-        typeExpression: typeExpression;
-        colonToken: lexToken;
-      }
-    | {
-        explicitType: false;
-        typeExpression: typeExpression;
-      };
+          body: expression & comment;
+          letToken: lexToken;
+          equalsToken: lexToken;
+          semicolonToken: lexToken;
+        } & hasExplicitType &
+          genericAnnotation)
+      | {
+          type: 'type-alias';
+          identifierToken: lexToken;
+          typeValue: typeExpression;
+          typeToken: lexToken;
+          equalsToken: lexToken;
+          semicolonToken: lexToken;
+        }
+      | {
+          type: 'complex-type';
+          identifierToken: lexToken;
+          // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
+          typeValue: complexTypeValue[];
+          typeToken: lexToken;
+          openingBracketToken: lexToken;
+          closingBracketToken: lexToken;
+        }
+    );
+
   type complexTypeValue = {
     identifierToken: lexToken;
     parameters: {
@@ -216,22 +194,20 @@ export namespace Parser {
     // comments: lexTokenType[] // TODO, add for better formatting
   };
 
-  // TODO what about generics: func[T1, T2]
-  export type funcExpression = {
-    type: 'func';
-    parameters: {
-      identifierToken: lexToken;
-      typeExpression: typeExpression;
-      colonToken: optLexToken /*colon for type annotation*/;
-      commaToken: optLexToken /*comma for next param*/;
-    }[];
-    body: expression;
-    funcToken: lexToken;
-    openingBracketToken: lexToken;
-    closingBracketToken: lexToken;
-    arrowToken: lexToken;
-  } & hasExplicitType;
+  type genericAnnotation =
+    | { isGeneric: false }
+    | {
+        isGeneric: true;
+        genericIdentifiers: {
+          identifierToken: lexToken;
+          commaToken: optLexToken;
+        }[];
+        genericOpeningBracketToken: lexToken;
+        genericClosingBracketToken: lexToken;
+      };
+  // #endregion
 
+  // #region expr
   // match, func, "nan", "inf", literals
   // TODO each branch in match expression should get its own comments in the formatter/prettier
   export type expression =
@@ -286,6 +262,23 @@ export namespace Parser {
       }
     | { type: 'match' /*TODO, put in comments[] for each and every branch!*/ };
 
+  export type funcExpression = {
+    type: 'func';
+    parameters: {
+      identifierToken: lexToken;
+      typeExpression: typeExpression;
+      colonToken: optLexToken /*colon for type annotation*/;
+      commaToken: optLexToken /*comma for next param*/;
+    }[];
+    body: expression;
+    funcToken: lexToken;
+    openingBracketToken: lexToken;
+    closingBracketToken: lexToken;
+    arrowToken: lexToken;
+  } & hasExplicitType;
+  // #endregion
+
+  // #region types
   // TODO generics?, wab propertAccess of complex types?
   export type typeExpression = comment &
     (
@@ -312,6 +305,24 @@ export namespace Parser {
           closingBracketToken: lexToken;
         }
     );
+
+  type hasExplicitType =
+    | {
+        explicitType: true;
+        typeExpression: typeExpression;
+        colonToken: lexToken;
+      }
+    | {
+        explicitType: false;
+        typeExpression: typeExpression;
+      };
+  // #endregion
+
+  // TODO
+  type argumentList<T> = {
+    argument: T;
+    delimiterToken: optLexToken;
+  }[];
   // #endregion
 
   // #region helper
@@ -467,29 +478,16 @@ export namespace Parser {
     return isPresent(present) ? callBack() : undefined;
   }
 
-  // TODO
-  type argumentList<T> = {
-    data: {
-      argument: T;
-      delimiterToken: optLexToken;
-    }[];
-    closingBracketToken: lexToken;
-  };
-
   function parseArgumentList<T>(
     closingBracket: string,
     delimiter: optional<string>,
     parseArgument: () => T,
     comments: lexToken[],
+    invalidArgumentError: string = 'could not parse a valid argument',
     missingDelimiterError: string = 'missing comma token while parsing arguments',
-    missingBracketError: string = 'missing closing bracket token while parsing arguments',
-    eofError: string = 'unexpected eof while parsing arguments',
-    invalidArgumentError: string = 'could not parse a valid argument'
+    eofError: string = 'unexpected eof while parsing arguments'
   ): argumentList<T> {
-    const argumentList: {
-      argument: T;
-      delimiterToken: optLexToken;
-    }[] = [];
+    const argumentList: argumentList<T> = [];
 
     consumeComments(comments);
 
@@ -523,17 +521,12 @@ export namespace Parser {
 
       checkEofWithError(eofError);
 
-      if (!iterationAdvanced(currentTokenDebug)) break;
+      if (!iterationAdvanced(currentTokenDebug, invalidArgumentError)) break;
     }
 
     checkEofWithError(eofError);
 
-    const closingBracketToken: lexToken = matchAdvanceOrError(
-      closingBracket,
-      missingBracketError
-    );
-
-    return { data: argumentList, closingBracketToken };
+    return argumentList;
   }
 
   function iterationAdvanced(
@@ -704,10 +697,9 @@ export namespace Parser {
                 'did not match an identifier in generic let statement'
               ),
             comments,
+            'did not match an identifier in generic let statement',
             'missing comma token in generic let statement declaration',
-            'missing closing bracket in generic let statement declaration',
-            'unexpected eof in generic let statement',
-            'did not match an identifier in generic let statement'
+            'unexpected eof in generic let statement'
           )
         : undefined;
 
@@ -718,7 +710,7 @@ export namespace Parser {
           commaToken: optLexToken;
         }[]
       > = isGeneric
-        ? argumentList?.data.map((e) => ({
+        ? argumentList?.map((e) => ({
             identifierToken: e.argument,
             commaToken: e.delimiterToken
           }))
@@ -731,7 +723,10 @@ export namespace Parser {
         newParseError('missing generic token values in generic let statement');
 
       const genericClosingBracketToken: optLexToken = isGeneric
-        ? argumentList?.closingBracketToken
+        ? matchAdvanceOrError(
+            ']',
+            'missing closing bracket in generic let statement declaration'
+          )
         : undefined;
 
       consumeComments(comments);
@@ -860,7 +855,7 @@ export namespace Parser {
 
         consumeComments(comments);
 
-        checkEofWithError('Got nothing after "=" in type expression');
+        checkEofWithError('got nothing after "=" in type statement');
 
         // TODO refactor but how??
         const typeValue: typeExpression | undefined = !match(';') // better error messages
@@ -1001,7 +996,10 @@ export namespace Parser {
           if (!iterationAdvanced(currentTokenDebug)) break;
         }
 
-        const closingBracketToken: optLexToken = optionalMatchAdvance(')');
+        const closingBracketToken: optLexToken = matchAdvanceOrError(
+          ')',
+          'TODO missing closing bracket in complex type'
+        );
 
         consumeComments(comments);
 
@@ -1365,6 +1363,7 @@ export namespace Parser {
       if (match('(')) {
         const openingBracketToken: lexToken = advance()!;
         consumeComments(comments);
+        // TODO isEof checks
         const body: expression = parseExpression();
         consumeComments(comments);
         const closingBracketToken: lexToken = matchAdvanceOrError(
@@ -1487,8 +1486,6 @@ export namespace Parser {
       const funcToken: lexToken = advance()!;
 
       consumeComments(comments);
-
-      // TODO generics
 
       const openingBracketToken: lexToken = matchAdvanceOrError(
         '(',
@@ -1882,6 +1879,7 @@ const code = [
     let b = 6.0;
   }
   `,
+  'let f[T,B,Z,]: ((T, B,) -> i32) -> Z = func (g) => g()',
   'use test let func ;',
   `group test { let a[] = 5; let b = 3; let c = 2; }`,
   `let x = func (x, y, z) => 1;`
