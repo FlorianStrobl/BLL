@@ -116,7 +116,6 @@ export namespace Parser {
       | ({
           type: 'complex-type';
           identifierToken: token;
-          // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
           typeValue: complexTypeValue[];
           typeToken: token;
           openingBracketToken: token;
@@ -139,24 +138,20 @@ export namespace Parser {
     openingBracketToken: optToken;
     closingBracketToken: optToken /*TODO if has opening bracket, then must have closing bracket or vice versa*/;
     commaToken: optToken;
-    // comments: lexTokenType[] // TODO, add for better formatting
+    // comments: lexTokenType[] // TODO, add for better formatting in prettier
   };
 
   type genericAnnotation =
     | { isGeneric: false }
     | {
         isGeneric: true;
-        genericIdentifiers: {
-          identifierToken: token;
-          commaToken: optToken;
-        }[];
+        genericIdentifiers: argumentList<token>;
         genericOpeningBracketToken: token;
         genericClosingBracketToken: token;
       };
   // #endregion
 
   // #region expr
-  // match, func, "nan", "inf", literals
   export type expression = comment &
     (
       | funcExpression
@@ -183,7 +178,7 @@ export namespace Parser {
       | {
           type: 'literal';
           literalType: 'i32' | 'f32';
-          literal: number;
+          literal: number; // "NaN", "Infinity", 0, 1.5, ...
           literalToken: token;
         }
       | {
@@ -199,12 +194,14 @@ export namespace Parser {
           rightSide: expression;
           operatorToken: token;
         }
-      | { type: 'match' /*TODO, put in comments[] for each and every branch!*/ }
+      | {
+          type: 'match' /*TODO ; put in comments[] for each and every branch!*/;
+        }
     );
 
   export type funcExpression = {
     type: 'func';
-    parameters: funcParameters;
+    parameters: funcParameter[];
     body: expression;
     returnType: explicitType;
     funcToken: token;
@@ -213,16 +210,16 @@ export namespace Parser {
     arrowToken: token;
   };
 
-  type funcParameters = {
+  type funcParameter = {
     identifierToken: token;
     typeExpression: optional<typeExpression>;
     colonToken: optToken /*colon for type annotation*/;
     commaToken: optToken /*comma for next param*/;
-  }[];
+  };
   // #endregion
 
   // #region types
-  // TODO generics?, wab propertAccess of complex types?
+  // TODO generics just like calling stuff?, wab propertAccess of complex types?
   export type typeExpression = comment &
     (
       | {
@@ -231,10 +228,7 @@ export namespace Parser {
         }
       | {
           type: 'func-type';
-          parameters: {
-            typeExpression: typeExpression;
-            commaToken: optToken;
-          }[];
+          parameters: argumentList<typeExpression>;
           returnType: typeExpression;
           openingBracketToken: optToken;
           closingBracketToken: optToken;
@@ -267,15 +261,15 @@ export namespace Parser {
   // #region helper
   type optional<T> = T | undefined;
 
-  type token = Lexer.token;
-  type optToken = optional<token>;
-  type tokenType = Lexer.tokenType;
-  const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
-
   type argumentList<T> = {
     argument: T;
     delimiterToken: optToken;
   }[];
+
+  type token = Lexer.token;
+  type optToken = optional<Lexer.token>;
+  type tokenType = Lexer.tokenType;
+  const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
 
   // #region traditional
   function isAtEnd(): boolean {
@@ -297,13 +291,13 @@ export namespace Parser {
     return currentToken;
   }
 
-  // returns if the current token matches the tokens
+  // check if the current token matches the tokens
   function match(...tokens: string[]): boolean {
     const currentToken: optToken = peek();
     return isPresent(currentToken) && tokens.includes(currentToken.lexeme);
   }
 
-  // returns if the current token type matches the tokenTypes
+  // check if the current token type matches the tokenTypes
   function matchType(...tokenTypes: tokenType[]): boolean {
     const currentToken: optToken = peek();
     return isPresent(currentToken) && tokenTypes.includes(currentToken.type);
@@ -322,18 +316,23 @@ export namespace Parser {
   }
 
   function checkEofWithError(errorOnEof: string): void {
-    if (isAtEnd())
-      throw (
-        (newParseError('Invalid eof while parsing code: ' + errorOnEof),
-        parseErrors)
-      );
-    // TODO not throw, BUT eof is the very last thing in the code: so could now check all the errors
+    if (isAtEnd()) {
+      newParseError('Invalid eof while parsing code: ' + errorOnEof);
+      throw parseErrors;
 
-    // should print out all errors in a formatted way, aswell as the eof error
-    // then stop the program *but* then the parser would have to import logger...
+      // TODO not throw, BUT eof is the very last thing in the code: so could now check all the errors
+
+      // should print out all errors in a formatted way, aswell as the eof error
+      // then stop the program *but* then the parser would have to import logger...
+    }
   }
 
-  // return advace on match else error
+  // on match: advance
+  function optionalMatchAdvance(token: string): optToken {
+    return match(token) ? advance()! : undefined;
+  }
+
+  // on match: advace else error
   function matchAdvanceOrError(
     token: string,
     error: parseError
@@ -341,7 +340,7 @@ export namespace Parser {
     return match(token) ? advance()! : newParseError(error);
   }
 
-  // return advance on match type else error
+  // on match type: advance else error
   function matchTypeAdvanceOrError(
     tokenType: tokenType,
     error: parseError
@@ -349,9 +348,13 @@ export namespace Parser {
     return matchType(tokenType) ? advance()! : newParseError(error);
   }
 
-  // return advance on match
-  function optionalMatchAdvance(token: string): optToken {
-    return match(token) ? advance()! : undefined;
+  function iterationAdvanced(
+    tokenBeforeLoopIter: token,
+    errIfSameToken: parseError
+  ): boolean {
+    return isPresent(peek()) && tokenBeforeLoopIter.idx === peek()!.idx
+      ? (newParseError(errIfSameToken), false)
+      : true;
   }
 
   function isPresent<T>(value: T | undefined): value is NonNullable<T> {
@@ -360,13 +363,7 @@ export namespace Parser {
 
   // calls the callback function if and only if present is not undefined
   function callOnPresent<T, U>(
-    present: undefined,
-    callBack: () => T
-  ): undefined;
-  function callOnPresent<T, U>(present: NonNullable<U>, callBack: () => T): T;
-  function callOnPresent<T, U>(present: U, callBack: () => T): optional<T>;
-  function callOnPresent<T, U>(
-    present: undefined | NonNullable<U> | U,
+    present: NonNullable<U> | undefined,
     callBack: () => T
   ): optional<T> {
     return isPresent(present) ? callBack() : undefined;
@@ -421,15 +418,6 @@ export namespace Parser {
     checkEofWithError(eofError);
 
     return argumentList;
-  }
-
-  function iterationAdvanced(
-    curTokenBeforeLoopIter: token,
-    errorMsgOnSameToken: parseError = 'TODO same token'
-  ): boolean {
-    if (isPresent(peek()) && curTokenBeforeLoopIter.idx === peek()!.idx)
-      return newParseError(errorMsgOnSameToken), false;
-    return true;
   }
   // #endregion
   // #endregion
@@ -594,15 +582,10 @@ export namespace Parser {
         : undefined;
 
       // TODO HERE NOW generics at this step
-      const genericIdentifiers: optional<
-        {
-          identifierToken: token;
-          commaToken: optToken;
-        }[]
-      > = isGeneric
+      const genericIdentifiers: optional<argumentList<token>> = isGeneric
         ? argumentList?.map((e) => ({
-            identifierToken: e.argument,
-            commaToken: e.delimiterToken
+            argument: e.argument,
+            delimiterToken: e.delimiterToken
           }))
         : undefined;
 
@@ -638,15 +621,12 @@ export namespace Parser {
         () => {
           /*if for better error messages*/
           if (!match('=')) return parseTypeExpression();
+          else
+            return newParseError(
+              'missing type annotation in let statement after getting a ":"'
+            );
         }
       );
-
-      callOnPresent(colonToken, () => {
-        if (!isPresent(typeAnnotation))
-          newParseError(
-            'missing type annotation in let statement after getting a ":"'
-          );
-      });
 
       consumeComments(comments);
 
@@ -749,10 +729,7 @@ export namespace Parser {
         // TODO refactor but how??
         const typeValue: typeExpression | undefined = !match(';') // better error messages
           ? parseTypeExpression()
-          : undefined;
-
-        if (!isPresent(typeValue))
-          newParseError('got no type expression in type alias');
+          : newParseError('got no type expression in type alias');
 
         consumeComments(comments);
 
@@ -797,7 +774,7 @@ export namespace Parser {
 
           typeValue.push(parseComplexeTypeLine());
 
-          if (!iterationAdvanced(currentTokenDebug)) break;
+          if (!iterationAdvanced(currentTokenDebug, 'TODO same token')) break;
         }
         checkEofWithError('eof in complex type statement');
         const closingBracketToken: token = matchAdvanceOrError(
@@ -881,7 +858,7 @@ export namespace Parser {
             delimiterToken: commaToken
           });
 
-          if (!iterationAdvanced(currentTokenDebug)) break;
+          if (!iterationAdvanced(currentTokenDebug, 'TODO same token')) break;
         }
 
         const closingBracketToken: optToken = matchAdvanceOrError(
@@ -1225,7 +1202,7 @@ export namespace Parser {
               delimiterToken: commaToken
             });
 
-            if (!iterationAdvanced(currentTokenDebug)) break;
+            if (!iterationAdvanced(currentTokenDebug, 'TODO same token')) break;
           }
 
           checkEofWithError('Had eof in function calling expression');
@@ -1329,8 +1306,8 @@ export namespace Parser {
           'Internal error, called this function, even tho here is no function'
         );
 
-      function parseFuncExprParam(): funcParameters {
-        const params: funcParameters = [];
+      function parseFuncExprParam(): funcParameter[] {
+        const params: funcParameter[] = [];
 
         consumeComments(comments);
 
@@ -1370,7 +1347,7 @@ export namespace Parser {
             commaToken
           });
 
-          if (!iterationAdvanced(currentTokenDebug)) break;
+          if (!iterationAdvanced(currentTokenDebug, 'TODO same token')) break;
         }
 
         return params;
@@ -1467,7 +1444,7 @@ export namespace Parser {
 
       return {
         type: 'func-type',
-        parameters: [{ typeExpression: primitive, commaToken: undefined }],
+        parameters: [{ argument: primitive, delimiterToken: undefined }],
         returnType: parseTypeExpression(),
         openingBracketToken: undefined,
         closingBracketToken: undefined,
@@ -1481,16 +1458,16 @@ export namespace Parser {
 
       const closingBracket: optToken = optionalMatchAdvance(')');
 
-      const body: {
-        typeExpression: typeExpression;
-        commaToken: optToken;
-      }[] = [];
+      const body: argumentList<typeExpression> = [];
       while (!isPresent(closingBracket) && !isAtEnd() && !match(')')) {
         const currentTokenDebug: token = peek()!;
 
         consumeComments(comments);
 
-        if (body.length !== 0 && !isPresent(body[body.length - 1].commaToken))
+        if (
+          body.length !== 0 &&
+          !isPresent(body[body.length - 1].delimiterToken)
+        )
           newParseError(
             'TODO did not get a comma in last type expression, while grouping types'
           );
@@ -1507,9 +1484,9 @@ export namespace Parser {
 
         // TODO what if now comes a comment??
 
-        body.push({ typeExpression: type, commaToken });
+        body.push({ argument: type, delimiterToken: commaToken });
 
-        if (!iterationAdvanced(currentTokenDebug)) break;
+        if (!iterationAdvanced(currentTokenDebug, 'TODO same token')) break;
       }
 
       const closingBracketToken: token = isPresent(closingBracket)
@@ -1538,7 +1515,7 @@ export namespace Parser {
           newParseError('TODO, did not get any type in grouping expression');
         if (body.length !== 1)
           newParseError('TODO got multiple types in a grouping expression');
-        else if (body.length === 1 && isPresent(body[0].commaToken))
+        else if (body.length === 1 && isPresent(body[0].delimiterToken))
           newParseError(
             'TODO got a trailing comma at the end of a grouping expression'
           );
@@ -1546,7 +1523,7 @@ export namespace Parser {
         return {
           type: 'grouping',
           // TODO couldnt it also be undefined here??
-          body: body[0].typeExpression,
+          body: body[0].argument,
           openingBracketToken,
           closingBracketToken,
           comments
