@@ -1,138 +1,92 @@
+import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
-import { Lexer } from './LCLexer';
 
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
 
-/*
- Check list:
- var, let, const, function, namespace, type, interface, export
- switch, for, while, do, yield, return, enum, new, continue, break
- void, any, unknown, never, null, undefined, as
- Error, throw, try catch
- Infinity, NaN
- ?:, =, {, [, ', ", `, !, ?, =>
- TODO, HERE, NOW, BLL Text
-*/
+// #region lexer code for the parser
+class Larser {
+  private code: string;
+  private lexer: Generator<Lexer.nextToken>;
 
-// TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
+  private state:
+    | { eof: false; currentToken: Lexer.token }
+    | { eof: true; currentToken: undefined };
 
-// TODO invalid char in lexer step results in random error in interpreter.ts
+  constructor(code: string) {
+    this.code = code;
+    this.lexer = Lexer.lexeNextTokenIter(code);
 
-// TODO func (x: i32 = 5) => x;
-// TODO match (number): i32 { case 0 => 5; default /*?? maybe just "case", or just the trailing thing?? TODO HERE*/ => 6; }
-// TODO calling integers/floats in order to add `==` support: 5(0)(1)
-// TODO add generic types in funcs and types
-// TODO isAtEnd() and consumeComments(comments)
-// TODO endless loop error
+    this.state = { eof: false, currentToken: undefined as any };
+    this.advanceToken();
+    if (this.state.eof === false && this.state.currentToken === undefined)
+      throw new Error(
+        'Internal error, could not lexe the very first token correctly in the parsing step.'
+      );
+  }
 
-// TODO church numerals: +, -, *, **, ==, <=
+  public isEof(): boolean {
+    return this.state.eof;
+  }
 
-// TODO check if identifiers are used properly (in generics, types and their bodys, lets, groups, parameters in funcs, ...) + if all types alligne
+  // assertion: not eof
+  public getCurrentToken(): Lexer.token {
+    if (this.isEof())
+      throw new Error(
+        'Internal error while parsing. Tried getting the current token, even tho the code is eof.'
+      );
 
-// TODO functions as types because of `let f = func () => f;` where the type of `f` is literally: `() -> f`
+    return this.state.currentToken!;
+  }
 
-// TODO check this always invalid case: let f = func [T](x: T, y: T): T => x + y();
+  // assertion: not eof
+  public advanceToken(): void {
+    if (this.isEof())
+      throw new Error(
+        'Internal error while parsing. Tried advancing to next token, even tho the code is eof.'
+      );
 
-// TODO generics only for `let` and `type` statements, and not in the expr things
+    // this.previousToken = this.currentToken;
 
-// TODO generics need to have bounds, like `i32 | f32` in order to check if all of the expressions, where a value of the generic type is used, is valid. so: `let f[T: i32 | f32] = func (x: T) => x(1, 2, 3, 4);` is invalid, if calling a `i32` or `f32` is not valid
+    const lexerNext: IteratorResult<Lexer.nextToken, Lexer.nextToken> =
+      this.lexer.next();
+    const lexerNextValue: Lexer.nextToken = lexerNext.value;
 
-// TODO add calling `i32` and `f32` with the signature: `T => (T => T)`
+    const lexerIsNotDone: boolean = lexerNext.done === false;
+    const eof: boolean =
+      lexerIsNotDone &&
+      !lexerNextValue.valid &&
+      lexerNextValue.value.type === 'eof';
 
-// TODO add map() to arrs in std
-// TODO type expressions need sometimes annotation for generics
+    // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
+    if (!eof && lexerNextValue.valid)
+      this.state = { eof: false, currentToken: lexerNextValue.value };
+    else if (eof) this.state = { eof: true, currentToken: undefined };
+    else this.errorHandling();
+  }
 
-// TODO imports with `use` keyword, are not allowed inside groups but only global scope
+  private errorHandling(): never {
+    const tokens = Lexer.lexe(this.code);
 
-// TODO add `let x: thatType[itsGenericValueHere] = ...;`
-//                          ^ property access, prob like function calling
-// it is a substitution for a generic value in its type
+    if (tokens.valid)
+      throw new Error(
+        'Internal error, parser does not accepped the valid tokens from the lexer: ' +
+          tokens.tokens?.toString()
+      );
 
-/*
-  TODO
-  type x[T] = T;
-
-  // x[] must be doable in a type expression to substitute the generic types
-  let f = func (a: x[i32]): x[32] => a;
-*/
-
-/*
-  TODO
-  let f = 4;
-  let f = 5; // error
-  let f = 6; // error aswell! but what is the error message?
-*/
-
-// Rust: `type TypeAlias = i32;`
-// Rust: `use std;`
-
-/*
-type ZeroVariants { }
-
-type RustEnum {
-  A,
-  B(),
-  C(i32)
+    // TODO
+    console.error(tokens);
+    throw '';
+  }
 }
-*/
-
-// https://doc.rust-lang.org/reference/items.html rust Statements
-
-// console.clear();
-// log(
-//   Parser.parse(`
-// type ZeroVariants { }
-
-// type RustEnum {
-//   A,
-//   B(),
-//   C(i32)
-// }
-// `)
-// );
-
-// log(
-//   Parser.parse(`
-// type t {
-//   identifier1(),
-//   identifier2(i32),
-//   identifier3,
-// }
-
-// type t2 = t;
-
-// let x = func (a) => a * (t + 1) / 2.0;
-// `)
-// );
+// #endregion
 
 export namespace Parser {
-  let larser: Larser;
   const parseErrors: parseError[] = [];
-
-  function newParseError(arg: parseError): never {
-    parseErrors.push({ type: 'error', value: arg, currentToken: peek() });
-    return { type: 'error', parserError: arg } as never;
-  }
-
-  function checkEofWithError(errorOnEof: string): void {
-    if (isAtEnd())
-      throw (
-        (newParseError('Invalid eof while parsing code: ' + errorOnEof),
-        parseErrors)
-      );
-    // TODO not throw, BUT eof is the very last thing in the code: so could now check all the errors
-
-    // should print out all errors in a formatted way, aswell as the eof error
-    // then stop the program *but* then the parser would have to import logger...
-  }
+  let larser: Larser;
 
   // #region types
-  export type parseError =
-    | string
-    | { type: 'error'; value: any; currentToken: optLexToken };
-
   type comment = { comments: lexToken[] };
 
   // #region stmt
@@ -318,96 +272,25 @@ export namespace Parser {
       };
   // #endregion
 
-  // TODO
-  type argumentList<T> = {
-    argument: T;
-    delimiterToken: optLexToken;
-  }[];
+  export type parseError =
+    | string
+    | { type: 'error'; value: any; currentToken: optLexToken };
   // #endregion
 
   // #region helper
   type optional<T> = T | undefined;
+
   type lexToken = Lexer.token;
   type optLexToken = optional<lexToken>;
   type lexTokenType = Lexer.tokenType;
   const lexTokenType: typeof Lexer.tokenType = Lexer.tokenType;
 
-  // part which handles the lexer
-  class Larser {
-    private code: string;
-    private lexer: Generator<Lexer.nextToken>;
+  type argumentList<T> = {
+    argument: T;
+    delimiterToken: optLexToken;
+  }[];
 
-    private state:
-      | { eof: false; currentToken: lexToken }
-      | { eof: true; currentToken: undefined };
-
-    constructor(code: string) {
-      this.code = code;
-      this.lexer = Lexer.lexeNextTokenIter(code);
-
-      this.state = { eof: false, currentToken: undefined as any };
-      this.advanceToken();
-      if (this.state.eof === false && this.state.currentToken === undefined)
-        throw new Error(
-          'Internal error, could not lexe the very first token correctly in the parsing step.'
-        );
-    }
-
-    public isEof(): boolean {
-      return this.state.eof;
-    }
-
-    // assertion: not eof
-    public getCurrentToken(): lexToken {
-      if (this.isEof())
-        throw new Error(
-          'Internal error while parsing. Tried getting the current token, even tho the code is eof.'
-        );
-
-      return this.state.currentToken!;
-    }
-
-    // assertion: not eof
-    public advanceToken(): void {
-      if (this.isEof())
-        throw new Error(
-          'Internal error while parsing. Tried advancing to next token, even tho the code is eof.'
-        );
-
-      // this.previousToken = this.currentToken;
-
-      const lexerNext: IteratorResult<Lexer.nextToken, Lexer.nextToken> =
-        this.lexer.next();
-      const lexerNextValue: Lexer.nextToken = lexerNext.value;
-
-      const lexerIsNotDone: boolean = lexerNext.done === false;
-      const eof: boolean =
-        lexerIsNotDone &&
-        !lexerNextValue.valid &&
-        lexerNextValue.value.type === 'eof';
-
-      // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
-      if (!eof && lexerNextValue.valid)
-        this.state = { eof: false, currentToken: lexerNextValue.value };
-      else if (eof) this.state = { eof: true, currentToken: undefined };
-      else this.errorHandling();
-    }
-
-    private errorHandling(): never {
-      const tokens = Lexer.lexe(this.code);
-
-      if (tokens.valid)
-        throw new Error(
-          'Internal error, parser does not accepped the valid tokens from the lexer: ' +
-            tokens.tokens?.toString()
-        );
-
-      // TODO
-      console.error(tokens);
-      throw '';
-    }
-  }
-
+  // #region traditional
   function isAtEnd(): boolean {
     return larser.isEof();
   }
@@ -437,6 +320,30 @@ export namespace Parser {
   function matchType(...tokenTypes: lexTokenType[]): boolean {
     const currentToken: optLexToken = peek();
     return isPresent(currentToken) && tokenTypes.includes(currentToken.type);
+  }
+  // #endregion
+
+  // #region functional
+  function consumeComments(comments: lexToken[]): void {
+    while (!isAtEnd() && matchType(lexTokenType.comment))
+      comments.push(advance()!);
+  }
+
+  function newParseError(arg: parseError): never {
+    parseErrors.push({ type: 'error', value: arg, currentToken: peek() });
+    return { type: 'error', parserError: arg } as never;
+  }
+
+  function checkEofWithError(errorOnEof: string): void {
+    if (isAtEnd())
+      throw (
+        (newParseError('Invalid eof while parsing code: ' + errorOnEof),
+        parseErrors)
+      );
+    // TODO not throw, BUT eof is the very last thing in the code: so could now check all the errors
+
+    // should print out all errors in a formatted way, aswell as the eof error
+    // then stop the program *but* then the parser would have to import logger...
   }
 
   // return advace on match else error
@@ -537,11 +444,8 @@ export namespace Parser {
       return newParseError(errorMsgOnSameToken), false;
     return true;
   }
+  // #endregion
 
-  function consumeComments(comments: lexToken[]): void {
-    while (!isAtEnd() && matchType(lexTokenType.comment))
-      comments.push(advance()!);
-  }
   // #endregion
 
   // #region parser
@@ -1899,3 +1803,105 @@ console.log('CODE:');
 for (const stmt of parsedCode.statements) log(stmt);
 if (!parsedCode.valid) console.error('ERRORS:');
 if (!parsedCode.valid) for (const err of parsedCode.parseErrors) log(err);
+
+/*
+ Check list:
+ var, let, const, function, namespace, type, interface, export
+ switch, for, while, do, yield, return, enum, new, continue, break
+ void, any, unknown, never, null, undefined, as
+ Error, throw, try catch
+ Infinity, NaN
+ ?:, =, {, [, ', ", `, !, ?, =>
+ TODO, HERE, NOW, BLL Text
+*/
+
+// TODO: add test codes, where after each step of a valid thing, it suddenly eofs and where between each thing a comment is
+
+// TODO invalid char in lexer step results in random error in interpreter.ts
+
+// TODO func (x: i32 = 5) => x;
+// TODO match (number): i32 { case 0 => 5; default /*?? maybe just "case", or just the trailing thing?? TODO HERE*/ => 6; }
+// TODO calling integers/floats in order to add `==` support: 5(0)(1)
+// TODO add generic types in funcs and types
+// TODO isAtEnd() and consumeComments(comments)
+// TODO endless loop error
+
+// TODO church numerals: +, -, *, **, ==, <=
+
+// TODO check if identifiers are used properly (in generics, types and their bodys, lets, groups, parameters in funcs, ...) + if all types alligne
+
+// TODO functions as types because of `let f = func () => f;` where the type of `f` is literally: `() -> f`
+
+// TODO check this always invalid case: let f = func [T](x: T, y: T): T => x + y();
+
+// TODO generics only for `let` and `type` statements, and not in the expr things
+
+// TODO generics need to have bounds, like `i32 | f32` in order to check if all of the expressions, where a value of the generic type is used, is valid. so: `let f[T: i32 | f32] = func (x: T) => x(1, 2, 3, 4);` is invalid, if calling a `i32` or `f32` is not valid
+
+// TODO add calling `i32` and `f32` with the signature: `T => (T => T)`
+
+// TODO add map() to arrs in std
+// TODO type expressions need sometimes annotation for generics
+
+// TODO imports with `use` keyword, are not allowed inside groups but only global scope
+
+// TODO add `let x: thatType[itsGenericValueHere] = ...;`
+//                          ^ property access, prob like function calling
+// it is a substitution for a generic value in its type
+
+/*
+  TODO
+  type x[T] = T;
+
+  // x[] must be doable in a type expression to substitute the generic types
+  let f = func (a: x[i32]): x[32] => a;
+*/
+
+/*
+  TODO
+  let f = 4;
+  let f = 5; // error
+  let f = 6; // error aswell! but what is the error message?
+*/
+
+// Rust: `type TypeAlias = i32;`
+// Rust: `use std;`
+
+/*
+type ZeroVariants { }
+
+type RustEnum {
+  A,
+  B(),
+  C(i32)
+}
+*/
+
+// https://doc.rust-lang.org/reference/items.html rust Statements
+
+// console.clear();
+// log(
+//   Parser.parse(`
+// type ZeroVariants { }
+
+// type RustEnum {
+//   A,
+//   B(),
+//   C(i32)
+// }
+// `)
+// );
+
+// log(
+//   Parser.parse(`
+// type t {
+//   identifier1(),
+//   identifier2(i32),
+//   identifier3,
+// }
+
+// type t2 = t;
+
+// let x = func (a) => a * (t + 1) / 2.0;
+// `)
+// );

@@ -30,7 +30,7 @@ export namespace Lexer {
     '*', // multiplication (binary, i32/f32)
     '/', // divide (binary, f32/for i32: rounding down, TODO what about div by 0 on i32??)
     '**', // exponentiation (binary, i32/f32)
-    '***', // root or log (binary, i32/f32) TODO really needed?
+    '***', // root or log (binary, i32/f32)
     '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32)
 
     // only ints
@@ -373,7 +373,7 @@ export namespace Lexer {
   function consumeNumericLiteral(code: string, idx: number): nextToken {
     function consumeDigits(): boolean {
       let consumedSomething: boolean = false;
-      let lastCharWasDigit: boolean = false; // TODO needs both?
+      let lastCharWasDigit: boolean = false;
       let lastCharWasUnderscore: boolean = false;
 
       const localAlphabet: string[] =
