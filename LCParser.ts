@@ -106,23 +106,14 @@ export namespace Parser {
           semicolonToken: token;
         }
       | ({
-          type: 'let';
-          identifierToken: token;
-          body: expression & comment;
-          letToken: token;
-          equalsToken: token;
-          semicolonToken: token;
-        } & hasExplicitType &
-          genericAnnotation)
-      | {
           type: 'type-alias';
           identifierToken: token;
           typeValue: typeExpression;
           typeToken: token;
           equalsToken: token;
           semicolonToken: token;
-        }
-      | {
+        } & genericAnnotation)
+      | ({
           type: 'complex-type';
           identifierToken: token;
           // TODO each branch in complexe type statement should get its own comments in the formatter/prettier
@@ -130,7 +121,16 @@ export namespace Parser {
           typeToken: token;
           openingBracketToken: token;
           closingBracketToken: token;
-        }
+        } & genericAnnotation)
+      | ({
+          type: 'let';
+          identifierToken: token;
+          body: expression;
+          letToken: token;
+          equalsToken: token;
+          semicolonToken: token;
+        } & explicitType &
+          genericAnnotation)
     );
 
   type complexTypeValue = {
@@ -160,80 +160,77 @@ export namespace Parser {
 
   // #region expr
   // match, func, "nan", "inf", literals
-  // TODO each branch in match expression should get its own comments in the formatter/prettier
-  export type expression =
-    | funcExpression
-    | {
-        type: 'literal';
-        literalType: 'i32';
-        literal: number;
-        literalToken: token;
-      }
-    | {
-        type: 'literal';
-        literalType: 'f32';
-        literal: number;
-        literalToken: token;
-      }
-    | { type: 'identifier'; identifierToken: token }
-    | {
-        type: 'grouping';
-        body: expression;
-        openingBracketToken: token;
-        closingBracketToken: token;
-      }
-    | {
-        type: 'unary';
-        operator: string;
-        body: expression;
-        operatorToken: token;
-      }
-    | {
-        type: 'binary';
-        operator: string;
-        leftSide: expression;
-        rightSide: expression;
-        operatorToken: token;
-      }
-    | {
-        type: 'propertyAccess';
-        source: expression;
-        propertyToken: token;
-        dotToken: token;
-      }
-    | {
-        type: 'functionCall';
-        function: expression;
-        arguments: {
-          argumentExpression: expression;
-          commaToken: optToken;
-        }[];
-        openingBracketToken: token;
-        closingBracketToken: token;
-      }
-    | { type: 'match' /*TODO, put in comments[] for each and every branch!*/ };
+  export type expression = comment &
+    (
+      | funcExpression
+      | {
+          type: 'grouping';
+          body: expression;
+          openingBracketToken: token;
+          closingBracketToken: token;
+        }
+      | {
+          type: 'propertyAccess';
+          propertyToken: token;
+          source: expression;
+          dotToken: token;
+        }
+      | {
+          type: 'functionCall';
+          arguments: {
+            argumentExpression: expression;
+            commaToken: optToken;
+          }[];
+          function: expression;
+          openingBracketToken: token;
+          closingBracketToken: token;
+        }
+      | { type: 'identifier'; identifierToken: token }
+      | {
+          type: 'literal';
+          literalType: 'i32' | 'f32';
+          literal: number;
+          literalToken: token;
+        }
+      | {
+          type: 'unary';
+          operator: string;
+          body: expression;
+          operatorToken: token;
+        }
+      | {
+          type: 'binary';
+          operator: string;
+          leftSide: expression;
+          rightSide: expression;
+          operatorToken: token;
+        }
+      | { type: 'match' /*TODO, put in comments[] for each and every branch!*/ }
+    );
 
   export type funcExpression = {
     type: 'func';
-    parameters: {
-      identifierToken: token;
-      typeExpression: typeExpression;
-      colonToken: optToken /*colon for type annotation*/;
-      commaToken: optToken /*comma for next param*/;
-    }[];
+    parameters: funcParameters;
     body: expression;
+    returnType: explicitType;
     funcToken: token;
     openingBracketToken: token;
     closingBracketToken: token;
     arrowToken: token;
-  } & hasExplicitType;
+  };
+
+  type funcParameters = {
+    identifierToken: token;
+    typeExpression: optional<typeExpression>;
+    colonToken: optToken /*colon for type annotation*/;
+    commaToken: optToken /*comma for next param*/;
+  }[];
   // #endregion
 
   // #region types
   // TODO generics?, wab propertAccess of complex types?
   export type typeExpression = comment &
     (
-      | { type: 'implicit' }
       | {
           type: 'primitive-type';
           primitiveToken: token; // keyword like i32/f32 or generic identifier/type identifier
@@ -257,7 +254,7 @@ export namespace Parser {
         }
     );
 
-  type hasExplicitType =
+  type explicitType =
     | {
         explicitType: true;
         typeExpression: typeExpression;
@@ -265,7 +262,6 @@ export namespace Parser {
       }
     | {
         explicitType: false;
-        typeExpression: typeExpression;
       };
   // #endregion
 
@@ -673,7 +669,7 @@ export namespace Parser {
 
       checkEofWithError('unexpected eof in let statement after "="');
 
-      const body: expression & comment = !match(';') /*better error messages*/
+      const body: expression = !match(';') /*better error messages*/
         ? parseExpression()
         : newParseError('TODO no body in let expression');
 
@@ -686,15 +682,14 @@ export namespace Parser {
         'TODO let statements must be finished with a ";" symbol'
       );
 
-      const explicitType: hasExplicitType = isPresent(colonToken)
+      const explicitType: explicitType = isPresent(colonToken)
         ? {
             explicitType: true,
             typeExpression: typeAnnotation!,
             colonToken
           }
         : {
-            explicitType: false,
-            typeExpression: { type: 'implicit', comments: [] }
+            explicitType: false
           };
 
       const genericAnnotation: genericAnnotation = isGeneric
@@ -781,7 +776,8 @@ export namespace Parser {
           typeToken,
           equalsToken,
           semicolonToken,
-          comments
+          comments,
+          isGeneric: false // TODO
         };
       } else if (match('{')) {
         const openingBracketToken: token = advance()!;
@@ -822,7 +818,8 @@ export namespace Parser {
           typeToken,
           openingBracketToken,
           closingBracketToken,
-          comments
+          comments,
+          isGeneric: false // TODO
         };
       }
 
@@ -940,7 +937,7 @@ export namespace Parser {
   }
 
   // TODO add comments and isAtEnd() support
-  function parseExpression(): expression & comment {
+  function parseExpression(): expression {
     const comments: token[] = [];
 
     function parseExprLvl0(): expression {
@@ -960,7 +957,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -983,7 +981,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1006,7 +1005,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1029,7 +1029,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1052,7 +1053,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1075,7 +1077,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1098,7 +1101,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1121,7 +1125,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1146,7 +1151,8 @@ export namespace Parser {
           operator: operatorToken.lexeme,
           leftSide,
           rightSide,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1165,7 +1171,8 @@ export namespace Parser {
           type: 'unary',
           operator: operatorToken.lexeme,
           body,
-          operatorToken
+          operatorToken,
+          comments
         };
       }
 
@@ -1195,7 +1202,8 @@ export namespace Parser {
             type: 'propertyAccess',
             source: left,
             propertyToken,
-            dotToken: token
+            dotToken: token,
+            comments
           };
         } else {
           //   f(
@@ -1239,7 +1247,8 @@ export namespace Parser {
             function: left,
             arguments: args,
             openingBracketToken: token,
-            closingBracketToken
+            closingBracketToken,
+            comments
           };
         }
       }
@@ -1277,7 +1286,8 @@ export namespace Parser {
           type: 'grouping',
           body,
           openingBracketToken,
-          closingBracketToken
+          closingBracketToken,
+          comments
         };
       } else if (matchType(tokenType.literal)) {
         const literalToken: token = advance()!;
@@ -1301,14 +1311,16 @@ export namespace Parser {
           type: 'literal',
           literalType,
           literal,
-          literalToken
+          literalToken,
+          comments
         };
       } else if (matchType(tokenType.identifier)) {
         const identifierToken: token = advance()!;
         consumeComments(comments);
         return {
           type: 'identifier',
-          identifierToken
+          identifierToken,
+          comments
         };
       } else if (match('func')) return parseFuncExpression();
       else if (match('match')) return parseMatchExpression();
@@ -1326,18 +1338,8 @@ export namespace Parser {
           'Internal error, called this function, even tho here is no function'
         );
 
-      function parseFuncExprParam(): {
-        identifierToken: token;
-        typeExpression: typeExpression;
-        colonToken: optToken /*colon for type annotation*/;
-        commaToken: optToken;
-      }[] {
-        const params: {
-          identifierToken: token;
-          typeExpression: typeExpression;
-          colonToken: optToken /*colon for type annotation*/;
-          commaToken: optToken;
-        }[] = [];
+      function parseFuncExprParam(): funcParameters {
+        const params: funcParameters = [];
 
         consumeComments(comments);
 
@@ -1372,7 +1374,7 @@ export namespace Parser {
 
           params.push({
             identifierToken,
-            typeExpression: explicitType ?? { type: 'implicit', comments: [] },
+            typeExpression: explicitType,
             colonToken,
             commaToken
           });
@@ -1426,26 +1428,26 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      const typeAnnotation: hasExplicitType = isPresent(colonToken)
+      const returnType: explicitType = isPresent(colonToken)
         ? {
             explicitType: true,
             typeExpression: typeExpression!,
             colonToken
           }
         : {
-            explicitType: false,
-            typeExpression: { type: 'implicit', comments: [] }
+            explicitType: false
           };
 
       return {
         type: 'func',
         parameters: params,
         body,
-        ...typeAnnotation,
+        returnType,
         funcToken,
         openingBracketToken,
         closingBracketToken,
-        arrowToken
+        arrowToken,
+        comments
       };
     }
 

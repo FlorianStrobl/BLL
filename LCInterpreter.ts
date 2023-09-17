@@ -115,11 +115,13 @@ export namespace Interpreter {
               type: 'literal',
               literalType: 'i32',
               literal: argument,
-              literalToken: {} as any
+              literalToken: {} as any,
+              comments: []
             },
             commaToken: undefined
           }
-        ]
+        ],
+        comments: []
       });
 
     return result as any;
@@ -255,7 +257,8 @@ export namespace Interpreter {
                     lexeme: '$',
                     type: Lexer.tokenType.identifier,
                     idx: -1
-                  }
+                  },
+                  comments: []
                 }
               : {
                   type: 'identifier',
@@ -263,14 +266,14 @@ export namespace Interpreter {
                     lexeme: '$$',
                     type: Lexer.tokenType.identifier,
                     idx: -1
-                  }
+                  },
+                  comments: []
                 },
           funcToken: {} as any,
           openingBracketToken: {} as any,
           closingBracketToken: {} as any,
           arrowToken: {} as any,
-          explicitType: false,
-          typeExpression: {} as any
+          returnType: { explicitType: false }
         };
         const func: Parser.funcExpression =
           typeof rawValue === 'number' ? numberFunction : rawValue;
