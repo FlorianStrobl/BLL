@@ -1451,7 +1451,7 @@ export namespace Parser {
     return { ...parseExprLvl0() };
   }
 
-  // id[substitution]
+  // TODO id[substitution]
   function parseTypeExpression(): typeExpression {
     const comments: token[] = [];
 
