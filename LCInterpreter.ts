@@ -383,6 +383,10 @@ let const1 = (func (x) => x) (1);
 let main = func (arg: i32): i32 => 1 + (51 != const1 + g(arg));
 
 let g = func (arg: i32): i32 => (const4 + constFunc5()) + f(arg + 6);
+
+let a = func (x) => func (y) => x + y;
+let b = a(5);
+let c = b(3); // 8
 `,
     '',
     7

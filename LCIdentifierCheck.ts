@@ -6,33 +6,29 @@ import { inspect } from 'util';
 const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 // TODO
+type parserValue = { statement: Parser.statement; path: Lexer.token[] };
 type astAsStatements = {
   imports: Parser.statement[]; // TODO no path allowed!
 
   mainFunc: Parser.funcExpression;
 
-  typeAliases: { statement: Parser.statement; path: Lexer.token[] }[];
-  genericTypeAliases: { statement: Parser.statement; path: Lexer.token[] }[];
+  typeAliases: parserValue[];
+  genericTypeAliases: parserValue[];
 
-  complexTypes: { statement: Parser.statement; path: Lexer.token[] }[];
-  genericComplexTypes: { statement: Parser.statement; path: Lexer.token[] }[];
+  complexTypes: parserValue[];
+  genericComplexTypes: parserValue[];
 
-  lets: {
-    statement: Parser.statement;
-    path: Lexer.token[] /*TODO path for the groups*/;
-  }[];
-  genericLets: { statement: Parser.statement; path: Lexer.token[] }[];
+  lets: parserValue[];
+  genericLets: parserValue[];
 
-  // TODO for better error messages in hindsight and to check if doubles are there
-  groups: {
-    statement: Parser.statement;
-    path: Lexer.token[];
-  }[];
+  groups: parserValue[];
 };
 
 // TODO check if identifiers are used multiple times:
 // use a hashmap where we store the amount of times an identifier was used, and if
 // we get more than one for a field, we store that index (strs) in a seperate array, and at the end, we report all the indexes in the seperate array
+
+// after building the hashmap with all its values and know each and every value only comes once: check if implicit identifier use happens (also checks local params from funcs for this one!)
 
 function test(ast: Parser.statement[]): astAsStatements {
   const answer: astAsStatements = {
