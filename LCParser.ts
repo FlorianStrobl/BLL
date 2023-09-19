@@ -2,7 +2,7 @@ import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
 
-// TODO match expression parsing and generic types
+// TODO parsing: "match expressions", "generics for types statement" and "substituting value for generic inside a type"
 // then debug parser (tests, comments, eof) and benchmark speed
 
 // #region lexer code for parser
@@ -921,6 +921,7 @@ export namespace Parser {
     return newParseError('TODO could not parse any statement properly');
   }
 
+  // isEof checks
   function parseExpression(): expression {
     function parseExprLvl0(): expression {
       const comments: token[] = [];
@@ -1450,6 +1451,7 @@ export namespace Parser {
     return { ...parseExprLvl0() };
   }
 
+  // id[substitution]
   function parseTypeExpression(): typeExpression {
     const comments: token[] = [];
 
