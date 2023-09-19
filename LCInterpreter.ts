@@ -36,6 +36,7 @@ export namespace Interpreter {
     return interpretAst(ast.statements, argument);
   }
 
+  // assertion: ast is type safe and identifiers can resolve without errors
   // TODO type checking and infering everything needed
   function interpretAst(ast: Parser.statement[], argument: number): number {
     function extractValues(
@@ -117,7 +118,7 @@ export namespace Interpreter {
             argument: {
               type: 'literal',
               literalType: 'i32',
-              literal: argument,
+              literalValue: argument,
               literalToken: {} as any,
               comments: []
             },
@@ -138,7 +139,7 @@ export namespace Interpreter {
   ): number | Parser.funcExpression {
     switch (expression.type) {
       case 'literal':
-        return expression.literal;
+        return expression.literalValue;
       case 'grouping':
         return evaluateExpression(expression.body, localIdentifiers);
       case 'identifier':
@@ -238,8 +239,7 @@ export namespace Interpreter {
                   type: Lexer.tokenType.identifier,
                   idx: -1
                 },
-                typeExpression: {} as any,
-                colonToken: undefined
+                typeAnnotation: { hasTypeAnnotation: false }
               },
               delimiterToken: undefined
             },
@@ -250,8 +250,7 @@ export namespace Interpreter {
                   type: Lexer.tokenType.identifier,
                   idx: -1
                 },
-                typeExpression: {} as any,
-                colonToken: undefined
+                typeAnnotation: { hasTypeAnnotation: false }
               },
               delimiterToken: undefined
             }

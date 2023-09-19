@@ -2,6 +2,9 @@ import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
 
+// TODO match expression parsing and generic types
+// then debug parser (tests, comments, eof) and benchmark speed
+
 // #region lexer code for parser
 class Larser {
   private code: string;
@@ -84,6 +87,18 @@ export namespace Parser {
   let larser: Larser;
 
   // #region types
+  type optional<T> = T | undefined;
+
+  type argumentList<T> = {
+    argument: T;
+    delimiterToken: optToken;
+  }[];
+
+  type token = Lexer.token;
+  type optToken = optional<Lexer.token>;
+  type tokenType = Lexer.tokenType;
+  const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
+
   type comment = { comments: token[] };
 
   // #region stmt
@@ -135,24 +150,24 @@ export namespace Parser {
   type complexTypeValue = {
     identifierToken: token;
     parameters:
-      | { hasParameters: false }
       | {
           hasParameters: true;
           value: argumentList<typeExpression>;
           openingBracketToken: token;
           closingBracketToken: token;
           // comments: lexTokenType[] // TODO, add for better formatting in prettier
-        };
+        }
+      | { hasParameters: false };
   };
 
   type genericAnnotation =
-    | { isGeneric: false }
     | {
         isGeneric: true;
         genericIdentifiers: argumentList<token>;
         genericOpeningBracketToken: token;
         genericClosingBracketToken: token;
-      };
+      }
+    | { isGeneric: false };
   // #endregion
 
   // #region expr
@@ -216,8 +231,13 @@ export namespace Parser {
 
   type funcParameter = {
     identifierToken: token;
-    typeExpression: optional<typeExpression>;
-    colonToken: optToken /*colon for type annotation*/;
+    typeAnnotation:
+      | {
+          hasTypeAnnotation: true;
+          typeExpression: typeExpression;
+          colonToken: token;
+        }
+      | { hasTypeAnnotation: false };
   };
   // #endregion
 
@@ -227,14 +247,23 @@ export namespace Parser {
     (
       | {
           type: 'primitive-type';
-          primitiveToken: token; // keyword like i32/f32 or generic identifier/type identifier
+          primitiveToken: token; // keyword like i32/f32
+        }
+      | {
+          type: 'identifier';
+          identifierToken: token; // generic identifier/type identifier
         }
       | {
           type: 'func-type';
           parameters: argumentList<typeExpression>;
           returnType: typeExpression;
-          openingBracketToken: optToken;
-          closingBracketToken: optToken;
+          brackets:
+            | {
+                hasBrackets: true;
+                openingBracketToken: token;
+                closingBracketToken: token;
+              }
+            | { hasBrackets: false };
           arrowToken: token;
         }
       | {
@@ -262,18 +291,6 @@ export namespace Parser {
   // #endregion
 
   // #region helper
-  type optional<T> = T | undefined;
-
-  type argumentList<T> = {
-    argument: T;
-    delimiterToken: optToken;
-  }[];
-
-  type token = Lexer.token;
-  type optToken = optional<Lexer.token>;
-  type tokenType = Lexer.tokenType;
-  const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
-
   // #region traditional
   function isAtEnd(): boolean {
     return larser.isEof();
@@ -574,6 +591,7 @@ export namespace Parser {
       checkEofWithError('TODO');
 
       // TODO add generic
+
       const genericClosingBracketToken: optToken = undefined;
 
       if (match('=')) {
@@ -650,7 +668,7 @@ export namespace Parser {
         'TODO invalid type expression: cannot resolve which type it should be. Missing "=" or "{"'
       );
 
-      // TODO NOW comments and eof
+      // TODO local comments and eof
       function parseComplexeTypeLine(): complexTypeValue {
         const localComments: [] = []; // TODO add special comments to each complex type
 
@@ -1338,10 +1356,26 @@ export namespace Parser {
             parseTypeExpression
           );
 
+          const typeAnnotation:
+            | { hasTypeAnnotation: false }
+            | {
+                hasTypeAnnotation: true;
+                typeExpression: typeExpression;
+                colonToken: token;
+              } =
+            isPresent(colonToken) || isPresent(typeExpression)
+              ? {
+                  hasTypeAnnotation: true,
+                  typeExpression: typeExpression!,
+                  colonToken: colonToken!
+                }
+              : { hasTypeAnnotation: false };
+
+          // typeExpression,
+          // colonToken
           return {
             identifierToken,
-            typeExpression,
-            colonToken
+            typeAnnotation
           };
         },
         { consumeTopLevelComments: true, comments },
@@ -1422,12 +1456,15 @@ export namespace Parser {
     consumeComments(comments);
 
     if (match('i32') || match('f32') || matchType(tokenType.identifier)) {
+      const isKeyword: boolean = matchType(tokenType.keyword);
       const value: token = advance()!;
-      const primitive: typeExpression = {
-        type: 'primitive-type',
-        primitiveToken: value,
-        comments
-      };
+      const primitive: typeExpression = isKeyword
+        ? {
+            type: 'primitive-type',
+            primitiveToken: value,
+            comments
+          }
+        : { type: 'identifier', identifierToken: value, comments };
 
       consumeComments(comments);
 
@@ -1442,8 +1479,7 @@ export namespace Parser {
         type: 'func-type',
         parameters: [{ argument: primitive, delimiterToken: undefined }],
         returnType,
-        openingBracketToken: undefined,
-        closingBracketToken: undefined,
+        brackets: { hasBrackets: false },
         arrowToken,
         comments
       };
@@ -1486,13 +1522,15 @@ export namespace Parser {
 
       if (isPresent(arrowToken)) {
         const returnType: typeExpression = parseTypeExpression();
-
         return {
           type: 'func-type',
           parameters: body,
           returnType,
-          openingBracketToken,
-          closingBracketToken,
+          brackets: {
+            hasBrackets: true,
+            openingBracketToken,
+            closingBracketToken
+          },
           arrowToken,
           comments
         };
