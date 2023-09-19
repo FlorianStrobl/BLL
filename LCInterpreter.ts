@@ -6,6 +6,9 @@ TODO: create a tree structure with all the namespaces/groups; then create a func
 TODO: add caching for funcs with only i32/float args or for vars which are of primitive type and not a function type in order to not evaluate them twice
 */
 
+// let main = func (arg: f32): f32 => arg; // also allowed!
+// program correct closures!
+
 // @ts-ignore
 import { inspect } from 'util';
 const log = (args: any) => console.log(inspect(args, { depth: 999 }));
@@ -229,24 +232,28 @@ export namespace Interpreter {
           type: 'func',
           parameters: [
             {
-              identifierToken: {
-                lexeme: '$',
-                type: Lexer.tokenType.identifier,
-                idx: -1
+              argument: {
+                identifierToken: {
+                  lexeme: '$',
+                  type: Lexer.tokenType.identifier,
+                  idx: -1
+                },
+                typeExpression: {} as any,
+                colonToken: undefined
               },
-              typeExpression: {} as any,
-              colonToken: undefined,
-              commaToken: undefined
+              delimiterToken: undefined
             },
             {
-              identifierToken: {
-                lexeme: '$$',
-                type: Lexer.tokenType.identifier,
-                idx: -1
+              argument: {
+                identifierToken: {
+                  lexeme: '$$',
+                  type: Lexer.tokenType.identifier,
+                  idx: -1
+                },
+                typeExpression: {} as any,
+                colonToken: undefined
               },
-              typeExpression: {} as any,
-              colonToken: undefined,
-              commaToken: undefined
+              delimiterToken: undefined
             }
           ],
           body:
@@ -286,7 +293,7 @@ export namespace Interpreter {
 
         for (let i = 0; i < funcParameters.length; ++i) {
           localIdentifiers.push([
-            funcParameters[i].identifierToken.lexeme,
+            funcParameters[i].argument.identifierToken.lexeme,
             callingArguments[i].argument
           ]);
         }
