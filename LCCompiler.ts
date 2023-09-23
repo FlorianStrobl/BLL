@@ -6,7 +6,7 @@ import { Parser } from './LCParser';
 
 export namespace Compiler {
   function todoCompileSimpleExpression(
-    exp: Parser.expressionT,
+    exp: Parser.expression,
     varCounter: { c: number } = { c: 0 }
   ): string {
     function isLLVMIRRegisterOrLiteral(str: string): boolean {
@@ -49,6 +49,7 @@ export namespace Compiler {
               isLLVMIRRegisterOrLiteral(value) ? value : '%Z' + valueId
             }\n`;
         }
+        break;
       case 'binary':
         let leftSide: string;
         let leftSideVarId: number;
@@ -57,9 +58,9 @@ export namespace Compiler {
         let tmp: number;
         switch (exp.operator) {
           case '|':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -75,9 +76,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '^':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -93,9 +94,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '&':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -111,9 +112,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '==':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -129,9 +130,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n%Z${varCounter.c++} = zext i1 %Z${tmp} to i64\n`;
           case '!=':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -147,9 +148,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n%Z${varCounter.c++} = zext i1 %Z${tmp} to i64\n`;
           case '<':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -165,9 +166,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n%Z${varCounter.c++} = zext i1 %Z${tmp} to i64\n`;
           case '>':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -183,9 +184,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n%Z${varCounter.c++} = zext i1 %Z${tmp} to i64\n`;
           case '<=':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -201,9 +202,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n%Z${varCounter.c++} = zext i1 %Z${tmp} to i64\n`;
           case '>=':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -219,9 +220,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n%Z${varCounter.c++} = zext i1 %Z${tmp} to i64\n`;
           case '<<':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -237,9 +238,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '>>':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -255,9 +256,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '+':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -273,9 +274,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '-':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -291,9 +292,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '*':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -309,9 +310,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '/':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -327,9 +328,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '%':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -345,9 +346,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '**':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -363,9 +364,9 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
           case '***':
-            leftSide = todoCompileSimpleExpression(exp.left, varCounter);
+            leftSide = todoCompileSimpleExpression(exp.leftSide, varCounter);
             leftSideVarId = varCounter.c - 1;
-            rightSide = todoCompileSimpleExpression(exp.right, varCounter);
+            rightSide = todoCompileSimpleExpression(exp.rightSide, varCounter);
             rightSideVarId = varCounter.c - 1;
             return `${
               isLLVMIRRegisterOrLiteral(leftSide) ? '' : leftSide + '\n'
@@ -381,20 +382,24 @@ export namespace Compiler {
                 : '%Z' + rightSideVarId
             }`}\n`;
         }
+        break;
       case 'grouping':
-        return todoCompileSimpleExpression(exp.value, varCounter);
+        return todoCompileSimpleExpression(exp.body, varCounter);
       case 'literal':
-        const literalValue = Number(exp.literal.lexeme);
-        return literalValue.toString();
+        return exp.literalValue.toString();
       case 'identifier':
-        return '%' + exp.identifier.lexeme;
-      case 'identifier-path':
+        return '%' + exp.identifierToken.lexeme;
+      case 'match':
+        return 'NOT DONE YET';
+      case 'propertyAccess':
         return 'NOT DONE YET';
       case 'functionCall':
         return 'NOT DONE YET';
       case 'func':
         return 'NOT DONE YET';
     }
+
+    return '';
   }
 
   function todoCompileSimpleFunction(func: Parser.statement): string {
@@ -403,13 +408,16 @@ export namespace Compiler {
 
     const funcReturnType = 'i64';
 
-    const funcIdentifier = func.identifier.lexeme;
+    const funcIdentifier = func.identifierToken.lexeme;
 
     let funcParameters = '';
-    for (const [key, param] of Object.entries(func.body.params.args))
-      if (Number(key) === func.body.params.args.length - 1)
-        funcParameters += `${'i64'} %${param.lexeme}`;
-      else funcParameters += `${'i64'} %${param.lexeme}, `;
+    for (const [key, param] of Object.entries(func.body.parameters))
+      if (Number(key) === func.body.parameters.length - 1)
+        funcParameters += `${'i64'} %${param.argument.identifierToken.lexeme}`;
+      else
+        funcParameters += `${'i64'} %${
+          param.argument.identifierToken.lexeme
+        }, `;
 
     let idCounter = { c: 0 };
     const funcBody = todoCompileSimpleExpression(func.body.body, idCounter);
@@ -422,7 +430,7 @@ export namespace Compiler {
 
   // compiles down to llvm ir
   export function compile(
-    ast: Parser.statementT[],
+    ast: Parser.statement[],
     code: string,
     fileName: string
   ): string {
@@ -435,3 +443,10 @@ export namespace Compiler {
     return str;
   }
 }
+
+const ans = Compiler.compile(
+  Parser.parse('let x = func (a, b) => a + 4;').statements,
+  '',
+  ''
+);
+console.log(ans);

@@ -330,6 +330,18 @@ let main = func (arg) => x(arg, 3 + arg,) + 1;
   log(Interpreter.interpret(code, '', 12));
 }
 
+console.clear();
+log(
+  Interpreter.interpret(
+    `
+let x = 5;
+let main = func (arg) => x * 2 + arg;
+`,
+    '',
+    3
+  )
+);
+
 // debug();
 
 // log(
@@ -347,7 +359,7 @@ let main = func (arg) => x(arg, 3 + arg,) + 1;
 //     2
 //   )
 // );
-console.clear();
+//console.clear();
 log(
   Interpreter.interpret(
     `

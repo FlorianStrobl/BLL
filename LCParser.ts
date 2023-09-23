@@ -5,6 +5,8 @@ import { inspect } from 'util';
 // TODO parsing: "match expressions", "generics for types statement" and "substituting value for generic inside a type"
 // then debug parser (tests, comments, eof) and benchmark speed
 
+// must do, must not do
+
 // #region lexer code for parser
 class Larser {
   private code: string;
@@ -1789,14 +1791,14 @@ const codeWithComments: string =
     .join(' /*comment*/ ') +
   '/**/';
 
-console.log(codeWithComments);
+//console.log(codeWithComments);
 const parsedCode = Parser.parse(code[0]);
 
-console.log('is code valid:', parsedCode.valid);
-console.log('CODE:');
-for (const stmt of parsedCode.statements) log(stmt);
-if (!parsedCode.valid) console.error('ERRORS:');
-if (!parsedCode.valid) for (const err of parsedCode.parseErrors) log(err);
+//console.log('is code valid:', parsedCode.valid);
+//console.log('CODE:');
+//for (const stmt of parsedCode.statements) log(stmt);
+//if (!parsedCode.valid) console.error('ERRORS:');
+//if (!parsedCode.valid) for (const err of parsedCode.parseErrors) log(err);
 // #endregion
 
 // #region comments
