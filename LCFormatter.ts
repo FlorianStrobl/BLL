@@ -2,68 +2,107 @@
 // + code region folding
 // takes the ast as input and returns a string with annotations for VSCode
 
-// @ts-nocheck HERE TODO
-
 import { Parser } from './LCParser';
-import { Lexer } from './LCLexer';
 
 // TODO
 
-export namespace prettier {
-  function printExpression(expression: Parser.expression): string {
-    // if two identifiers or operators are following one each other, put a space in between!!
+export namespace Prettier {
+  function printTypeExpression(expression: Parser.typeExpression): string {
+    // TODO comments
     switch (expression.type) {
+      case 'grouping':
+        return `(${printTypeExpression(expression.body)})`;
+      case 'identifier':
+        return expression.identifierToken.lexeme;
+      case 'primitive-type':
+        return expression.primitiveToken.lexeme;
+      case 'func-type':
+        return `(${expression.parameters
+          .map((e) => printTypeExpression(e.argument))
+          .join(', ')}) -> ${printTypeExpression(expression.returnType)}`;
+    }
+  }
+
+  function printExpression(expression: Parser.expression): string {
+    // TODO comments
+    switch (expression.type) {
+      case 'grouping':
+        return `(${printExpression(expression.body)})`;
+      case 'literal':
+        return expression.literalToken.lexeme;
+      case 'identifier':
+        return expression.identifierToken.lexeme;
+      case 'propertyAccess':
+        return `${printExpression(expression.source)}.${
+          expression.propertyToken.lexeme
+        }`;
+      case 'functionCall':
+        return `${printExpression(expression.function)}(${expression.arguments
+          .map((e) => printExpression(e.argument))
+          .join(', ')})`;
       case 'unary':
         return `${expression.operator} ${printExpression(expression.body)}`;
       case 'binary':
-        return `${printExpression(expression.left)} ${
+        return `${printExpression(expression.leftSide)} ${
           expression.operator
-        } ${printExpression(expression.right)}`;
+        } ${printExpression(expression.rightSide)}`;
       case 'func':
-        return `func (TODO) -> ${printExpression(expression.body)}`;
-      case 'grouping':
-        return `(${printExpression(expression.value)})`;
-      case 'literal':
-        return expression.literal.lexeme;
-      case 'identifier':
-        return expression.identifier.lexeme;
-      case 'functionCall':
+        return `func (${expression.parameters
+          .map(
+            (e) =>
+              e.argument.identifierToken.lexeme +
+              (e.argument.typeAnnotation.hasTypeAnnotation
+                ? `: ${printTypeExpression(
+                    e.argument.typeAnnotation.typeExpression
+                  )}`
+                : '')
+          )
+          .join(', ')})${
+          expression.returnType.explicitType === true
+            ? ': ' + printTypeExpression(expression.returnType.typeExpression)
+            : ''
+        } => ${printExpression(expression.body)}`;
+      case 'match':
         return 'TODO';
     }
-    return '';
   }
 
   function printStatement(statement: Parser.statement): string {
-    function printImportStatement(path: Lexer.token[]): string {
-      let str = '';
-      for (const p of path) str += p.lexeme;
-      return str;
-    }
-
-    // will have expressions in it
+    // TODO comments
     switch (statement.type) {
-      case ';':
+      case 'empty':
         return ';';
       case 'import':
-        return printImportStatement(statement.path) + ';';
-      case 'namespace':
-        const namespaceBody: string[] = [];
-        for (const s of statement.body) {
-          namespaceBody.push(printStatement(s));
-        }
-        return `${statement.public ? 'pub ' : ''}namespace ${
-          statement.identifier.lexeme
-        } {\n${namespaceBody.join('\n')}\n}`;
+        return statement.filename + ';';
+      case 'group':
+        return `group ${statement.identifierToken.lexeme} {\n${statement.body
+          .map(printStatement)
+          .join('\n')}\n}`;
       case 'let':
-        const expression = printExpression(statement.body);
-        return `${statement.public ? 'pub ' : ''}let ${
-          statement.identifier.lexeme
-        } = ${expression};`;
+        return `let ${statement.identifierToken.lexeme}${
+          statement.isGeneric
+            ? `[${statement.genericIdentifiers
+                .map((e) => e.argument.lexeme)
+                .join(', ')}]`
+            : ''
+        }${
+          statement.explicitType === true
+            ? ': ' + printTypeExpression(statement.typeExpression)
+            : ''
+        } = ${printExpression(statement.body)};`;
+      case 'comment':
+        return statement.comments.join('\n');
+      case 'complex-type':
+        return 'TODO';
+      case 'type-alias':
+        return `type ${
+          statement.identifierToken.lexeme
+        } = ${printTypeExpression(statement.typeValue)};`;
     }
   }
 
   export function prettier(
-    ast: Parser.statementT[],
+    ast: Parser.statement[],
     withColor: boolean = false
   ): string {
     let code = '';
@@ -77,3 +116,11 @@ export namespace prettier {
     return code;
   }
 }
+
+console.log(
+  Prettier.prettier(
+    Parser.parse(
+      'let id[T]: (T -> T) -> (T -> T) = func (x: T -> T): T -> T => x;'
+    ).statements
+  )
+);

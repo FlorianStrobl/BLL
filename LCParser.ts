@@ -2,11 +2,6 @@ import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
 
-// TODO parsing: "match expressions", "generics for types statement" and "substituting value for generic inside a type"
-// then debug parser (tests, comments, eof) and benchmark speed
-
-// must do, must not do
-
 // #region lexer code for parser
 class Larser {
   private code: string;
@@ -91,15 +86,15 @@ export namespace Parser {
   // #region types
   type optional<T> = T | undefined;
 
-  type argumentList<T> = {
-    argument: T;
-    delimiterToken: optToken;
-  }[];
-
   type token = Lexer.token;
   type optToken = optional<Lexer.token>;
   type tokenType = Lexer.tokenType;
   const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
+
+  type argumentList<T> = {
+    argument: T;
+    delimiterToken: optToken;
+  }[];
 
   type comment = { comments: token[] };
 
@@ -118,7 +113,7 @@ export namespace Parser {
         }
       | {
           type: 'import';
-          localFileName: token;
+          filename: token;
           useToken: token;
           semicolonToken: token;
         }
@@ -557,7 +552,7 @@ export namespace Parser {
 
       return {
         type: 'import',
-        localFileName,
+        filename: localFileName,
         useToken,
         semicolonToken,
         comments
@@ -1454,6 +1449,7 @@ export namespace Parser {
   }
 
   // TODO id[substitution]
+  // TODO just like parseExpression tbh HERE NOW
   function parseTypeExpression(): typeExpression {
     const comments: token[] = [];
 
@@ -1490,6 +1486,7 @@ export namespace Parser {
     }
 
     if (match('(')) {
+      // TODO, either its () -> x; or it is something like T -> ((i32) -> f32); or its like (f32) -> f32
       const openingBracketToken: token = advance()!;
 
       consumeComments(comments);
@@ -1551,7 +1548,7 @@ export namespace Parser {
         return {
           type: 'grouping',
           // TODO couldnt it also be undefined here??
-          body: body[0].argument,
+          body: body[0]?.argument, // TODO NOT WORKING
           openingBracketToken,
           closingBracketToken,
           comments
@@ -1747,6 +1744,8 @@ export namespace Parser {
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
+console.log('HERE ', Parser.parse('let id[T]: T -> T -> T = 5;'));
+
 // #region debug
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
@@ -1802,6 +1801,11 @@ const parsedCode = Parser.parse(code[0]);
 // #endregion
 
 // #region comments
+// TODO parsing: "match expressions", "generics for types statement" and "substituting value for generic inside a type"
+// then debug parser (tests, comments, eof) and benchmark speed
+
+// must do, must not do
+
 /*
  Check list:
  var, let, const, function, namespace, type, interface, export
