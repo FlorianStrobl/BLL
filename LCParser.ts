@@ -17,7 +17,7 @@ class Larser {
 
     this.state = { eof: false, currentToken: undefined as any };
     this.advanceToken();
-    if (this.state.eof === false && this.state.currentToken === undefined)
+    if (!this.state.eof && this.state.currentToken === undefined)
       throw new Error(
         'Internal error, could not lexe the very first token correctly in the parsing step.'
       );
@@ -98,6 +98,10 @@ export namespace Parser {
 
   type comment = { comments: token[] };
 
+  export type parseError =
+    | string
+    | { type: 'error'; value: any; currentToken: optToken };
+
   // #region stmt
   export type statement = comment &
     (
@@ -120,7 +124,7 @@ export namespace Parser {
       | ({
           type: 'type-alias';
           identifierToken: token;
-          typeValue: typeExpression;
+          body: typeExpression;
           typeToken: token;
           equalsToken: token;
           semicolonToken: token;
@@ -128,7 +132,7 @@ export namespace Parser {
       | ({
           type: 'complex-type';
           identifierToken: token;
-          typeValue: argumentList<complexTypeValue>;
+          body: argumentList<complexTypeValue>;
           typeToken: token;
           openingBracketToken: token;
           closingBracketToken: token;
@@ -178,7 +182,7 @@ export namespace Parser {
           closingBracketToken: token;
         }
       | {
-          type: 'propertyAccess';
+          type: 'propertyAccess'; // source.property
           propertyToken: token;
           source: expression;
           dotToken: token;
@@ -194,7 +198,7 @@ export namespace Parser {
       | {
           type: 'literal';
           literalType: 'i32' | 'f32';
-          literalValue: number; // "NaN", "Infinity", 0, 1.5, ...
+          value: number; // "NaN", "Infinity", 0, 1.5, ...
           literalToken: token;
         }
       | {
@@ -228,13 +232,7 @@ export namespace Parser {
 
   type funcParameter = {
     identifierToken: token;
-    typeAnnotation:
-      | {
-          hasTypeAnnotation: true;
-          typeExpression: typeExpression;
-          colonToken: token;
-        }
-      | { hasTypeAnnotation: false };
+    typeAnnotation: explicitType;
   };
   // #endregion
 
@@ -243,12 +241,26 @@ export namespace Parser {
   export type typeExpression = comment &
     (
       | {
+          type: 'grouping';
+          body: typeExpression;
+          openingBracketToken: token;
+          closingBracketToken: token;
+        }
+      | {
           type: 'primitive-type';
           primitiveToken: token; // keyword like i32/f32
         }
       | {
           type: 'identifier';
           identifierToken: token; // generic identifier/type identifier
+          generic:
+            | {
+                hasGenericSubstitution: true;
+                values: argumentList<typeExpression>;
+                closingBracketToken: token;
+                openingBracketToken: token;
+              }
+            | { hasGenericSubstitution: false };
         }
       | {
           type: 'func-type';
@@ -263,12 +275,6 @@ export namespace Parser {
             | { hasBrackets: false };
           arrowToken: token;
         }
-      | {
-          type: 'grouping';
-          body: typeExpression;
-          openingBracketToken: token;
-          closingBracketToken: token;
-        }
     );
 
   type explicitType =
@@ -281,10 +287,6 @@ export namespace Parser {
         explicitType: false;
       };
   // #endregion
-
-  export type parseError =
-    | string
-    | { type: 'error'; value: any; currentToken: optToken };
   // #endregion
 
   // #region helper
@@ -294,37 +296,40 @@ export namespace Parser {
   }
 
   // returns the current token
-  function peek(): optToken {
-    if (isAtEnd()) return undefined; // TODO shouldnt it just crash if that happens? invalid internal code, same with advance()
+  // assertion: not eof
+  function peek(): token {
+    if (isAtEnd())
+      throw new Error(
+        'internal error, tried to peek a value even tho it is eof'
+      );
+
     return larser.getCurrentToken();
   }
 
   // returns the current token and advances to the next token
-  function advance(): optToken {
-    if (isAtEnd()) return undefined;
-
-    const currentToken: optToken = peek();
+  // assertion: not eof
+  function advance(): token {
+    const currentToken: token = peek();
     larser.advanceToken();
     return currentToken;
   }
 
   // check if the current token matches the tokens
+  // assertion: not eof
   function match(...tokens: string[]): boolean {
-    const currentToken: optToken = peek();
-    return isPresent(currentToken) && tokens.includes(currentToken.lexeme);
+    return tokens.includes(peek().lexeme);
   }
 
   // check if the current token type matches the tokenTypes
+  // assertion: not eof
   function matchType(...tokenTypes: tokenType[]): boolean {
-    const currentToken: optToken = peek();
-    return isPresent(currentToken) && tokenTypes.includes(currentToken.type);
+    return tokenTypes.includes(peek().type);
   }
   // #endregion
 
   // #region functional
   function consumeComments(comments: token[]): void {
-    while (!isAtEnd() && matchType(tokenType.comment))
-      comments.push(advance()!);
+    while (!isAtEnd() && matchType(tokenType.comment)) comments.push(advance());
   }
 
   function newParseError(arg: parseError): never {
@@ -333,25 +338,25 @@ export namespace Parser {
   }
 
   function checkEofWithError(errorOnEof: string): void {
-    if (isAtEnd()) {
-      newParseError('Invalid eof while parsing code: ' + errorOnEof);
-      throw parseErrors;
+    if (!isAtEnd()) return;
 
-      // TODO not throw, BUT eof is the very last thing in the code: so could now check all the errors
+    newParseError('Invalid eof while parsing code: ' + errorOnEof);
+    throw parseErrors;
 
-      // should print out all errors in a formatted way, aswell as the eof error
-      // then stop the program *but* then the parser would have to import logger...
-    }
+    // TODO not throw, BUT eof is the very last thing in the code: so could now check all the errors
+
+    // should print out all errors in a formatted way, aswell as the eof error
+    // then stop the program *but* then the parser would have to import logger...
   }
 
   // on match: advance
   function optionalMatchAdvance(token: string): optToken {
-    return match(token) ? advance()! : undefined;
+    return match(token) ? advance() : undefined;
   }
 
   // on match: advace else error
   function matchAdvanceOrError(token: string, error: parseError): token {
-    return match(token) ? advance()! : newParseError(error);
+    return match(token) ? advance() : newParseError(error);
   }
 
   // on match type: advance else error
@@ -359,7 +364,7 @@ export namespace Parser {
     tokenType: tokenType,
     error: parseError
   ): token {
-    return matchType(tokenType) ? advance()! : newParseError(error);
+    return matchType(tokenType) ? advance() : newParseError(error);
   }
 
   function isPresent<T>(value: T | undefined): value is NonNullable<T> {
@@ -378,74 +383,76 @@ export namespace Parser {
   function parseArgumentList<T>(
     parseArgument: () => T, // assertion: does not have delimiter as valid value
     commentInfo:
-      | { consumeTopLevelComments: false }
-      | { consumeTopLevelComments: true; comments: token[] },
+      | { consumeTopLevelComments: true; comments: token[] }
+      | { consumeTopLevelComments: false },
     endTokenInfo:
-      | { hasEndToken: false }
-      | { hasEndToken: true; endToken: string },
+      | {
+          hasEndToken: true;
+          endToken: string /*TODO missing end token error?*/;
+        }
+      | { hasEndToken: false },
     delimiterInfo:
-      | { hasDelimiter: false }
       | {
           hasDelimiter: true;
           delimiterToken: string;
           missingDelimiterError: parseError;
-        },
+        }
+      | { hasDelimiter: false },
     invalidArgumentError: string,
     eofError: string
   ): argumentList<T> {
+    const hasDelimiter = delimiterInfo.hasDelimiter;
+    const hasEndToken = endTokenInfo.hasEndToken;
+    const consumeTopLevelComments = commentInfo.consumeTopLevelComments;
+
     const argumentList: argumentList<T> = [];
-    let delimiterToken: optToken = undefined;
+    let lastDelimiterToken: optToken = undefined;
 
-    if (commentInfo.consumeTopLevelComments)
-      consumeComments(commentInfo.comments);
+    if (consumeTopLevelComments) consumeComments(commentInfo.comments);
 
-    while (
-      !isAtEnd() &&
-      (!endTokenInfo.hasEndToken || !match(endTokenInfo.endToken))
-    ) {
-      if (commentInfo.consumeTopLevelComments)
-        consumeComments(commentInfo.comments);
+    while (!isAtEnd() && (!hasEndToken || !match(endTokenInfo.endToken))) {
+      if (consumeTopLevelComments) consumeComments(commentInfo.comments);
 
       if (isAtEnd()) break;
 
       if (
-        delimiterInfo.hasDelimiter &&
+        hasDelimiter &&
         argumentList.length !== 0 &&
-        !isPresent(delimiterToken)
+        !isPresent(lastDelimiterToken)
       )
         newParseError(delimiterInfo.missingDelimiterError);
 
-      const currentTokenDebug: token = peek()!;
+      const debugCurrentTokenIdx: number = peek().idx;
 
       const argument: T =
-        !delimiterInfo.hasDelimiter ||
-        /*has delimiter*/ !match(
-          delimiterInfo.delimiterToken
-        ) /*better error msgs*/
-          ? parseArgument()
-          : newParseError(invalidArgumentError);
+        hasDelimiter &&
+        match(delimiterInfo.delimiterToken) /*better error msgs*/
+          ? newParseError(invalidArgumentError)
+          : parseArgument();
 
-      if (commentInfo.consumeTopLevelComments)
-        consumeComments(commentInfo.comments);
+      if (consumeTopLevelComments) consumeComments(commentInfo.comments);
 
-      delimiterToken = delimiterInfo.hasDelimiter
+      // no is at end check
+
+      lastDelimiterToken = hasDelimiter
         ? optionalMatchAdvance(delimiterInfo.delimiterToken)
         : undefined;
 
-      argumentList.push({ argument, delimiterToken });
+      argumentList.push({ argument, delimiterToken: lastDelimiterToken });
 
       if (isAtEnd()) break;
 
-      if (peek()!.idx /*isAtEnd check beforehand*/ === currentTokenDebug.idx) {
+      if (consumeTopLevelComments) consumeComments(commentInfo.comments);
+
+      if (isAtEnd()) break;
+
+      if (debugCurrentTokenIdx === peek().idx) {
         newParseError(invalidArgumentError);
         break;
       }
-
-      if (commentInfo.consumeTopLevelComments)
-        consumeComments(commentInfo.comments);
     }
 
-    if (endTokenInfo.hasEndToken) checkEofWithError(eofError);
+    if (hasEndToken) checkEofWithError(eofError);
     // else it can be eof, since no end was expected anyways
 
     return argumentList;
@@ -502,6 +509,7 @@ export namespace Parser {
         'unexpected eof in group statement after the opening bracket'
       );
 
+      // TODO not parse argument list
       const body: statement[] = parseArgumentList(
         parseStatement,
         { consumeTopLevelComments: false },
@@ -615,7 +623,7 @@ export namespace Parser {
         return {
           type: 'type-alias',
           identifierToken,
-          typeValue,
+          body: typeValue,
           typeToken,
           equalsToken,
           semicolonToken,
@@ -652,7 +660,7 @@ export namespace Parser {
         return {
           type: 'complex-type',
           identifierToken,
-          typeValue,
+          body: typeValue,
           typeToken,
           openingBracketToken,
           closingBracketToken,
@@ -1298,7 +1306,7 @@ export namespace Parser {
         return {
           type: 'literal',
           literalType,
-          literalValue,
+          value: literalValue,
           literalToken,
           comments
         };
@@ -1354,20 +1362,14 @@ export namespace Parser {
             parseTypeExpression
           );
 
-          const typeAnnotation:
-            | { hasTypeAnnotation: false }
-            | {
-                hasTypeAnnotation: true;
-                typeExpression: typeExpression;
-                colonToken: token;
-              } =
+          const typeAnnotation: explicitType =
             isPresent(colonToken) || isPresent(typeExpression)
               ? {
-                  hasTypeAnnotation: true,
+                  explicitType: true,
                   typeExpression: typeExpression!,
                   colonToken: colonToken!
                 }
-              : { hasTypeAnnotation: false };
+              : { explicitType: false };
 
           // typeExpression,
           // colonToken
@@ -1456,15 +1458,19 @@ export namespace Parser {
     consumeComments(comments);
 
     if (match('i32') || match('f32') || matchType(tokenType.identifier)) {
-      const isKeyword: boolean = matchType(tokenType.keyword);
       const value: token = advance()!;
-      const primitive: typeExpression = isKeyword
+      const primitive: typeExpression = matchType(tokenType.keyword)
         ? {
             type: 'primitive-type',
             primitiveToken: value,
             comments
           }
-        : { type: 'identifier', identifierToken: value, comments };
+        : {
+            type: 'identifier',
+            identifierToken: value,
+            generic: { hasGenericSubstitution: false /*TODO*/ },
+            comments
+          };
 
       consumeComments(comments);
 
@@ -1567,6 +1573,7 @@ export namespace Parser {
     | { valid: false; parseErrors: parseError[]; statements: statement[] } {
     larser = new Larser(code);
 
+    // TODO not parse argument list
     const statements: statement[] = parseArgumentList(
       parseStatement,
       { consumeTopLevelComments: false },
@@ -1744,13 +1751,12 @@ export namespace Parser {
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
-console.log('HERE ', Parser.parse('let id[T]: T -> T -> T = 5;'));
-
 // #region debug
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
 
 const code = [
+  'let id[T]: T -> T -> T = 5;',
   `
   use file;
 
@@ -1793,16 +1799,21 @@ const codeWithComments: string =
 //console.log(codeWithComments);
 const parsedCode = Parser.parse(code[0]);
 
-//console.log('is code valid:', parsedCode.valid);
-//console.log('CODE:');
-//for (const stmt of parsedCode.statements) log(stmt);
-//if (!parsedCode.valid) console.error('ERRORS:');
-//if (!parsedCode.valid) for (const err of parsedCode.parseErrors) log(err);
+if (false) {
+  console.log('is code valid:', parsedCode.valid);
+  console.log('CODE:');
+  for (const stmt of parsedCode.statements) log(stmt);
+  if (!parsedCode.valid) console.error('ERRORS:');
+  // @ts-ignore
+  if (!parsedCode.valid) for (const err of parsedCode.parseErrors) log(err);
+}
 // #endregion
 
 // #region comments
 // TODO parsing: "match expressions", "generics for types statement" and "substituting value for generic inside a type"
 // then debug parser (tests, comments, eof) and benchmark speed
+
+// let id[T]: (T -> T) -> (T -> T) = func (x: T -> T): T -> T => x;
 
 // must do, must not do
 

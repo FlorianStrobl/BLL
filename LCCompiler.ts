@@ -386,7 +386,7 @@ export namespace Compiler {
       case 'grouping':
         return todoCompileSimpleExpression(exp.body, varCounter);
       case 'literal':
-        return exp.literalValue.toString();
+        return exp.value.toString();
       case 'identifier':
         return '%' + exp.identifierToken.lexeme;
       case 'match':
@@ -445,7 +445,7 @@ export namespace Compiler {
 }
 
 const ans = Compiler.compile(
-  Parser.parse('let x = func (a, b) => a + 4;').statements,
+  Parser.parse('let x = func (a, b) => a + 4 - 2;').statements,
   '',
   ''
 );

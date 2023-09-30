@@ -118,7 +118,7 @@ export namespace Interpreter {
             argument: {
               type: 'literal',
               literalType: 'i32',
-              literalValue: argument,
+              value: argument,
               literalToken: {} as any,
               comments: []
             },
@@ -139,7 +139,7 @@ export namespace Interpreter {
   ): number | Parser.funcExpression {
     switch (expression.type) {
       case 'literal':
-        return expression.literalValue;
+        return expression.value;
       case 'grouping':
         return evaluateExpression(expression.body, localIdentifiers);
       case 'identifier':
@@ -239,7 +239,7 @@ export namespace Interpreter {
                   type: Lexer.tokenType.identifier,
                   idx: -1
                 },
-                typeAnnotation: { hasTypeAnnotation: false }
+                typeAnnotation: { explicitType: false }
               },
               delimiterToken: undefined
             },
@@ -250,7 +250,7 @@ export namespace Interpreter {
                   type: Lexer.tokenType.identifier,
                   idx: -1
                 },
-                typeAnnotation: { hasTypeAnnotation: false }
+                typeAnnotation: { explicitType: false }
               },
               delimiterToken: undefined
             }

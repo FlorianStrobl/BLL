@@ -4,7 +4,7 @@
 
 import { Parser } from './LCParser';
 
-// TODO
+// TODO, do spaces correctly, do comments, break on too many lines, put use-statements on the very top
 
 export namespace Prettier {
   function printTypeExpression(expression: Parser.typeExpression): string {
@@ -51,14 +51,14 @@ export namespace Prettier {
           .map(
             (e) =>
               e.argument.identifierToken.lexeme +
-              (e.argument.typeAnnotation.hasTypeAnnotation
+              (e.argument.typeAnnotation.explicitType
                 ? `: ${printTypeExpression(
                     e.argument.typeAnnotation.typeExpression
                   )}`
                 : '')
           )
           .join(', ')})${
-          expression.returnType.explicitType === true
+          expression.returnType.explicitType
             ? ': ' + printTypeExpression(expression.returnType.typeExpression)
             : ''
         } => ${printExpression(expression.body)}`;
@@ -86,7 +86,7 @@ export namespace Prettier {
                 .join(', ')}]`
             : ''
         }${
-          statement.explicitType === true
+          statement.explicitType
             ? ': ' + printTypeExpression(statement.typeExpression)
             : ''
         } = ${printExpression(statement.body)};`;
@@ -97,7 +97,7 @@ export namespace Prettier {
       case 'type-alias':
         return `type ${
           statement.identifierToken.lexeme
-        } = ${printTypeExpression(statement.typeValue)};`;
+        } = ${printTypeExpression(statement.body)};`;
     }
   }
 
@@ -119,8 +119,7 @@ export namespace Prettier {
 
 console.log(
   Prettier.prettier(
-    Parser.parse(
-      'let id[T]: (T -> T) -> (T -> T) = func (x: T -> T): T -> T => x;'
-    ).statements
+    Parser.parse('let id[T]: T -> T = func (x: T -> T): T -> T => x;')
+      .statements
   )
 );
