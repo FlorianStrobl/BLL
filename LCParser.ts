@@ -3,6 +3,7 @@ import { Lexer } from './LCLexer';
 import { inspect } from 'util';
 
 // #region lexer code for parser
+// can throw internal errors when assertions are not met
 class Larser {
   private code: string;
   private lexer: Generator<Lexer.nextToken>;
@@ -72,15 +73,17 @@ class Larser {
           tokens.tokens?.toString()
       );
 
-    // TODO
     console.error(tokens);
-    throw '';
+    throw 'TODO';
   }
 }
 // #endregion
 
+const log = (args: any) =>
+  console.log(inspect(args, { depth: 999, colors: true }));
+
 export namespace Parser {
-  const parseErrors: parseError[] = [];
+  let parseErrors: parseError[] = [];
   let larser: Larser;
 
   // #region types
@@ -98,9 +101,12 @@ export namespace Parser {
 
   type comment = { comments: token[] };
 
-  export type parseError =
-    | string
-    | { type: 'error'; value: any; currentToken: optToken };
+  export type parseError = {
+    type: 'error';
+    message: string;
+    value?: any;
+    currentToken?: optToken;
+  };
 
   // #region stmt
   export type statement = comment &
@@ -221,18 +227,16 @@ export namespace Parser {
 
   export type funcExpression = {
     type: 'func';
-    parameters: argumentList<funcParameter>;
+    parameters: argumentList<{
+      identifierToken: token;
+      typeAnnotation: explicitType;
+    }>;
     body: expression;
     returnType: explicitType;
     funcToken: token;
     openingBracketToken: token;
     closingBracketToken: token;
     arrowToken: token;
-  };
-
-  type funcParameter = {
-    identifierToken: token;
-    typeAnnotation: explicitType;
   };
   // #endregion
 
@@ -298,11 +302,6 @@ export namespace Parser {
   // returns the current token
   // assertion: not eof
   function peek(): token {
-    if (isAtEnd())
-      throw new Error(
-        'internal error, tried to peek a value even tho it is eof'
-      );
-
     return larser.getCurrentToken();
   }
 
@@ -332,20 +331,29 @@ export namespace Parser {
     while (!isAtEnd() && matchType(tokenType.comment)) comments.push(advance());
   }
 
-  function newParseError(arg: parseError): never {
-    parseErrors.push({ type: 'error', value: arg, currentToken: peek() });
-    return { type: 'error', parserError: arg } as never;
+  function newParseError(arg: string | parseError): parseError & never {
+    const currentToken: optToken = !isAtEnd() ? peek() : undefined;
+
+    const parseError: parseError =
+      typeof arg === 'string'
+        ? {
+            type: 'error',
+            message: arg,
+            value: arg,
+            currentToken
+          }
+        : arg;
+    parseErrors.push(parseError);
+    return parseError as never;
   }
 
   function checkEofWithError(errorOnEof: string): void {
     if (!isAtEnd()) return;
 
     newParseError('Invalid eof while parsing code: ' + errorOnEof);
-    throw parseErrors;
+    throw 'eof';
 
-    // TODO not throw, BUT eof is the very last thing in the code: so could now check all the errors
-
-    // should print out all errors in a formatted way, aswell as the eof error
+    // TODO should print out all errors in a formatted way, aswell as the eof error
     // then stop the program *but* then the parser would have to import logger...
   }
 
@@ -355,14 +363,19 @@ export namespace Parser {
   }
 
   // on match: advace else error
-  function matchAdvanceOrError(token: string, error: parseError): token {
+  // assertion: not eof
+  function matchAdvanceOrError(
+    token: string,
+    error: string | parseError
+  ): token {
     return match(token) ? advance() : newParseError(error);
   }
 
   // on match type: advance else error
+  // assertion: not eof
   function matchTypeAdvanceOrError(
     tokenType: tokenType,
-    error: parseError
+    error: string | parseError
   ): token {
     return matchType(tokenType) ? advance() : newParseError(error);
   }
@@ -382,69 +395,43 @@ export namespace Parser {
   // TODO what about error messages for `(5,,)`
   function parseArgumentList<T>(
     parseArgument: () => T, // assertion: does not have delimiter as valid value
-    commentInfo:
-      | { consumeTopLevelComments: true; comments: token[] }
-      | { consumeTopLevelComments: false },
-    endTokenInfo:
-      | {
-          hasEndToken: true;
-          endToken: string /*TODO missing end token error?*/;
-        }
-      | { hasEndToken: false },
-    delimiterInfo:
-      | {
-          hasDelimiter: true;
-          delimiterToken: string;
-          missingDelimiterError: parseError;
-        }
-      | { hasDelimiter: false },
+    comments: token[],
+    endToken: string,
+    delimiterToken: string,
+    missingDelimiterError: string | parseError,
     invalidArgumentError: string,
     eofError: string
   ): argumentList<T> {
-    const hasDelimiter = delimiterInfo.hasDelimiter;
-    const hasEndToken = endTokenInfo.hasEndToken;
-    const consumeTopLevelComments = commentInfo.consumeTopLevelComments;
-
     const argumentList: argumentList<T> = [];
     let lastDelimiterToken: optToken = undefined;
 
-    if (consumeTopLevelComments) consumeComments(commentInfo.comments);
+    consumeComments(comments);
 
-    while (!isAtEnd() && (!hasEndToken || !match(endTokenInfo.endToken))) {
-      if (consumeTopLevelComments) consumeComments(commentInfo.comments);
+    while (!isAtEnd() && !match(endToken)) {
+      consumeComments(comments);
 
-      if (isAtEnd()) break;
+      checkEofWithError(eofError);
 
-      if (
-        hasDelimiter &&
-        argumentList.length !== 0 &&
-        !isPresent(lastDelimiterToken)
-      )
-        newParseError(delimiterInfo.missingDelimiterError);
+      if (argumentList.length !== 0 && !isPresent(lastDelimiterToken))
+        newParseError(missingDelimiterError);
 
       const debugCurrentTokenIdx: number = peek().idx;
 
-      const argument: T =
-        hasDelimiter &&
-        match(delimiterInfo.delimiterToken) /*better error msgs*/
-          ? newParseError(invalidArgumentError)
-          : parseArgument();
+      const argument: T = match(delimiterToken) /*better error msgs*/
+        ? newParseError(invalidArgumentError)
+        : parseArgument();
 
-      if (consumeTopLevelComments) consumeComments(commentInfo.comments);
+      consumeComments(comments);
 
       // no is at end check
 
-      lastDelimiterToken = hasDelimiter
-        ? optionalMatchAdvance(delimiterInfo.delimiterToken)
-        : undefined;
+      lastDelimiterToken = optionalMatchAdvance(delimiterToken);
 
       argumentList.push({ argument, delimiterToken: lastDelimiterToken });
 
-      if (isAtEnd()) break;
+      consumeComments(comments);
 
-      if (consumeTopLevelComments) consumeComments(commentInfo.comments);
-
-      if (isAtEnd()) break;
+      checkEofWithError(eofError);
 
       if (debugCurrentTokenIdx === peek().idx) {
         newParseError(invalidArgumentError);
@@ -452,8 +439,7 @@ export namespace Parser {
       }
     }
 
-    if (hasEndToken) checkEofWithError(eofError);
-    // else it can be eof, since no end was expected anyways
+    checkEofWithError(eofError);
 
     return argumentList;
   }
@@ -461,11 +447,9 @@ export namespace Parser {
   // #endregion
 
   // #region parser
-  function parseStatement(): statement {
-    if (isAtEnd())
-      throw new Error(
-        'Internal Parser error. Tried to parse a statement at eof.'
-      );
+  // can throw eof
+  function parseStatement(): statement | parseError {
+    checkEofWithError('could not parse any statement because of eof');
 
     const comments: token[] = [];
     consumeComments(comments);
@@ -510,14 +494,13 @@ export namespace Parser {
       );
 
       // TODO not parse argument list
-      const body: statement[] = parseArgumentList(
-        parseStatement,
-        { consumeTopLevelComments: false },
-        { hasEndToken: true, endToken: '}' },
-        { hasDelimiter: false },
-        'TODO did not match a statement in group statement',
-        'unexpected eof in group statement'
-      ).map((arg) => arg.argument);
+      const body: statement[] = [];
+
+      while (!isAtEnd() && !match('}')) {
+        const statement: statement | parseError = parseStatement();
+        if (statement.type === 'error') break;
+        body.push(statement);
+      }
 
       checkEofWithError('unexpected eof in group statement');
 
@@ -637,16 +620,10 @@ export namespace Parser {
 
         const typeValue: argumentList<complexTypeValue> = parseArgumentList(
           parseComplexeTypeLine,
-          {
-            consumeTopLevelComments: true,
-            comments /*TODO, should be per line and not per type itself!*/
-          },
-          { hasEndToken: true, endToken: '}' },
-          {
-            hasDelimiter: true,
-            delimiterToken: ',',
-            missingDelimiterError: 'TODO, missing comma in complex type body'
-          },
+          comments /*TODO, should be per line and not per type itself!*/,
+          '}',
+          ',',
+          'TODO, missing comma in complex type body',
           'invalid or missing argument in complex type body',
           'eof in complex type statement'
         );
@@ -707,14 +684,10 @@ export namespace Parser {
         )
           ? parseArgumentList(
               parseTypeExpression,
-              { consumeTopLevelComments: true, comments },
-              { hasEndToken: true, endToken: ')' },
-              {
-                hasDelimiter: true,
-                delimiterToken: ',',
-                missingDelimiterError:
-                  'TODO missing comma between two parameters in complex type value'
-              },
+              comments,
+              ')',
+              ',',
+              'TODO missing comma between two parameters in complex type value',
               'TODO invalid value while parsing arguments for a complex type line',
               'TODO invalid eof while parsing arguments from a complex type line'
             )
@@ -805,14 +778,10 @@ export namespace Parser {
                 tokenType.identifier,
                 'did not match an identifier in generic let statement'
               ),
-            { consumeTopLevelComments: true, comments },
-            { hasEndToken: true, endToken: ']' },
-            {
-              hasDelimiter: true,
-              delimiterToken: ',',
-              missingDelimiterError:
-                'missing comma token in generic let statement declaration'
-            },
+            comments,
+            ']',
+            ',',
+            'missing comma token in generic let statement declaration',
             'did not match an identifier in generic let statement',
             'unexpected eof in generic let statement'
           )
@@ -1192,8 +1161,12 @@ export namespace Parser {
       const comments: token[] = [];
 
       consumeComments(comments);
+      checkEofWithError('TODO');
+
       let left: expression = primary();
+
       consumeComments(comments);
+      checkEofWithError('TODO');
 
       while (match('(', '.')) {
         const token: token = advance()!;
@@ -1219,14 +1192,10 @@ export namespace Parser {
           //   f(
           const args: argumentList<expression> = parseArgumentList(
             parseExpression,
-            { consumeTopLevelComments: true, comments },
-            { hasEndToken: true, endToken: ')' },
-            {
-              hasDelimiter: true,
-              delimiterToken: ',',
-              missingDelimiterError:
-                'TODO, missing comma in function call argument list'
-            },
+            comments,
+            ')',
+            ',',
+            'TODO, missing comma in function call argument list',
             'TODO wrong type expression in function call argument list',
             'TODO unexpected eof while parsing a function call argument list'
           );
@@ -1347,7 +1316,10 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      const params: argumentList<funcParameter> = parseArgumentList(
+      const params: argumentList<{
+        identifierToken: token;
+        typeAnnotation: explicitType;
+      }> = parseArgumentList(
         () => {
           // TODO could also be, that the user forget a ")" and there was no identifier intended
           const identifierToken: token = matchTypeAdvanceOrError(
@@ -1378,14 +1350,10 @@ export namespace Parser {
             typeAnnotation
           };
         },
-        { consumeTopLevelComments: true, comments },
-        { hasEndToken: true, endToken: ')' },
-        {
-          hasDelimiter: true,
-          delimiterToken: ',',
-          missingDelimiterError:
-            'Invalid func expression: missing comma in argument list'
-        },
+        comments,
+        ')',
+        ',',
+        'Invalid func expression: missing comma in argument list',
         'TODO invalid function argument parsed',
         'TODO unexpected eof while parsing function arguments'
       );
@@ -1447,122 +1415,228 @@ export namespace Parser {
       return {} as any;
     }
 
-    return { ...parseExprLvl0() };
+    return parseExprLvl0();
   }
+
+  /*
+  Type:
+    i32
+    f32
+    IDENTIFIER
+    IDENTIFIER[ TYPE {, TYPE}* { , }? ]
+    ( TYPE ) // grouping
+    ( TYPE ) -> TYPE // func
+    () -> TYPE // empty grouping: must be arg list
+    ( TYPE { , TYPE }+  { , }? ) -> TYPE // none empty grouping: arg list
+    TYPE -> TYPE // parse as binary operator with check
+*/
 
   // TODO id[substitution]
   // TODO just like parseExpression tbh HERE NOW
   function parseTypeExpression(): typeExpression {
-    const comments: token[] = [];
-
-    consumeComments(comments);
-
-    if (match('i32') || match('f32') || matchType(tokenType.identifier)) {
-      const value: token = advance()!;
-      const primitive: typeExpression = matchType(tokenType.keyword)
-        ? {
-            type: 'primitive-type',
-            primitiveToken: value,
-            comments
-          }
-        : {
-            type: 'identifier',
-            identifierToken: value,
-            generic: { hasGenericSubstitution: false /*TODO*/ },
-            comments
-          };
-
-      consumeComments(comments);
-
-      checkEofWithError('TODO unexpected eof while parsing a type expression');
-
-      const arrowToken: optToken = optionalMatchAdvance('->');
-
-      if (!isPresent(arrowToken)) return primitive;
-
-      const returnType: typeExpression = parseTypeExpression();
-      return {
-        type: 'func-type',
-        parameters: [{ argument: primitive, delimiterToken: undefined }],
-        returnType,
-        brackets: { hasBrackets: false },
-        arrowToken,
-        comments
-      };
-    }
-
-    if (match('(')) {
-      // TODO, either its () -> x; or it is something like T -> ((i32) -> f32); or its like (f32) -> f32
-      const openingBracketToken: token = advance()!;
+    function parseTypeExpression0(): typeExpression {
+      const comments: token[] = [];
 
       consumeComments(comments);
 
       checkEofWithError('TODO');
 
-      const closingBracket: optToken = optionalMatchAdvance(')');
+      let val:
+        | typeExpression
+        | {
+            type: 'arglist';
+            body: argumentList<typeExpression>;
+            openingBracketToken: Lexer.token;
+            closingBracketToken: Lexer.token;
+            comments: Lexer.token[];
+          } = primary();
 
-      // TODO "grouping types" is not really the correct term here
-      const body: argumentList<typeExpression> = isPresent(closingBracket)
-        ? parseArgumentList(
-            parseTypeExpression,
-            { consumeTopLevelComments: true, comments },
-            { hasEndToken: true, endToken: ')' },
-            {
-              hasDelimiter: true,
-              delimiterToken: ',',
-              missingDelimiterError:
-                'TODO did not get a comma in last type expression, while grouping types'
-            },
-            'TODO did not match type expression',
-            'TODO unexpected eof in type expression while grouping types'
-          )
-        : [];
+      consumeComments(comments);
 
-      const closingBracketToken: token = isPresent(closingBracket)
-        ? closingBracket
-        : matchAdvanceOrError(
-            ')',
-            'TODO did not close bracket in type-grouping expression'
-          );
+      checkEofWithError('TODO');
 
-      const arrowToken: optToken = optionalMatchAdvance('->');
+      if (match('->')) {
+        const arrowToken: token = advance();
 
-      if (isPresent(arrowToken)) {
-        const returnType: typeExpression = parseTypeExpression();
+        consumeComments(comments);
+
+        checkEofWithError('TODO');
+
+        const returnType: typeExpression = parseTypeExpression0();
+
+        const brackets:
+          | {
+              hasBrackets: true;
+              openingBracketToken: token;
+              closingBracketToken: token;
+            }
+          | { hasBrackets: false } =
+          val.type !== 'arglist'
+            ? { hasBrackets: false }
+            : {
+                hasBrackets: true,
+                openingBracketToken: val.openingBracketToken,
+                closingBracketToken: val.closingBracketToken
+              };
+
+        const parameters: argumentList<typeExpression> =
+          val.type === 'arglist'
+            ? val.body
+            : [{ argument: val, delimiterToken: undefined }];
+
         return {
           type: 'func-type',
-          parameters: body,
+          parameters,
           returnType,
-          brackets: {
-            hasBrackets: true,
-            openingBracketToken,
-            closingBracketToken
-          },
+          brackets,
           arrowToken,
           comments
         };
-      } else {
-        if (isPresent(closingBracket) || body.length === 0)
-          newParseError('TODO, did not get any type in grouping expression');
-        if (body.length !== 1)
-          newParseError('TODO got multiple types in a grouping expression');
-        else if (body.length === 1 && isPresent(body[0].delimiterToken))
+      }
+
+      if (val.type === 'arglist') {
+        if (val.body.length === 1 && !isPresent(val.body[0].delimiterToken)) {
+          val = {
+            type: 'grouping',
+            body: val.body[0].argument,
+            openingBracketToken: val.openingBracketToken,
+            closingBracketToken: val.closingBracketToken,
+            comments: val.comments
+          };
+        } else
+          return newParseError(
+            'got arglist as type expression without being followed by an arrow for a func expression'
+          );
+      }
+
+      return val;
+    }
+
+    // isAtEnd and consumeComments
+    function primary():
+      | typeExpression
+      | {
+          type: 'arglist';
+          body: argumentList<typeExpression>;
+          openingBracketToken: token;
+          closingBracketToken: token;
+          comments: token[];
+        } {
+      const comments: token[] = [];
+
+      consumeComments(comments);
+
+      checkEofWithError('TODO');
+
+      if (match('i32') || match('f32')) {
+        return {
+          type: 'primitive-type',
+          primitiveToken: advance(),
+          comments
+        };
+      } else if (matchType(tokenType.identifier)) {
+        const identifierToken: token = advance();
+
+        consumeComments(comments);
+
+        checkEofWithError('TODO');
+
+        // TODO what if invalid thing "id subs,]" instead of "id [ subs, ]"
+        if (!match('['))
+          return {
+            type: 'identifier',
+            identifierToken,
+            comments,
+            generic: { hasGenericSubstitution: false }
+          };
+
+        // did match "["
+        const openingBracketToken: token = advance();
+
+        consumeComments(comments);
+
+        checkEofWithError('TODO');
+
+        const values = parseArgumentList(
+          parseTypeExpression,
+          comments,
+          ']',
+          ',',
+          'TODO ERROR',
+          'TODO ERROR',
+          'TODO ERROR'
+        );
+
+        if (values.length === 0)
           newParseError(
-            'TODO got a trailing comma at the end of a grouping expression'
+            'invalid amount of value substitution for complex type identifier'
           );
 
+        consumeComments(comments);
+
+        checkEofWithError('TODO');
+
+        const closingBracketToken: token = matchAdvanceOrError(
+          ']',
+          'TODO missing closing bracket token in type expression for generic type substitution'
+        );
+
         return {
-          type: 'grouping',
-          // TODO couldnt it also be undefined here??
-          body: body[0]?.argument, // TODO NOT WORKING
+          type: 'identifier',
+          identifierToken,
+          comments,
+          generic: {
+            hasGenericSubstitution: true,
+            values,
+            openingBracketToken,
+            closingBracketToken
+          }
+        };
+      } else if (match('(')) {
+        const openingBracketToken: token = advance();
+
+        consumeComments(comments);
+
+        checkEofWithError('TODO');
+
+        const body: argumentList<typeExpression> = parseArgumentList(
+          parseTypeExpression,
+          comments,
+          ')',
+          ',',
+          '',
+          '',
+          ''
+        );
+
+        consumeComments(comments);
+
+        checkEofWithError('TODO');
+
+        const closingBracketToken: token = matchAdvanceOrError(')', 'TODO');
+
+        return {
+          type: 'arglist',
+          body,
           openingBracketToken,
           closingBracketToken,
           comments
         };
       }
+
+      return newParseError('TODO could not match any type expression');
     }
 
-    return newParseError('TODO did not match any type expression statement');
+    return parseTypeExpression0();
+
+    // if (isPresent(closingBracket) || body.length === 0)
+    //   newParseError('TODO, did not get any type in grouping expression');
+    // if (body.length !== 1)
+    //   newParseError('TODO got multiple types in a grouping expression');
+    // else if (body.length === 1 && isPresent(body[0].delimiterToken))
+    //   newParseError(
+    //     'TODO got a trailing comma at the end of a grouping expression'
+    //  );
   }
   // #endregion
 
@@ -1572,16 +1646,21 @@ export namespace Parser {
     | { valid: true; statements: statement[] }
     | { valid: false; parseErrors: parseError[]; statements: statement[] } {
     larser = new Larser(code);
+    parseErrors = [];
 
-    // TODO not parse argument list
-    const statements: statement[] = parseArgumentList(
-      parseStatement,
-      { consumeTopLevelComments: false },
-      { hasEndToken: false },
-      { hasDelimiter: false },
-      'TODO could not parse a statement in global scope',
-      'internal error, should not happen'
-    ).map((arg) => arg.argument);
+    const statements: statement[] = [];
+
+    while (!isAtEnd()) {
+      try {
+        const statement: statement | parseError = parseStatement();
+        if (statement.type === 'error') break;
+        statements.push(statement);
+      } catch (e) {
+        if (e === 'eof') return { valid: false, parseErrors, statements };
+        else console.log('Internal error: ', code, e);
+        break;
+      }
+    }
 
     return parseErrors.length === 0
       ? { valid: true, statements }
@@ -1591,6 +1670,8 @@ export namespace Parser {
   function debugParser() {
     const mustParse: string[] = [
       '',
+      'let x: A -> (B) -> (C,) -> (D, E) -> (F) = 5;',
+      'let x: A -> ((B) -> (C )) -> (D, E) -> (F) = 5;',
       '// test',
       '/* test */',
       '/*test*/ /*hey*/ ; /*tast*/ /*ok*/',
@@ -1601,22 +1682,22 @@ export namespace Parser {
       'type test { }',
       'group test { }',
       'let test = ! ~ + - 1 + 1 - 1 * 1 / 1 ** 1 *** 1 % 1 & 1 | 1 ^ 1 << 1 >> 1 == 1 != 1 <= 1 >= 1 < 1 > 1;',
-      `type weekdays {
-        Saturday,
-        Sunday,
-        Monday,
-        Tuesday,
-        Wednesday,
-        Thursday,
-        Friday
-      }
+      // `type weekdays {
+      //   Saturday,
+      //   Sunday,
+      //   Monday,
+      //   Tuesday,
+      //   Wednesday,
+      //   Thursday,
+      //   Friday
+      // }
 
-      let f = func (weekday: weekdays): i32 =>
-        match (weekday): i32 {
-          case Saturday => 1;
-          case Sunday => 1;
-          0; // default for the other days
-        };`,
+      // let f = func (weekday: weekdays): i32 =>
+      //   match (weekday): i32 {
+      //     case Saturday => 1;
+      //     case Sunday => 1;
+      //     0; // default for the other days
+      //   };`,
       'let x = func (x: i32 -> i32,) => 5;',
       'let a = func (x: (i32) -> i32) => x(5);',
       'let a = func (x: () -> i32) => 5;',
@@ -1644,9 +1725,9 @@ export namespace Parser {
   let x: i32 = 1;
   let y: f32 = 2.0;
   let z[A] =
-    (func (x: A): A => x) (3);
+    (func (x: A): A => x) (3); // A == i32
   let f[B]: B -> i32 =
-    func (y: B): i32 => 4 + y;
+    func (y: B): i32 => 4 + y; // B == i32
 
   type alias = f32;
   type complex {
@@ -1663,6 +1744,9 @@ export namespace Parser {
   `
     ];
     const mustNotParseButLexe: string[] = [
+      '}',
+      'x = 5',
+      'let x: A -> ((B) -> (C,)) -> (D, E) -> (F) = 5;',
       'test',
       '5',
       '5.0',
@@ -1678,12 +1762,17 @@ export namespace Parser {
       'match',
       'func (x) => x',
       'let x = func ( => 5;',
+      'let x = func () 5;',
+      'let x = func () => 5',
       '+',
       '!',
       'use;',
       'use',
       'use test',
+      'group p {',
+      'let nan',
       'let func',
+      'let () => )',
       'let x',
       'let x]',
       'let x[',
@@ -1691,7 +1780,7 @@ export namespace Parser {
       'let x = func (x: i32 => i32) => 5;',
       'let x = func (x: i32 -> i32) -> 5;',
       'let x',
-      'let x =',
+      'let y =',
       'let x = 5',
       'let x = ;',
       'let x 5 ;',
@@ -1717,44 +1806,57 @@ export namespace Parser {
           .join(`/*comment ${i}*/`)
       );
 
-    for (const a of mustParse) {
-      //   // TODO
-      //   const ans = parse(a);
-      //   if (!ans.valid) throw new Error('could not parse: ' + ans.toString());
+    for (const code of mustParse) {
+      let ans: any;
+      try {
+        ans = parse(code);
+      } catch (e) {
+        console.error('INTERNAL ERROR:', code, e);
+      }
+      if (!ans?.valid) {
+        console.error('Should parse:', code);
+        log(ans);
+      }
     }
 
-    for (const a of mustNotParseButLexe) {
-      // if (!Lexer.lexe(a).valid)
-      //  throw new Error('this code should be lexable: ' + a);
-      // const ans = parse(a);
-      // if (ans.valid) throw new Error('should not parse: ' + ans.toString());
+    for (const code of mustNotParseButLexe) {
+      if (!Lexer.lexe(code).valid)
+        throw new Error('this code should be lexable: ' + code);
+
+      let ans: any;
+      try {
+        ans = parse(code);
+      } catch (e) {
+        console.error('INTERNAL ERROR', code, e);
+      }
+      if (ans?.valid) {
+        console.log('Should not parse: ', code);
+        log(ans);
+      }
     }
 
-    console.time('t');
-    // group test { let x = 5 + 2 * (func (x) => x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
-    // let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
-    // invalid to do: `a.(b).c` but (a.b).c is ok
-    // let _ = a(5+32,4)
+    // console.time('t');
+    // // group test { let x = 5 + 2 * (func (x) => x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
+    // // let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
+    // // invalid to do: `a.(b).c` but (a.b).c is ok
+    // // let _ = a(5+32,4)
 
-    // use std; let _ = (func (x) => 3 * x)(5);
+    // // use std; let _ = (func (x) => 3 * x)(5);
 
-    // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
-    // TODO where are the opening brackets of tust??
-    const parsed = parse(
-      'let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;'
-    );
-    console.timeEnd('t');
+    // // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
+    // // TODO where are the opening brackets of tust??
+    // const parsed = parse(
+    //   'let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;'
+    // );
+    // console.timeEnd('t');
 
-    log(parsed);
+    // log(parsed);
   }
 
   // for (let i = 0; i < 1; ++i) debugParser();
 }
 
 // #region debug
-const log = (args: any) =>
-  console.log(inspect(args, { depth: 999, colors: true }));
-
 const code = [
   'let id[T]: T -> T -> T = 5;',
   `
