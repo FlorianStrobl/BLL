@@ -1905,7 +1905,7 @@ export namespace Parser {
     // log(parsed);
   }
 
-  for (let i = 0; i < 1; ++i) debugParser();
+  // for (let i = 0; i < 1; ++i) debugParser();
 }
 
 // #region debug
