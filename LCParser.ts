@@ -98,7 +98,6 @@ export namespace Parser {
     argument: T;
     delimiterToken: optToken;
   } & (localComments extends true ? { localComments: token[] } : {}))[];
-
   type comment = { comments: token[] };
 
   export type parseError = {
@@ -138,7 +137,7 @@ export namespace Parser {
       | ({
           type: 'complex-type';
           identifierToken: token;
-          body: argumentList<complexTypeValue, false>;
+          body: argumentList<complexTypeValue, true>;
           typeToken: token;
           openingBracketToken: token;
           closingBracketToken: token;
@@ -396,10 +395,12 @@ export namespace Parser {
   }
 
   // TODO perLineComment
+  // TODO what if it is "(/*comment*/)" WHERE DOES THE COMMENT GET RETURNED, when it is localComments??
   // TODO what about error messages for `(5,,)`
-  function parseArgumentList<T>(
+  function parseArgumentList<T, localComments extends boolean>(
     parseArgument: () => T, // assertion: does not have delimiter as valid value
     comments: token[],
+    hasLocalComments: localComments,
     endToken: string,
     delimiterToken: string,
     missingDelimiterError: string | parseError,
@@ -408,14 +409,18 @@ export namespace Parser {
     emptyList:
       | { noEmptyList: true; errorMessage: string }
       | { noEmptyList: false }
-  ): argumentList<T, false> {
-    const argumentList: argumentList<T, false> = [];
+  ): argumentList<T, localComments> {
+    const argumentList: argumentList<T, localComments> = [];
     let lastDelimiterToken: optToken = undefined;
 
-    consumeComments(comments);
+    let localComments: token[] = [];
+
+    if (hasLocalComments) consumeComments(localComments);
+    else consumeComments(comments);
 
     while (!isAtEnd() && !match(endToken)) {
-      consumeComments(comments);
+      if (hasLocalComments) consumeComments(localComments);
+      else consumeComments(comments);
 
       checkEofWithError(eofError);
 
@@ -428,15 +433,31 @@ export namespace Parser {
         ? newParseError(invalidArgumentError)
         : parseArgument();
 
-      consumeComments(comments);
+      if (hasLocalComments) consumeComments(localComments);
+      else consumeComments(comments);
 
-      // no is at end check
+      // no isAtEnd check!
 
       lastDelimiterToken = optionalMatchAdvance(delimiterToken);
 
-      argumentList.push({ argument, delimiterToken: lastDelimiterToken });
+      if (hasLocalComments) {
+        argumentList.push({
+          argument,
+          delimiterToken: lastDelimiterToken,
+          localComments: [...localComments]
+        });
+      } else
+        argumentList.push({
+          argument,
+          delimiterToken: lastDelimiterToken
+        } as never);
 
-      consumeComments(comments);
+      if (hasLocalComments) {
+        // clear comments for next run
+        // TODO WHAT IF NOTHING COMES AFTER THIS ONE!!!!!
+        localComments = [];
+        consumeComments(localComments);
+      } else consumeComments(comments);
 
       checkEofWithError(eofError);
 
@@ -447,6 +468,9 @@ export namespace Parser {
     }
 
     checkEofWithError(eofError);
+
+    if (hasLocalComments && localComments.length !== 0)
+      comments = comments.concat(localComments);
 
     if (emptyList.noEmptyList && argumentList.length === 0)
       newParseError(emptyList.errorMessage);
@@ -583,9 +607,10 @@ export namespace Parser {
 
       const genericIdentifiers: optional<argumentList<token, false>> =
         callOnPresent(genericOpeningBracketToken, () =>
-          parseArgumentList(
+          parseArgumentList<token, false>(
             () => matchTypeAdvanceOrError(tokenType.identifier, 'TODO'),
             comments,
+            false,
             ']',
             ',',
             'TODO',
@@ -658,9 +683,13 @@ export namespace Parser {
 
         checkEofWithError('TODO');
 
-        const body: argumentList<complexTypeValue, false> = parseArgumentList(
+        const body: argumentList<complexTypeValue, true> = parseArgumentList<
+          complexTypeValue,
+          true
+        >(
           parseComplexeTypeLine,
-          comments /*TODO, should be per line and not per type itself!*/,
+          comments,
+          true,
           '}',
           ',',
           'TODO, missing comma in complex type body',
@@ -726,9 +755,10 @@ export namespace Parser {
         const parameterValues: argumentList<typeExpression, false> = isPresent(
           openingBracketToken
         )
-          ? parseArgumentList(
+          ? parseArgumentList<typeExpression, false>(
               parseTypeExpression,
               localComments,
+              false, // TODO does this make sense??
               ')',
               ',',
               'TODO missing comma between two parameters in complex type value',
@@ -818,13 +848,14 @@ export namespace Parser {
       );
 
       const genericIdentifiers: optional<argumentList<token, false>> = isGeneric
-        ? parseArgumentList(
+        ? parseArgumentList<token, false>(
             () =>
               matchTypeAdvanceOrError(
                 tokenType.identifier,
                 'did not match an identifier in generic let statement'
               ),
             comments,
+            false,
             ']',
             ',',
             'missing comma token in generic let statement declaration',
@@ -1241,9 +1272,13 @@ export namespace Parser {
           };
         } else {
           //   f(
-          const args: argumentList<expression, false> = parseArgumentList(
+          const args: argumentList<expression, false> = parseArgumentList<
+            expression,
+            false
+          >(
             parseExpression,
             comments,
+            false,
             ')',
             ',',
             'TODO, missing comma in function call argument list',
@@ -1352,14 +1387,16 @@ export namespace Parser {
     function parseFuncExpression(): expression {
       const comments: token[] = [];
 
-      if (!match('func'))
+      if (isAtEnd() || !match('func'))
         throw new Error(
           'Internal error, called this function, even tho here is no function'
         );
 
-      const funcToken: token = advance()!;
+      const funcToken: token = advance();
 
       consumeComments(comments);
+
+      checkEofWithError('TODO');
 
       const openingBracketToken: token = matchAdvanceOrError(
         '(',
@@ -1368,13 +1405,20 @@ export namespace Parser {
 
       consumeComments(comments);
 
+      // TODO better type annotation
       const params: argumentList<
         {
           identifierToken: token;
           typeAnnotation: explicitType;
         },
         false
-      > = parseArgumentList(
+      > = parseArgumentList<
+        {
+          identifierToken: token;
+          typeAnnotation: explicitType;
+        },
+        false
+      >(
         () => {
           // TODO could also be, that the user forget a ")" and there was no identifier intended
           const identifierToken: token = matchTypeAdvanceOrError(
@@ -1406,6 +1450,7 @@ export namespace Parser {
           };
         },
         comments,
+        false,
         ')',
         ',',
         'Invalid func expression: missing comma in argument list',
@@ -1613,9 +1658,13 @@ export namespace Parser {
 
         checkEofWithError('TODO');
 
-        const values = parseArgumentList(
+        const values: argumentList<typeExpression, false> = parseArgumentList<
+          typeExpression,
+          false
+        >(
           parseTypeExpression,
           comments,
+          false,
           ']',
           ',',
           'TODO ERROR',
@@ -1656,9 +1705,13 @@ export namespace Parser {
 
         checkEofWithError('TODO');
 
-        const body: argumentList<typeExpression, false> = parseArgumentList(
+        const body: argumentList<typeExpression, false> = parseArgumentList<
+          typeExpression,
+          false
+        >(
           parseTypeExpression,
           comments,
+          false,
           ')',
           ',',
           'TODO',
@@ -1913,6 +1966,24 @@ export namespace Parser {
 
   // for (let i = 0; i < 1; ++i) debugParser();
 }
+
+// TODO
+log(
+  Parser.parse(`
+  // a
+type cmpx {
+  // b
+  A(i32 /*c*/, f32),
+  // this test
+  B,
+  // d
+  C(hey, i32, /*ok works*/),
+  D
+  // e
+}
+// other
+`).statements[0] as any
+);
 
 // #region debug
 const code = [
