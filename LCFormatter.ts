@@ -7,119 +7,361 @@ import { Parser } from './LCParser';
 // TODO, do spaces correctly, do comments, break on too many lines, put use-statements on the very top
 
 export namespace Prettier {
-  function printTypeExpression(expression: Parser.typeExpression): string {
+  const enum Colors {
+    symbol = 37, // white
+    comments = 32, // green
+    numberLiteral = 32, // green
+    standardKeyword = 34, // blue
+    keywordLet = 35, // magenta
+    keywordType = 36, // cyan
+    identifier = 33 // yellow
+  }
+
+  function printTypeExpression(
+    expression: Parser.typeExpression,
+    withColor: boolean
+  ): string {
     // TODO comments
     switch (expression.type) {
       case 'grouping':
-        return `(${printTypeExpression(expression.body)})`;
+        return (
+          addColor('(', Colors.symbol, withColor) +
+          printTypeExpression(expression.body, withColor) +
+          addColor(')', Colors.symbol, withColor)
+        );
       case 'identifier':
-        return expression.identifierToken.lexeme;
+        return addColor(
+          expression.identifierToken.lexeme,
+          Colors.identifier,
+          withColor
+        );
       case 'primitive-type':
-        return expression.primitiveToken.lexeme;
+        return addColor(
+          expression.primitiveToken.lexeme,
+          Colors.standardKeyword,
+          withColor
+        );
       case 'func-type':
-        return `(${expression.parameters
-          .map((e) => printTypeExpression(e.argument))
-          .join(', ')}) -> ${printTypeExpression(expression.returnType)}`;
+        return (
+          addColor('(', Colors.symbol, withColor) +
+          expression.parameters
+            .map((e) => printTypeExpression(e.argument, withColor))
+            .join(addColor(', ', Colors.symbol, withColor)) +
+          addColor(')', Colors.symbol, withColor) +
+          addColor(' -> ', Colors.symbol, withColor) +
+          printTypeExpression(expression.returnType, withColor)
+        );
     }
   }
 
-  function printExpression(expression: Parser.expression): string {
+  function printExpression(
+    expression: Parser.expression,
+    withColor: boolean
+  ): string {
     // TODO comments
     switch (expression.type) {
       case 'grouping':
-        return `(${printExpression(expression.body)})`;
+        return (
+          addColor('(', Colors.symbol, withColor) +
+          printExpression(expression.body, withColor) +
+          addColor(')', Colors.symbol, withColor)
+        );
       case 'literal':
-        return expression.literalToken.lexeme;
+        return addColor(
+          expression.literalToken.lexeme,
+          Colors.numberLiteral,
+          withColor
+        );
       case 'identifier':
-        return expression.identifierToken.lexeme;
+        return addColor(
+          expression.identifierToken.lexeme,
+          Colors.identifier,
+          withColor
+        );
       case 'propertyAccess':
-        return `${printExpression(expression.source)}.${
-          expression.propertyToken.lexeme
-        }`;
-      case 'functionCall':
-        return `${printExpression(expression.function)}(${expression.arguments
-          .map((e) => printExpression(e.argument))
-          .join(', ')})`;
-      case 'unary':
-        return `${expression.operator} ${printExpression(expression.body)}`;
-      case 'binary':
-        return `${printExpression(expression.leftSide)} ${
-          expression.operator
-        } ${printExpression(expression.rightSide)}`;
-      case 'func':
-        return `func (${expression.parameters
-          .map(
-            (e) =>
-              e.argument.identifierToken.lexeme +
-              (e.argument.typeAnnotation.explicitType
-                ? `: ${printTypeExpression(
-                    e.argument.typeAnnotation.typeExpression
-                  )}`
-                : '')
+        return (
+          printExpression(expression.source, withColor) +
+          addColor('.', Colors.symbol, withColor) +
+          addColor(
+            expression.propertyToken.lexeme,
+            Colors.identifier,
+            withColor
           )
-          .join(', ')})${
-          expression.returnType.explicitType
-            ? ': ' + printTypeExpression(expression.returnType.typeExpression)
-            : ''
-        } => ${printExpression(expression.body)}`;
+        );
+      case 'functionCall':
+        return (
+          printExpression(expression.function, withColor) +
+          addColor('(', Colors.symbol, withColor) +
+          expression.arguments
+            .map((e) => printExpression(e.argument, withColor))
+            .join(addColor(', ', Colors.symbol, withColor)) +
+          addColor(')', Colors.symbol, withColor)
+        );
+      case 'unary':
+        return (
+          addColor(expression.operator, Colors.symbol, withColor) +
+          ' ' +
+          printExpression(expression.body, withColor)
+        );
+      case 'binary':
+        return (
+          printExpression(expression.leftSide, withColor) +
+          ' ' +
+          addColor(expression.operator, Colors.symbol, withColor) +
+          ' ' +
+          printExpression(expression.rightSide, withColor)
+        );
+      case 'func':
+        return (
+          addColor('func', Colors.standardKeyword, withColor) +
+          addColor('(', Colors.symbol, withColor) +
+          expression.parameters
+            .map(
+              (e) =>
+                addColor(
+                  e.argument.identifierToken.lexeme,
+                  Colors.identifier,
+                  withColor
+                ) +
+                (e.argument.typeAnnotation.explicitType
+                  ? addColor(': ', Colors.symbol, withColor) +
+                    printTypeExpression(
+                      e.argument.typeAnnotation.typeExpression,
+                      withColor
+                    )
+                  : '')
+            )
+            .join(addColor(', ', Colors.symbol, withColor)) +
+          addColor(')', Colors.symbol, withColor) +
+          (expression.returnType.explicitType
+            ? addColor(': ', Colors.symbol, withColor) +
+              printTypeExpression(
+                expression.returnType.typeExpression,
+                withColor
+              )
+            : '') +
+          addColor(' => ', Colors.symbol, withColor) +
+          printExpression(expression.body, withColor)
+        );
       case 'match':
         return 'TODO';
     }
   }
 
-  function printStatement(statement: Parser.statement): string {
+  function printStatement(
+    statement: Parser.statement,
+    withColor: boolean = false,
+    indent: string = ''
+  ): string {
+    const indentSize: string = '  ';
+
+    function printComments(comments: Parser.token[]): string {
+      if (comments.length !== 0)
+        return comments.map((e) => indent + e.lexeme).join('\n') + '\n';
+      return '';
+    }
+
     // TODO comments
     switch (statement.type) {
       case 'empty':
-        return ';';
+        return (
+          printComments(statement.comments) +
+          indent +
+          addColor(';', Colors.symbol, withColor)
+        );
       case 'import':
-        return statement.filename + ';';
+        return (
+          printComments(statement.comments) +
+          (indent +
+            (addColor('use ', Colors.standardKeyword, withColor) +
+              addColor(
+                statement.filename.lexeme,
+                Colors.identifier,
+                withColor
+              ) +
+              addColor(';', Colors.symbol, withColor)))
+        );
       case 'group':
-        return `group ${statement.identifierToken.lexeme} {\n${statement.body
-          .map(printStatement)
-          .join('\n')}\n}`;
+        if (statement.body.length === 0)
+          return (
+            printComments(statement.comments) +
+            indent +
+            addColor('group ', Colors.standardKeyword, withColor) +
+            addColor(
+              statement.identifierToken.lexeme,
+              Colors.identifier,
+              withColor
+            ) +
+            addColor(' { }', Colors.symbol, withColor)
+          );
+
+        return (
+          printComments(statement.comments) +
+          (indent +
+            (addColor('group ', Colors.standardKeyword, withColor) +
+              addColor(
+                statement.identifierToken.lexeme,
+                Colors.identifier,
+                withColor
+              ) +
+              addColor(' {\n', Colors.symbol, withColor) +
+              prettier(statement.body, withColor, indent + indentSize) +
+              // statement.body.map((e) => printStatement(e, withColor, indent + indentSize)).join('\n')
+              indent +
+              addColor('}', Colors.symbol, withColor)))
+        );
       case 'let':
-        return `let ${statement.identifierToken.lexeme}${
-          statement.isGeneric
-            ? `[${statement.genericIdentifiers
-                .map((e) => e.argument.lexeme)
-                .join(', ')}]`
-            : ''
-        }${
-          statement.explicitType
-            ? ': ' + printTypeExpression(statement.typeExpression)
-            : ''
-        } = ${printExpression(statement.body)};`;
+        return (
+          printComments(statement.comments) +
+          (indent +
+            (addColor('let ', Colors.keywordLet, withColor) +
+              addColor(
+                statement.identifierToken.lexeme,
+                Colors.identifier,
+                withColor
+              ) +
+              (statement.isGeneric
+                ? addColor('[', Colors.symbol, withColor) +
+                  statement.genericIdentifiers
+                    .map((e) =>
+                      addColor(e.argument.lexeme, Colors.identifier, withColor)
+                    )
+                    .join(addColor(', ', Colors.symbol, withColor)) +
+                  addColor(']', Colors.symbol, withColor)
+                : '') +
+              (statement.explicitType
+                ? addColor(': ', Colors.symbol, withColor) +
+                  printTypeExpression(statement.typeExpression, withColor)
+                : '') +
+              addColor(' = ', Colors.symbol, withColor) +
+              printExpression(statement.body, withColor) +
+              addColor(';', Colors.symbol, withColor)))
+        );
       case 'comment':
-        return statement.comments.join('\n');
+        return (
+          printComments(statement.comments) +
+          (indent +
+            statement.comments
+              .map((e) => addColor(e.lexeme, Colors.comments, withColor))
+              .join('\n'))
+        );
       case 'complex-type':
-        return 'TODO';
+        return (
+          printComments(statement.comments) +
+          (indent +
+            (addColor('type ', Colors.keywordType, withColor) +
+              addColor(
+                statement.identifierToken.lexeme,
+                Colors.identifier,
+                withColor
+              ) +
+              (statement.isGeneric
+                ? addColor('[', Colors.symbol, withColor) +
+                  statement.genericIdentifiers
+                    .map((e) =>
+                      addColor(e.argument.lexeme, Colors.identifier, withColor)
+                    )
+                    .join(addColor(', ', Colors.symbol, withColor)) +
+                  addColor(']', Colors.symbol, withColor)
+                : '') +
+              addColor(' {\n', Colors.symbol, withColor) +
+              statement.body
+                .map(
+                  (e) =>
+                    indent +
+                    indentSize +
+                    addColor(
+                      e.argument.identifierToken.lexeme,
+                      Colors.identifier,
+                      withColor
+                    ) +
+                    (e.argument.parameters.hasParameters
+                      ? addColor('(', Colors.symbol, withColor) +
+                        e.argument.parameters.value
+                          .map((a) =>
+                            printTypeExpression(a.argument, withColor)
+                          )
+                          .join(addColor(', ', Colors.symbol, withColor)) +
+                        addColor(')', Colors.symbol, withColor)
+                      : '')
+                )
+                .join(addColor(', ', Colors.symbol, withColor) + '\n') +
+              '\n' +
+              indent +
+              addColor('}', Colors.symbol, withColor)))
+        );
       case 'type-alias':
-        return `type ${
-          statement.identifierToken.lexeme
-        } = ${printTypeExpression(statement.body)};`;
+        return (
+          printComments(statement.comments) +
+          (indent +
+            (addColor('type ', Colors.keywordType, withColor) +
+              addColor(
+                statement.identifierToken.lexeme,
+                Colors.identifier,
+                withColor
+              ) +
+              (statement.isGeneric
+                ? addColor('[', Colors.symbol, withColor) +
+                  statement.genericIdentifiers
+                    .map((e) =>
+                      addColor(e.argument.lexeme, Colors.identifier, withColor)
+                    )
+                    .join(addColor(', ', Colors.symbol, withColor)) +
+                  addColor(']', Colors.symbol, withColor)
+                : '') +
+              addColor(' = ', Colors.symbol, withColor) +
+              printTypeExpression(statement.body, withColor) +
+              addColor(';', Colors.symbol, withColor)))
+        );
     }
+  }
+
+  function addColor(msg: string, color: number, active: boolean) {
+    if (!active) return msg;
+    return '\u001b[' + color + 'm' + msg + '\u001b[0m';
   }
 
   export function prettier(
     ast: Parser.statement[],
-    withColor: boolean = false
+    withColor: boolean = true,
+    indent: string = ''
   ): string {
     let code = '';
 
-    for (const [i, statement] of Object.entries(ast)) {
-      code += printStatement(statement) + '\n';
+    for (const [i, statement] of Object.entries(ast))
+      code += printStatement(statement, withColor, indent) + '\n';
 
-      // if last statement was of type namespace, and next one is too:
-      // code += "\n"
-    }
     return code;
   }
 }
 
 console.log(
   Prettier.prettier(
-    Parser.parse('let id[T]: T -> T = func (x: T -> T): T -> T => x;')
-      .statements
+    Parser.parse(`
+    // hey!
+    // more than one
+    use test;
+    let id[T]: T -> T = func (x: T -> T): T -> T => x /*lol*/ + 3;
+    group lol {
+      let a = 5;
+      // yep
+      group test {
+        let x: i32 = 6;
+        // test
+        let y[T] = 4;
+        group third {  }
+        group thirdToo { let test2 = 4; }
+        type what = i32;
+      }
+      type complex[T, U,] {
+        a,
+        // huh
+        b(f32, i32, T),
+        c,
+      }
+      let simple[T, B] = test.what;
+    }
+    `).statements,
+    true
   )
 );

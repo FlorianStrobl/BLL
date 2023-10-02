@@ -89,15 +89,15 @@ export namespace Parser {
   // #region types
   type optional<T> = T | undefined;
 
-  type token = Lexer.token;
+  export type token = Lexer.token;
   type optToken = optional<Lexer.token>;
   type tokenType = Lexer.tokenType;
   const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
 
-  type argumentList<T> = {
+  type argumentList<T, localComments extends boolean> = ({
     argument: T;
     delimiterToken: optToken;
-  }[];
+  } & (localComments extends true ? { localComments: token[] } : {}))[];
 
   type comment = { comments: token[] };
 
@@ -138,7 +138,7 @@ export namespace Parser {
       | ({
           type: 'complex-type';
           identifierToken: token;
-          body: argumentList<complexTypeValue>;
+          body: argumentList<complexTypeValue, false>;
           typeToken: token;
           openingBracketToken: token;
           closingBracketToken: token;
@@ -159,7 +159,7 @@ export namespace Parser {
     parameters:
       | {
           hasParameters: true;
-          value: argumentList<typeExpression>;
+          value: argumentList<typeExpression, false>;
           openingBracketToken: token;
           closingBracketToken: token;
           // comments: lexTokenType[] // TODO, add for better formatting in prettier
@@ -170,7 +170,7 @@ export namespace Parser {
   type genericAnnotation =
     | {
         isGeneric: true;
-        genericIdentifiers: argumentList<token>;
+        genericIdentifiers: argumentList<token, false>;
         genericOpeningBracketToken: token;
         genericClosingBracketToken: token;
       }
@@ -195,7 +195,7 @@ export namespace Parser {
         }
       | {
           type: 'functionCall';
-          arguments: argumentList<expression>;
+          arguments: argumentList<expression, false>;
           function: expression;
           openingBracketToken: token;
           closingBracketToken: token;
@@ -227,10 +227,13 @@ export namespace Parser {
 
   export type funcExpression = {
     type: 'func';
-    parameters: argumentList<{
-      identifierToken: token;
-      typeAnnotation: explicitType;
-    }>;
+    parameters: argumentList<
+      {
+        identifierToken: token;
+        typeAnnotation: explicitType;
+      },
+      false
+    >;
     body: expression;
     returnType: explicitType;
     funcToken: token;
@@ -260,7 +263,7 @@ export namespace Parser {
           generic:
             | {
                 hasGenericSubstitution: true;
-                values: argumentList<typeExpression>;
+                values: argumentList<typeExpression, false>;
                 closingBracketToken: token;
                 openingBracketToken: token;
               }
@@ -268,7 +271,7 @@ export namespace Parser {
         }
       | {
           type: 'func-type';
-          parameters: argumentList<typeExpression>;
+          parameters: argumentList<typeExpression, false>;
           returnType: typeExpression;
           brackets:
             | {
@@ -392,6 +395,7 @@ export namespace Parser {
     return isPresent(present) ? callBack() : undefined;
   }
 
+  // TODO perLineComment
   // TODO what about error messages for `(5,,)`
   function parseArgumentList<T>(
     parseArgument: () => T, // assertion: does not have delimiter as valid value
@@ -404,8 +408,8 @@ export namespace Parser {
     emptyList:
       | { noEmptyList: true; errorMessage: string }
       | { noEmptyList: false }
-  ): argumentList<T> {
-    const argumentList: argumentList<T> = [];
+  ): argumentList<T, false> {
+    const argumentList: argumentList<T, false> = [];
     let lastDelimiterToken: optToken = undefined;
 
     consumeComments(comments);
@@ -577,9 +581,8 @@ export namespace Parser {
 
       checkEofWithError('TODO');
 
-      const genericIdentifiers: optional<argumentList<token>> = callOnPresent(
-        genericOpeningBracketToken,
-        () =>
+      const genericIdentifiers: optional<argumentList<token, false>> =
+        callOnPresent(genericOpeningBracketToken, () =>
           parseArgumentList(
             () => matchTypeAdvanceOrError(tokenType.identifier, 'TODO'),
             comments,
@@ -590,7 +593,7 @@ export namespace Parser {
             'TODO',
             { noEmptyList: true, errorMessage: 'TODO' }
           )
-      );
+        );
 
       consumeComments(comments);
 
@@ -655,7 +658,7 @@ export namespace Parser {
 
         checkEofWithError('TODO');
 
-        const body: argumentList<complexTypeValue> = parseArgumentList(
+        const body: argumentList<complexTypeValue, false> = parseArgumentList(
           parseComplexeTypeLine,
           comments /*TODO, should be per line and not per type itself!*/,
           '}',
@@ -720,7 +723,7 @@ export namespace Parser {
           'Invalid eof in complex type statement after getting a "("'
         );
 
-        const parameterValues: argumentList<typeExpression> = isPresent(
+        const parameterValues: argumentList<typeExpression, false> = isPresent(
           openingBracketToken
         )
           ? parseArgumentList(
@@ -761,7 +764,7 @@ export namespace Parser {
         const parameters:
           | {
               hasParameters: true;
-              value: argumentList<typeExpression>;
+              value: argumentList<typeExpression, false>;
               openingBracketToken: token;
               closingBracketToken: token;
               // comments: lexTokenType[] // TODO, add for better formatting in prettier
@@ -814,7 +817,7 @@ export namespace Parser {
         'error after getting opening bracket for generic in let statement'
       );
 
-      const genericIdentifiers: optional<argumentList<token>> = isGeneric
+      const genericIdentifiers: optional<argumentList<token, false>> = isGeneric
         ? parseArgumentList(
             () =>
               matchTypeAdvanceOrError(
@@ -1238,7 +1241,7 @@ export namespace Parser {
           };
         } else {
           //   f(
-          const args: argumentList<expression> = parseArgumentList(
+          const args: argumentList<expression, false> = parseArgumentList(
             parseExpression,
             comments,
             ')',
@@ -1365,10 +1368,13 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      const params: argumentList<{
-        identifierToken: token;
-        typeAnnotation: explicitType;
-      }> = parseArgumentList(
+      const params: argumentList<
+        {
+          identifierToken: token;
+          typeAnnotation: explicitType;
+        },
+        false
+      > = parseArgumentList(
         () => {
           // TODO could also be, that the user forget a ")" and there was no identifier intended
           const identifierToken: token = matchTypeAdvanceOrError(
@@ -1495,7 +1501,7 @@ export namespace Parser {
         | typeExpression
         | {
             type: 'arglist';
-            body: argumentList<typeExpression>;
+            body: argumentList<typeExpression, false>;
             openingBracketToken: Lexer.token;
             closingBracketToken: Lexer.token;
             comments: Lexer.token[];
@@ -1529,7 +1535,7 @@ export namespace Parser {
                 closingBracketToken: val.closingBracketToken
               };
 
-        const parameters: argumentList<typeExpression> =
+        const parameters: argumentList<typeExpression, false> =
           val.type === 'arglist'
             ? val.body
             : [{ argument: val, delimiterToken: undefined }];
@@ -1567,7 +1573,7 @@ export namespace Parser {
       | typeExpression
       | {
           type: 'arglist';
-          body: argumentList<typeExpression>;
+          body: argumentList<typeExpression, false>;
           openingBracketToken: token;
           closingBracketToken: token;
           comments: token[];
@@ -1650,7 +1656,7 @@ export namespace Parser {
 
         checkEofWithError('TODO');
 
-        const body: argumentList<typeExpression> = parseArgumentList(
+        const body: argumentList<typeExpression, false> = parseArgumentList(
           parseTypeExpression,
           comments,
           ')',
