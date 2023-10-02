@@ -155,9 +155,21 @@ export namespace Prettier {
   ): string {
     const indentSize: string = '  ';
 
-    function printComments(comments: Parser.token[]): string {
+    function printComments(
+      comments: Parser.token[],
+      moreIndent: string = ''
+    ): string {
       if (comments.length !== 0)
-        return comments.map((e) => indent + e.lexeme).join('\n') + '\n';
+        return (
+          comments
+            .map(
+              (e) =>
+                indent +
+                moreIndent +
+                addColor(e.lexeme, Colors.comments, withColor)
+            )
+            .join('\n') + '\n'
+        );
       return '';
     }
 
@@ -246,28 +258,14 @@ export namespace Prettier {
               .join('\n'))
         );
       case 'complex-type':
-        return (
-          printComments(statement.comments) +
-          (indent +
-            (addColor('type ', Colors.keywordType, withColor) +
-              addColor(
-                statement.identifierToken.lexeme,
-                Colors.identifier,
-                withColor
-              ) +
-              (statement.isGeneric
-                ? addColor('[', Colors.symbol, withColor) +
-                  statement.genericIdentifiers
-                    .map((e) =>
-                      addColor(e.argument.lexeme, Colors.identifier, withColor)
-                    )
-                    .join(addColor(', ', Colors.symbol, withColor)) +
-                  addColor(']', Colors.symbol, withColor)
-                : '') +
-              addColor(' {\n', Colors.symbol, withColor) +
+        const bodyStr: string =
+          statement.body.length === 0
+            ? addColor(' { }', Colors.symbol, withColor)
+            : addColor(' {\n', Colors.symbol, withColor) +
               statement.body
                 .map(
                   (e) =>
+                    printComments(e.localComments, indentSize) +
                     indent +
                     indentSize +
                     addColor(
@@ -288,7 +286,27 @@ export namespace Prettier {
                 .join(addColor(', ', Colors.symbol, withColor) + '\n') +
               '\n' +
               indent +
-              addColor('}', Colors.symbol, withColor)))
+              addColor('}', Colors.symbol, withColor);
+
+        return (
+          printComments(statement.comments) +
+          (indent +
+            (addColor('type ', Colors.keywordType, withColor) +
+              addColor(
+                statement.identifierToken.lexeme,
+                Colors.identifier,
+                withColor
+              ) +
+              (statement.isGeneric
+                ? addColor('[', Colors.symbol, withColor) +
+                  statement.genericIdentifiers
+                    .map((e) =>
+                      addColor(e.argument.lexeme, Colors.identifier, withColor)
+                    )
+                    .join(addColor(', ', Colors.symbol, withColor)) +
+                  addColor(']', Colors.symbol, withColor)
+                : '') +
+              bodyStr))
         );
       case 'type-alias':
         return (
@@ -338,6 +356,31 @@ export namespace Prettier {
 console.log(
   Prettier.prettier(
     Parser.parse(`
+    // a
+    type cmpx {
+      // b
+      A(i32 /*c*/, f32),
+      // this test
+      // F
+      B,
+      // d
+      C(hey, i32, /*ok works*/),
+      D
+      // e
+    }
+    type two {
+      // test
+    }
+    // other
+    `).statements,
+    true
+  )
+);
+
+if (false) {
+  console.log(
+    Prettier.prettier(
+      Parser.parse(`
     // hey!
     // more than one
     use test;
@@ -362,6 +405,7 @@ console.log(
       let simple[T, B] = test.what;
     }
     `).statements,
-    true
-  )
-);
+      true
+    )
+  );
+}

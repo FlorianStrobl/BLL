@@ -470,7 +470,7 @@ export namespace Parser {
     checkEofWithError(eofError);
 
     if (hasLocalComments && localComments.length !== 0)
-      comments = comments.concat(localComments);
+      comments.push(...localComments);
 
     if (emptyList.noEmptyList && argumentList.length === 0)
       newParseError(emptyList.errorMessage);
@@ -520,8 +520,6 @@ export namespace Parser {
         '{',
         'TODO cant have a group statement without an opening brackt "{"'
       );
-
-      consumeComments(comments);
 
       checkEofWithError(
         'unexpected eof in group statement after the opening bracket'
@@ -678,8 +676,6 @@ export namespace Parser {
         };
       } else if (match('{')) {
         const openingBracketToken: token = advance();
-
-        consumeComments(comments);
 
         checkEofWithError('TODO');
 
@@ -1966,24 +1962,6 @@ export namespace Parser {
 
   // for (let i = 0; i < 1; ++i) debugParser();
 }
-
-// TODO
-log(
-  Parser.parse(`
-  // a
-type cmpx {
-  // b
-  A(i32 /*c*/, f32),
-  // this test
-  B,
-  // d
-  C(hey, i32, /*ok works*/),
-  D
-  // e
-}
-// other
-`).statements[0] as any
-);
 
 // #region debug
 const code = [
