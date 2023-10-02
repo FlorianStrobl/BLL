@@ -7,15 +7,15 @@ import { Parser } from './LCParser';
 // TODO, do spaces correctly, do comments, break on too many lines, put use-statements on the very top
 
 export namespace Prettier {
-  const enum Colors {
-    symbol = 37, // white
-    comments = 32, // green
-    numberLiteral = 32, // green
-    standardKeyword = 34, // blue
-    keywordLet = 35, // magenta
-    keywordType = 36, // cyan
-    identifier = 33 // yellow
-  }
+  const Colors = {
+    symbol: `${0xab};${0xb2};${0xbf}`, // white
+    comments: `${0x98};${0xc3};${0x79}`, // green
+    numberLiteral: `${0xe5};${0xc0};${0x7b}`, // green
+    standardKeyword: `${0x61};${0xaf};${0xef}`, // blue
+    keywordLet: `${0xc6};${0x78};${0xdd}`, // magenta
+    keywordType: `${0xc6};${0x78};${0xdd}`, // cyan
+    identifier: `${0xe0};${0x6c};${0x75}` // yellow
+  };
 
   function printTypeExpression(
     expression: Parser.typeExpression,
@@ -334,9 +334,10 @@ export namespace Prettier {
     }
   }
 
-  function addColor(msg: string, color: number, active: boolean) {
+  function addColor(msg: string, color: string, active: boolean): string {
     if (!active) return msg;
-    return '\u001b[' + color + 'm' + msg + '\u001b[0m';
+    //return '\u001b[' + color + 'm' + msg + '\u001b[0m';
+    return `\x1b[38;2;${color}m` + msg + `\u001b[0m`;
   }
 
   export function prettier(
@@ -356,6 +357,7 @@ export namespace Prettier {
 console.log(
   Prettier.prettier(
     Parser.parse(`
+    let a = 4;
     // a
     type cmpx {
       // b
@@ -372,6 +374,7 @@ console.log(
       // test
     }
     // other
+    // test two
     `).statements,
     true
   )
