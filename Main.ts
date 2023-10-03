@@ -39,15 +39,35 @@ const log = (args: any) =>
 const filename = 'src';
 const code = `
 // **
-let my_func = func (x) => - 2 - (x + 3);
+
+// let my_func = func (x) => - 2 - (x + 3);
+// with a=5 its -9
+// let main = func (a) => (3)(my_func(a+1), my_func(a-1));
+
+// a & ((a + 3a) % 7); with a=5 its 4
+// let main = func (argument: i32): i32 => argument & ((argument + 3 * argument) % 7);
+
 
 // let fac = func (n, erg) => n(erg, fac (n-1, erg+n));
 // let main = func (arg: i32) => fac(arg, 0);
 
-//let main = func (a) => (${3})(my_func(a+1), my_func(a-1));
+let f[T]: (T, T -> T) -> T
+  = func (
+     v: T,
+     fn: T -> T = func (x: T): T => x
+    ): T => fn(v);
 
-// a & ((a + 3a) % 7)
-let main = func (argument: i32): i32 => argument & ((argument + 3 * argument) % 7);
+
+
+// with any arg: 22
+let main = func (arg: i32): i32 => f1();
+// with arg2=5: 3
+let f1 = func (arg2: i32 = 22): i32 => f(arg2);
+
+// with arg=5: 16
+// let main = func (arg: i32): i32 => f2(arg+2);
+// with arg2=7: 16
+// let f2 = func (arg2: i32): i32 => f(arg2+1, func (x) => 1 + x + arg2);
 
 // ((a.b).c().d);
 //let g = func (x, y) => x / y;

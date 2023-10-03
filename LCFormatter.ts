@@ -129,6 +129,10 @@ export namespace Formatter {
                       e.argument.typeAnnotation.typeExpression,
                       withColor
                     )
+                  : '') +
+                (e.argument.defaultValue.hasDefaultValue
+                  ? addColor(' = ', Colors.symbol, withColor) +
+                    printExpression(e.argument.defaultValue.value, withColor)
                   : '')
             )
             .join(addColor(', ', Colors.symbol, withColor)) +
@@ -347,6 +351,13 @@ export namespace Formatter {
     return code;
   }
 }
+
+console.log(
+  Formatter.beautify(
+    Parser.parse(`let x[A]: A = func (x: A = 4
+      +3): A => x;`).statements
+  )
+);
 
 if (false) {
   console.log(

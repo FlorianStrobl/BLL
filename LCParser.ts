@@ -237,10 +237,20 @@ export namespace Parser {
     arrowToken: token;
   };
 
+  // TODO has default value for a parameter
   type funcExprParameter = {
     identifierToken: token;
     typeAnnotation: explicitType;
+    defaultValue: funcExprParamDefaultVal;
   };
+
+  type funcExprParamDefaultVal =
+    | {
+        hasDefaultValue: true;
+        defaultValueEqualsToken: token;
+        value: expression;
+      }
+    | { hasDefaultValue: false };
   // #endregion
 
   // #region types
@@ -1496,6 +1506,7 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing a func expression');
 
+      let lastParameterHadDefaultValue: boolean = false;
       const params: argumentList<funcExprParameter, false> = parseArgumentList<
         funcExprParameter,
         false
@@ -1524,6 +1535,37 @@ export namespace Parser {
             parseTypeExpression
           );
 
+          consumeComments(comments);
+          checkEofWithError(
+            'invalid eof while parsing arguments of a func expression'
+          );
+
+          const defaultValueEqualsToken: optToken = optionalMatchAdvance('=');
+
+          // TODO if last one has a default value, this new one needs it too
+          if (
+            lastParameterHadDefaultValue &&
+            !isPresent(defaultValueEqualsToken)
+          )
+            newParseError(
+              'having, in a func expression, a parameter with a default value, then all the following parameters need a default value aswell'
+            );
+
+          if (isPresent(defaultValueEqualsToken))
+            lastParameterHadDefaultValue = true;
+
+          callOnPresent(defaultValueEqualsToken, () => {
+            consumeComments(comments);
+            checkEofWithError(
+              'invalid eof while parsing arguments of a func expression'
+            );
+          });
+
+          const value: optional<expression> = callOnPresent(
+            defaultValueEqualsToken,
+            parseExpression
+          );
+
           const typeAnnotation: explicitType =
             isPresent(colonToken) || isPresent(typeExpression)
               ? {
@@ -1533,9 +1575,19 @@ export namespace Parser {
                 }
               : { explicitType: false };
 
+          const defaultValue: funcExprParamDefaultVal =
+            isPresent(defaultValueEqualsToken) || isPresent(value)
+              ? {
+                  hasDefaultValue: true,
+                  value: value!,
+                  defaultValueEqualsToken: defaultValueEqualsToken!
+                }
+              : { hasDefaultValue: false };
+
           return {
             identifierToken,
-            typeAnnotation
+            typeAnnotation,
+            defaultValue
           };
         },
         comments,
@@ -1882,6 +1934,7 @@ export namespace Parser {
   function debugParser() {
     const mustParse: string[] = [
       '',
+      '      let f = func (x, a = 5, b = c) => a;',
       '//comment',
       `let x = func (a, b) => a + 4 - 2;`,
       `type
@@ -1892,6 +1945,8 @@ export namespace Parser {
   ; // test
   ;/*test*/; group t {//ok
   }`,
+      `let x[A]: A = func (x: A = 4
+    +3): A => x;`,
       `
       let a: () -> A = 0;
       let b: B -> C = 1;
@@ -1993,6 +2048,7 @@ export namespace Parser {
     ];
     const mustNotParseButLexe: string[] = [
       '}',
+      `let f = func (x, a = 5, b) => a;`,
       'x = 5',
       'let x: A -> ((B) -> (C,)) -> (D, E) -> (F) = 5;',
       'test',

@@ -242,7 +242,8 @@ export namespace Interpreter {
                   type: Lexer.tokenType.identifier,
                   idx: -1
                 },
-                typeAnnotation: { explicitType: false }
+                typeAnnotation: { explicitType: false },
+                defaultValue: { hasDefaultValue: false }
               },
               delimiterToken: undefined
             },
@@ -253,7 +254,8 @@ export namespace Interpreter {
                   type: Lexer.tokenType.identifier,
                   idx: -1
                 },
-                typeAnnotation: { explicitType: false }
+                typeAnnotation: { explicitType: false },
+                defaultValue: { hasDefaultValue: false }
               },
               delimiterToken: undefined
             }
@@ -286,17 +288,42 @@ export namespace Interpreter {
         };
         const func: Parser.funcExpression =
           typeof rawValue === 'number' ? numberFunction : rawValue;
-        const callingArguments = expression.arguments; // TODO evaluate them first?
+        const callingArguments = expression.arguments; // TODO evaluate them first? (no lazy evaluation)
         const funcParameters = func.parameters;
-        if (callingArguments.length !== funcParameters.length)
+
+        const givenArgumentCount: number = callingArguments.length;
+        const defaultParameterAmountCount: number = funcParameters
+          .map((e) =>
+            e.argument.defaultValue.hasDefaultValue ? (1 as number) : 0
+          )
+          .reduce((a, b) => a + b);
+
+        if (givenArgumentCount > funcParameters.length)
+          throw new Error('TODO too many arguments when called');
+
+        // TODO test if this works
+        if (
+          givenArgumentCount + defaultParameterAmountCount <
+          funcParameters.length
+        )
           throw new Error(
-            'TODO called function without right amount of arguments'
+            `TODO called function ${func.body} with too few arguments:
+            number of given arguments: ${givenArgumentCount}
+            number of default parameters: ${defaultParameterAmountCount}
+            expected number of parameters: ${funcParameters.length}`
           );
 
+        // TODO swich up with scopes
+        // TODO test
         for (let i = 0; i < funcParameters.length; ++i) {
+          const curParam = funcParameters[i].argument;
           localIdentifiers.push([
-            funcParameters[i].argument.identifierToken.lexeme,
-            callingArguments[i].argument
+            curParam.identifierToken.lexeme,
+            i < callingArguments.length
+              ? callingArguments[i].argument
+              : curParam.defaultValue.hasDefaultValue
+              ? curParam.defaultValue.value
+              : (new Error('internal error') as never)
           ]);
         }
 
