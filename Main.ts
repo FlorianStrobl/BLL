@@ -41,6 +41,9 @@ const code = `
 // **
 let my_func = func (x) => - 2 - (x + 3);
 
+// let fac = func (n, erg) => n(erg, fac (n-1, erg+n));
+// let main = func (arg: i32) => fac(arg, 0);
+
 let main = func (a) => (${3})(my_func(a+1), my_func(a-1));
 
 // ((a.b).c().d);
