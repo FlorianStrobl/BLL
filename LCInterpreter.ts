@@ -38,7 +38,10 @@ export namespace Interpreter {
 
   // assertion: ast is type safe and identifiers can resolve without errors
   // TODO type checking and infering everything needed
-  function interpretAst(ast: Parser.statement[], argument: number): number {
+  export function interpretAst(
+    ast: Parser.statement[],
+    argument: number
+  ): number {
     function extractValues(
       statements: Parser.statement[],
       namespacePath: string[] = []
@@ -327,90 +330,89 @@ let x = func (a, b,) => b + y / 2 + a*2;
 // doing main(12)
 let main = func (arg) => x(arg, 3 + arg,) + 1;
   `;
-  log(Interpreter.interpret(code, '', 12));
-}
+  log(
+    Interpreter.interpret(
+      `
+  /*
+  type OptionalInt[T] {
+    Some(T),
+    None
+  }
 
-console.clear();
-log(
-  Interpreter.interpret(
-    `
-let x = 5;
-let main = func (arg) => x * 2 + arg;
-`,
-    '',
-    3
-  )
-);
+  let a: OptionalInt[i32] = OptionalInt.Some(5);
+
+  let b = func (opt: OptionalInt[i32]): i32 =>
+    match (opt) {
+      case OptionalInt.Some(var) => var,
+      case OptionalInt.None => 0
+    };
+
+  let c = b(a);
+
+  let fac = func (n) => match (n) {
+    case 0 => 1,
+    default => n * fac(n - 1)
+  };
+  */
+
+
+  let const4: i32 = 4;
+  let f = func (x) => 2 + 3 * x;
+  let constFunc5: () -> i32 = func () => 5;
+  let const1 = (func (x) => x) (1);
+
+  let main = func (arg: i32): i32 => 1 + (51 != const1 + g(arg));
+
+  let g = func (arg: i32): i32 => (const4 + constFunc5()) + f(arg + 6);
+
+  let a = func (x) => func (y) => x + y;
+  let b = a(5);
+  let c = b(3); // 8
+  `,
+      '',
+      7
+    )
+  );
+  log(Interpreter.interpret(code, '', 12));
+  log(
+    Interpreter.interpret(
+      `
+  let x = 5;
+  let main = func (arg) => x * 2 + arg;
+  `,
+      '',
+      3
+    )
+  );
+  log(
+    Interpreter.interpret(
+      `
+  // TODO this "x" is not the one from the "main" func
+  //let test = (func (x, y) => x + y + 1)(5, 3); // 9
+  //let main = func (x) => x(1, test);
+  // let main = func (x) => (5 != 4 & 3 != 2)(1 /* returned when true */, 2 /* returned when false */);
+
+  let fac = func (n) => n(1, fac(n-1)*n);
+  let main = func (arg) => fac(arg);
+  `,
+      '',
+      2
+    )
+  );
+  log(
+    Interpreter.interpret(
+      `let identity = (func (x) => x) (1);
+
+  let f = func (x) => 2 + 3 * x;
+  let g: i32 = 4;
+  let h: () -> i32 = func () => 5;
+
+  let main = func (arg: i32): i32 => 51 == identity + main2(arg);
+  let main2 = func (arg: i32): i32 => (g + h()) + f(arg + 6);`,
+      '',
+      5
+    )
+  );
+}
 
 // debug();
-
-// log(
-//   Interpreter.interpret(
-//     `
-// // TODO this "x" is not the one from the "main" func
-// //let test = (func (x, y) => x + y + 1)(5, 3); // 9
-// //let main = func (x) => x(1, test);
-// // let main = func (x) => (5 != 4 & 3 != 2)(1 /* returned when true */, 2 /* returned when false */);
-
-// let fac = func (n) => n(1, fac(n-1)*n);
-// let main = func (arg) => fac(arg);
-// `,
-//     '',
-//     2
-//   )
-// );
-//console.clear();
-log(
-  Interpreter.interpret(
-    `
-/*
-type OptionalInt[T] {
-  Some(T),
-  None
-}
-
-let a: OptionalInt[i32] = OptionalInt.Some(5);
-
-let b = func (opt: OptionalInt[i32]): i32 =>
-  match (opt) {
-    case OptionalInt.Some(var) => var,
-    case OptionalInt.None => 0
-  };
-
-let c = b(a);
-
-let fac = func (n) => match (n) {
-  case 0 => 1,
-  default => n * fac(n - 1)
-};
-*/
-
-
-let const4: i32 = 4;
-let f = func (x) => 2 + 3 * x;
-let constFunc5: () -> i32 = func () => 5;
-let const1 = (func (x) => x) (1);
-
-let main = func (arg: i32): i32 => 1 + (51 != const1 + g(arg));
-
-let g = func (arg: i32): i32 => (const4 + constFunc5()) + f(arg + 6);
-
-let a = func (x) => func (y) => x + y;
-let b = a(5);
-let c = b(3); // 8
-`,
-    '',
-    7
-  )
-);
-
-/*
-let identity = (func (x) => x) (1);
-
-let f = func (x) => 2 + 3 * x;
-let g: i32 = 4;
-let h: () -> i32 = func () => 5;
-
-let main = func (arg: i32): i32 => 51 == identity + main2(arg);
-let main2 = func (arg: i32): i32 => (g + h()) + f(arg + 6);
-*/

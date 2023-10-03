@@ -6,7 +6,7 @@ import { Parser } from './LCParser';
 
 // TODO, do spaces correctly, do comments, break on too many lines, put use-statements on the very top
 
-export namespace Prettier {
+export namespace Formatter {
   const Colors = {
     symbol: `${0xab};${0xb2};${0xbf}`, // white
     comments: `${0x98};${0xc3};${0x79}`, // green
@@ -217,7 +217,7 @@ export namespace Prettier {
                 withColor
               ) +
               addColor(' {\n', Colors.symbol, withColor) +
-              prettier(statement.body, withColor, indent + indentSize) +
+              beautify(statement.body, withColor, indent + indentSize) +
               // statement.body.map((e) => printStatement(e, withColor, indent + indentSize)).join('\n')
               indent +
               addColor('}', Colors.symbol, withColor)))
@@ -250,13 +250,7 @@ export namespace Prettier {
               addColor(';', Colors.symbol, withColor)))
         );
       case 'comment':
-        return (
-          printComments(statement.comments) +
-          (indent +
-            statement.comments
-              .map((e) => addColor(e.lexeme, Colors.comments, withColor))
-              .join('\n'))
-        );
+        return printComments(statement.comments).trimEnd();
       case 'complex-type':
         const bodyStr: string =
           statement.body.length === 0
@@ -340,7 +334,7 @@ export namespace Prettier {
     return `\x1b[38;2;${color}m` + msg + `\u001b[0m`;
   }
 
-  export function prettier(
+  export function beautify(
     ast: Parser.statement[],
     withColor: boolean = true,
     indent: string = ''
@@ -354,35 +348,9 @@ export namespace Prettier {
   }
 }
 
-console.log(
-  Prettier.prettier(
-    Parser.parse(`
-    let a = 4;
-    // a
-    type cmpx {
-      // b
-      A(i32 /*c*/, f32),
-      // this test
-      // F
-      B,
-      // d
-      C(hey, i32, /*ok works*/),
-      D
-      // e
-    }
-    type two {
-      // test
-    }
-    // other
-    // test two
-    `).statements,
-    true
-  )
-);
-
 if (false) {
   console.log(
-    Prettier.prettier(
+    Formatter.beautify(
       Parser.parse(`
     // hey!
     // more than one
@@ -407,6 +375,33 @@ if (false) {
       }
       let simple[T, B] = test.what;
     }
+    `).statements,
+      true
+    )
+  );
+
+  console.log(
+    Formatter.beautify(
+      Parser.parse(`
+    let a: f32 = 4.5e3;
+    // a
+    type cmpx[hey] {
+      // b
+      A(i32 /*c*/, f32),
+      // this test
+      // F
+      B,
+      // d
+      C(hey, i32, /*ok works*/),
+      D
+      // e
+    }
+    type two {
+      // test
+    }
+    // other
+    // test two
+    type simpleType = f32 -> (f32, f32) -> i32;
     `).statements,
       true
     )
