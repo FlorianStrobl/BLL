@@ -11,6 +11,31 @@ import { inspect } from 'util';
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
 
+/**
+ * let a = 5; // no error
+ * let a = 4; // error double (let)
+ * group a { } // error double (let)
+ * type a = i32; // no error
+ *
+ * group b { // no error
+ *  let a = 3; // error double (let)
+ *  let b = 4; // no error
+ *  group b { // error double (let)
+ *   let c = 4; // error double (let below)
+ *  }
+ *  let c = 3; // no error
+ * }
+ *
+ * group d { // no error
+ *  group e { // no error
+ *   let g = 1; // no error
+ *  }
+ *  group f { // no error
+ *   let g = 1; // no error
+ *  }
+ * }
+ */
+
 const filename = 'src';
 const code = `
 // **

@@ -24,6 +24,11 @@ type astAsStatements = {
   groups: parserValue[];
 };
 
+// check if type alias, complex type, groups and lets are not double defined in statements
+// then check if no identifier was used, which is not defined somewhere
+
+// THEN do type checking and check if identifier was used with correct scope!
+
 // TODO check if identifiers are used multiple times:
 // use a hashmap where we store the amount of times an identifier was used, and if
 // we get more than one for a field, we store that index (strs) in a seperate array, and at the end, we report all the indexes in the seperate array
