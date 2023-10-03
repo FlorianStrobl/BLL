@@ -113,7 +113,7 @@ export namespace Formatter {
         );
       case 'func':
         return (
-          addColor('func', Colors.standardKeyword, withColor) +
+          addColor('func ', Colors.standardKeyword, withColor) +
           addColor('(', Colors.symbol, withColor) +
           expression.parameters
             .map(
