@@ -41,7 +41,7 @@ const code = `
 // **
 let my_func = func (x) => - 2 - (x + 3);
 
-let main = func (a) => my_func(a);
+let main = func (a) => 0(my_func(a+1), my_func(a-1));
 
 // ((a.b).c().d);
 //let g = func (x, y) => x / y;
