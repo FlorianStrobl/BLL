@@ -6,20 +6,16 @@ export namespace Lexer {
   const keywords: string[] = [
     // statements:
     'use', // imports all identifiers from other file (either local file, or global file)
-    'let', // binds a lambda term to an identifier (can be generic)
-    'type', // binds a type (alias or complex) to an identifier
     'group', // identifier as wrapper around identifiers
+    'let', // binds a lambda term to an identifier (can be generic)
+    'type', // binds a type (alias or complex) to an identifier (can be generic)
 
     // expressions:
     'func', // function expression
     'match', // expression to unwrap values of complex-types
 
-    // f32 literals:
-    'nan',
-    'inf',
-
     // types:
-    'i32', // 32 bit integer
+    'i32', // signed 32 bit integer in two's complement
     'f32' // single precision 32 bit float from the IEEE754-2008 standard
   ];
 
@@ -28,7 +24,7 @@ export namespace Lexer {
     '+', // add (binary, unary, i32/f32)
     '-', // sub (binary, unary, i32/f32)
     '*', // multiplication (binary, i32/f32)
-    '/', // divide (binary, f32/for i32: rounding down, TODO what about div by 0 on i32??)
+    '/', // divide (binary, f32/for i32: rounding down, TODO what about div by 0 on i32: make it undefined behaviour)
     '**', // exponentiation (binary, i32/f32)
     '***', // root or log (binary, i32/f32)
     '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32)
@@ -55,7 +51,7 @@ export namespace Lexer {
     '=>', // used in func definitions and match expressions
     ':', // type annotation for let, func and match
     ';', // end of use, let or type-alias statement/empty statement
-    ',', // seperator for arguments in funcs or calling funcs or trailing comma
+    ',', // seperator for arguments in funcs or calling funcs (with trailing commas too)
     '.', // accessing identifiers from groups
 
     '(', // grouping, func arguments/parameters/calls, complex type line
@@ -66,6 +62,7 @@ export namespace Lexer {
     ']'
   ];
 
+  // f32 literals:
   const floatLiterals: string[] = ['nan', 'inf'];
 
   const whitespaces: string[] = [' ', '\t', '\n', '\r'];
@@ -184,20 +181,27 @@ export namespace Lexer {
   const commentType2Stop1: string = '*';
   const commentType2Stop2: string = '/';
 
-  const stringStart: string[] = ["'", '"', '`'];
+  const possibleStringStarts: string[] = ["'", '"', '`'];
   const stringEscapeSymbol: string = '\\'; // only valid inside strings
+  const escapableChars: string[] = ['\\', 'n', 't', 'r', 'u'];
 
   const validChars: string[] = [
     ...whitespaces,
     ...alphaNumeric,
-    ...stringStart,
+    ...possibleStringStarts, // because of error messages
     ...'+-*/%&|^~=!><;:,.(){}[]'.split('')
   ];
 
-  const firstCharSymbols: string[] = symbols.map((str) => str[0]);
+  const firstCharOfSymbols: string[] = symbols.map((str) => str[0]);
   // #endregion
 
   // #region types, interfaces and enums
+  export interface token {
+    lexeme: string; // the raw character sequence in the src code, matching a token pattern
+    type: tokenType;
+    idx: number; // index of the lexeme in the src code
+  }
+
   export enum tokenType {
     comment = '#com', // "//...", "/*...*/"
     literal = '#lit', // "5.3e-4", "0xFF00FF"
@@ -206,29 +210,22 @@ export namespace Lexer {
     symbol = '#sym' // "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", ",", "(", ")", "{", "}", "=", "->", "."
   }
 
-  export interface token {
-    lexeme: string; // the raw character sequence in the src code, matching a token pattern
-    type: tokenType;
-    idx: number; // index of the lexeme in the src code
-  }
-
   export type nextToken =
     | {
-        valid: true;
+        type: 'token';
         value: token;
-        newidx: number; // index of the character after the end of the lexeme
       }
     | {
-        valid: false;
+        type: 'error';
         value: lexerErrorToken;
-        newidx: number;
-      };
+      }
+    | { type: 'eof'; /*end of file*/ idx: number };
 
   // TODO
   export type lexerErrorToken =
-    | { type: 'eof' /*reached end of file*/; idx: number }
     | {
         type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
+        chars: string;
         idx: number;
       }
     | { type: 'invalid chars'; chars: string; idx: number }
@@ -242,14 +239,14 @@ export namespace Lexer {
     | {
         type: 'used escape symbol not properly in string';
         chars: string;
-        idxs: number[];
         idx: number;
+        idxs: number[];
       }
     | {
-        type: 'used escape symbol with u not properly in string';
+        type: 'used escape symbol with \\u not properly in string';
         chars: string;
-        idxs: number[];
         idx: number;
+        idxs: number[];
       }
     | {
         type: 'invalid symbol';
@@ -259,26 +256,26 @@ export namespace Lexer {
     | {
         type: 'did not consume digits in numeric literal';
         chars: string;
-        idxs: number[];
         idx: number;
+        idxs: number[];
       }
     | {
         type: 'identifier connected to numeric literal';
         chars: string;
-        invalidIdentifierIdx: number;
         idx: number;
+        invalidIdentifierIdx: number;
       }
     | {
         type: 'part of numeric literal ended with underscore';
         chars: string;
-        underscores: number[];
         idx: number;
+        underscores: number[];
       }
     | {
         type: 'repeating underscores in numeric literal';
         chars: string;
-        underscores: number[];
         idx: number;
+        underscores: number[];
       }
     | {
         type: 'not lexed digits after dot in numeric literal';
@@ -293,8 +290,8 @@ export namespace Lexer {
     | {
         type: 'had wrong alphabet in numeric literal';
         chars: string;
-        idxs: number[];
         idx: number;
+        idxs: number[];
       };
   // #endregion
 
@@ -305,8 +302,8 @@ export namespace Lexer {
     );
   }
 
-  function idxValid(idx: number, obj: { length: number }): boolean {
-    return idx < obj.length && idx >= 0;
+  function idxValid(index: number, array: { length: number }): boolean {
+    return index < array.length && index >= 0 && Number.isSafeInteger(index);
   }
   // #endregion
 
@@ -328,7 +325,6 @@ export namespace Lexer {
         comment += char;
 
         if (hadCommentType2Stop1 && matches(char, commentType2Stop2)) break;
-
         hadCommentType2Stop1 = matches(char, commentType2Stop1);
       }
 
@@ -339,24 +335,23 @@ export namespace Lexer {
         !matches(comment[comment.length - 1], commentType2Stop2)
       )
         return {
-          valid: false,
+          type: 'error',
           value: {
             type: 'eof in /* comment',
             chars: comment,
             idx
-          },
-          newidx: i
+          }
         };
     }
 
     return {
-      valid: true,
-      value: { type: tokenType.comment, lexeme: comment, idx },
-      newidx: i
+      type: 'token',
+      value: { type: tokenType.comment, lexeme: comment, idx }
     };
   }
 
   // assert: a numeric literal is at idx
+  // TODO
   function consumeNumericLiteral(code: string, idx: number): nextToken {
     function consumeDigits(): boolean {
       let consumedSomething: boolean = false;
@@ -397,12 +392,26 @@ export namespace Lexer {
       return consumedSomething;
     }
 
+    function consumeDot(): void {
+      gotDot = true;
+      literal += code[i++]; // .
+      if (!consumeDigits()) invalidDidNotConsumDigits.push(i);
+    }
+
+    function consumeE(): void {
+      gotE = true;
+      literal += code[i++]; // e
+      if (matches(code[i], ['+', '-'])) literal += code[i++]; // + | -
+      if (!consumeDigits()) invalidDidNotConsumDigits.push(i);
+    }
+
     let i: number = idx;
     let literal: string = '';
 
     let alphabet: string[] = decimalDigits;
 
-    let gotDotOrE: boolean = false;
+    let gotE: boolean = false;
+    let gotDot: boolean = false;
     let cantHaveDotOrE: boolean = false;
     const invalidDidNotConsumDigits: number[] = [];
     const invalidDoubleUnderscore: number[] = [];
@@ -430,53 +439,59 @@ export namespace Lexer {
           alphabet = octalDigits;
           break;
       }
+
       if (!consumeDigits()) invalidDidNotConsumDigits.push(i);
     } else consumeDigits(); // assertion: will have something to lexe
 
-    if (idxValid(i, code) && matches(code[i], '.')) {
-      gotDotOrE = true;
+    // TODO, what if it is "5e1.toString()"
 
-      literal += code[i++]; // .
+    let didSomething: boolean = true;
+    // better error messages with while loop: consider "5e1e2.3e2.3"
+    while (didSomething) {
+      didSomething = false;
 
-      if (!consumeDigits()) invalidDidNotConsumDigits.push(i);
-    }
+      if (idxValid(i, code) && matches(code[i], '.')) {
+        if (gotDot || gotE) {
+          // TODO error messages
+          cantHaveDotOrE = true;
+        }
 
-    if (idxValid(i, code) && matches(code[i], 'e')) {
-      gotDotOrE = true;
+        didSomething = true;
+        consumeDot();
+      }
+      if (idxValid(i, code) && matches(code[i], 'e')) {
+        if (gotE) {
+          // TODO error messages
+          cantHaveDotOrE = true;
+        }
 
-      literal += code[i++]; // e
-      if (matches(code[i], ['+', '-'])) literal += code[i++]; // + | -
-
-      if (!consumeDigits()) invalidDidNotConsumDigits.push(i);
-
-      if (matches(code[i], '.')) {
-        // TODO, what if it is "5e1.toString()"
-        cantHaveDotOrE = true;
-        gotDotOrE = true;
-        literal += code[i++];
-        consumeDigits();
+        didSomething = true;
+        consumeE();
       }
     }
 
+    // for better error messages
     if (matches(code[i], identifierStart)) {
       const nextToken: nextToken = consumeIdentifier(code, i);
 
       if (
-        nextToken.valid &&
+        nextToken.type === 'token' &&
         (nextToken.value.type === tokenType.identifier ||
-          nextToken.value.type === tokenType.keyword)
+          nextToken.value.type === tokenType.keyword ||
+          nextToken.value.type === tokenType.literal)
       ) {
         return {
-          valid: false,
+          type: 'error',
           value: {
             type: 'identifier connected to numeric literal',
             chars: literal + nextToken.value.lexeme,
             invalidIdentifierIdx: nextToken.value.idx,
             idx
-          },
-          newidx: nextToken.newidx
+          }
         };
-      } else
+      }
+      // TODO is that an internal error??
+      else
         throw new Error(
           `Internal error while parsing numeric literal and a following identifier at position ${i}`
         );
@@ -484,64 +499,58 @@ export namespace Lexer {
 
     if (invalidUnderscoresEnd.length !== 0) {
       return {
-        valid: false,
+        type: 'error',
         value: {
           type: 'part of numeric literal ended with underscore',
           chars: literal,
           underscores: invalidUnderscoresEnd,
           idx
-        },
-        newidx: i
+        }
       };
     } else if (invalidDoubleUnderscore.length !== 0) {
       return {
-        valid: false,
+        type: 'error',
         value: {
           type: 'repeating underscores in numeric literal',
           chars: literal,
           underscores: invalidDoubleUnderscore,
           idx
-        },
-        newidx: i
+        }
       };
-    } else if (gotDotOrE && cantHaveDotOrE) {
+    } else if ((gotE || gotDot) && cantHaveDotOrE) {
       return {
-        valid: false,
+        type: 'error',
         value: {
           type: 'got a dot or e in a numeric literal which cant have it at that place',
           chars: literal,
           idx
-        },
-        newidx: i
+        }
       };
     } else if (invalidAlphabet.length !== 0) {
       return {
-        valid: false,
+        type: 'error',
         value: {
           type: 'had wrong alphabet in numeric literal',
           chars: literal,
           idxs: invalidAlphabet,
           idx
-        },
-        newidx: i
+        }
       };
     } else if (invalidDidNotConsumDigits.length !== 0) {
       return {
-        valid: false,
+        type: 'error',
         value: {
           type: 'did not consume digits in numeric literal',
           chars: literal,
           idxs: invalidDidNotConsumDigits,
           idx
-        },
-        newidx: i
+        }
       };
     }
 
     return {
-      valid: true,
-      value: { type: tokenType.literal, lexeme: literal, idx },
-      newidx: i
+      type: 'token',
+      value: { type: tokenType.literal, lexeme: literal, idx }
     };
   }
 
@@ -553,24 +562,17 @@ export namespace Lexer {
     while (idxValid(i, code) && matches(code[i], alphaNumeric))
       identifier += code[i++];
 
-    if (matches(identifier, floatLiterals))
-      return {
-        valid: true,
-        value: { type: tokenType.literal, lexeme: identifier, idx },
-        newidx: i
-      };
-
-    const type: tokenType = keywords.includes(identifier)
-      ? tokenType.keyword
-      : tokenType.identifier;
     return {
-      valid: true,
+      type: 'token',
       value: {
-        type,
+        type: matches(identifier, floatLiterals)
+          ? tokenType.literal
+          : keywords.includes(identifier)
+          ? tokenType.keyword
+          : tokenType.identifier,
         lexeme: identifier,
         idx
-      },
-      newidx: i
+      }
     };
   }
 
@@ -580,38 +582,35 @@ export namespace Lexer {
     let symbol: string = '';
 
     // reduce the search space
-    const possibleSymbols: string[] = symbols.filter((str) =>
-      str.startsWith(code[i])
+    const possibleSymbols: string[] = symbols.filter((sym) =>
+      sym.startsWith(code[i])
     );
     while (
       idxValid(i, code) &&
-      possibleSymbols.some((str) => str.startsWith(symbol + code[i]))
+      possibleSymbols.some((sym) => sym.startsWith(symbol + code[i]))
     )
       symbol += code[i++];
 
     // got: "->"; valid: "->*"; invalid: "-", ">", "->"
     const symbolGot: string = symbol;
     while (!possibleSymbols.includes(symbol)) {
-      if (symbol.length === 0) {
+      symbol = symbol.slice(0, -1);
+      i--;
+
+      if (symbol.length === 0)
         return {
-          valid: false,
+          type: 'error',
           value: {
             type: 'invalid symbol',
             chars: symbolGot,
             idx
-          },
-          newidx: i
+          }
         };
-      }
-
-      symbol = symbol.substring(0, symbol.length - 1);
-      i--;
     }
 
     return {
-      valid: true,
-      value: { type: tokenType.symbol, lexeme: symbol, idx },
-      newidx: i
+      type: 'token',
+      value: { type: tokenType.symbol, lexeme: symbol, idx }
     };
   }
 
@@ -622,93 +621,84 @@ export namespace Lexer {
     let string: string = code[i++]; // " | ' | `
 
     const stringEnd: string = string;
-    const toEscapSymbols: string[] = [stringEnd, '\\', 'n', 't', 'r', 'u'];
-    let lastCharWasEscape: boolean = false;
+    const toEscapeChars: string[] = [stringEnd, ...escapableChars];
     const escapeErrorIdxs: number[] = [];
     const escapeErrorU: number[] = [];
+
+    let lastCharWasEscape: boolean = false;
     while (
       idxValid(i, code) &&
-      !(matches(code[i], stringEnd) && !lastCharWasEscape)
+      !(!lastCharWasEscape && matches(code[i], stringEnd))
     ) {
-      if (!lastCharWasEscape) {
-        lastCharWasEscape = matches(code[i], stringEscapeSymbol);
-        string += code[i++];
-      } else {
-        if (!matches(code[i], toEscapSymbols)) {
-          escapeErrorIdxs.push(i);
-          string += code[i++];
-        } else {
-          const char: string = code[i++];
-          string += char;
+      const char: string = code[i++];
+      string += char;
 
-          if (matches(char, 'u')) {
-            if (
-              idxValid(i, code) &&
-              idxValid(i + 3, code) &&
-              matches(code[i], hexDigits) &&
-              matches(code[i + 1], hexDigits) &&
-              matches(code[i + 2], hexDigits) &&
-              matches(code[i + 3], hexDigits)
-            )
-              string += code[i++] + code[i++] + code[i++] + code[i++];
-            else escapeErrorU.push(i);
-          }
-        }
-
+      if (lastCharWasEscape) {
         lastCharWasEscape = false;
-      }
+
+        if (!matches(char, toEscapeChars)) escapeErrorIdxs.push(i);
+        else if (matches(char, 'u'))
+          if (
+            idxValid(i + 3, code) &&
+            code
+              .slice(i, i + 4)
+              .split('')
+              .every((char) => matches(char, hexDigits))
+          )
+            string += code[i++] + code[i++] + code[i++] + code[i++];
+          else escapeErrorU.push(i);
+      } else lastCharWasEscape = matches(code[i], stringEscapeSymbol);
     }
 
     if (idxValid(i, code) && matches(code[i], stringEnd))
       string += code[i++]; // " | ' | `
     else
       return {
-        valid: false,
-        value: { type: 'eof in string', chars: string, idx },
-        newidx: i
+        type: 'error',
+        value: { type: 'eof in string', chars: string, idx }
       };
 
     if (escapeErrorIdxs.length !== 0)
       return {
-        valid: false,
+        type: 'error',
         value: {
           type: 'used escape symbol not properly in string',
           chars: string,
-          idxs: escapeErrorIdxs,
-          idx
-        },
-        newidx: i
+          idx,
+          idxs: escapeErrorIdxs
+        }
       };
     else if (escapeErrorU.length !== 0)
       return {
-        valid: false,
+        type: 'error',
         value: {
-          type: 'used escape symbol with u not properly in string',
+          type: 'used escape symbol with \\u not properly in string',
           chars: string,
-          idxs: escapeErrorU,
-          idx
-        },
-        newidx: i
+          idx,
+          idxs: escapeErrorU
+        }
       };
 
     return {
-      valid: false,
-      value: { type: 'string used', chars: string, idx },
-      newidx: i
+      type: 'error',
+      value: { type: 'string used', chars: string, idx }
     };
   }
   // #endregion
 
   // #region lexer functions
   function lexeNextToken(code: string, idx: number): nextToken {
+    // skip whitespaces
     while (idxValid(idx, code) && matches(code[idx], whitespaces)) ++idx;
 
+    // reached eof
     if (!idxValid(idx, code))
       return {
-        valid: false,
-        value: { type: 'eof', /*HERE*/ idx },
-        newidx: idx
+        type: 'eof',
+        idx
       };
+
+    // check if the current char matches some valid token and consume it
 
     if (
       matches(code[idx], commentStart) &&
@@ -723,38 +713,56 @@ export namespace Lexer {
     if (matches(code[idx], decimalDigits))
       return consumeNumericLiteral(code, idx);
 
-    if (matches(code[idx], firstCharSymbols)) return consumeSymbol(code, idx);
+    if (matches(code[idx], firstCharOfSymbols)) return consumeSymbol(code, idx);
 
-    if (matches(code[idx], stringStart)) return consumeString(code, idx);
+    if (matches(code[idx], possibleStringStarts))
+      return consumeString(code, idx);
+
+    // the current char does not match any valid token type
+    // return an error in this case
 
     let invalidChars: string = '';
     while (idxValid(idx, code) && !matches(code[idx], validChars))
       invalidChars += code[idx++];
 
     return {
-      valid: false,
+      type: 'error',
       value: {
         type: 'invalid chars',
         chars: invalidChars,
         idx
-      },
-      newidx: idx
+      }
     };
   }
 
   export function* lexeNextTokenIter(code: string): Generator<nextToken> {
-    let newIdx: number = 0;
-    let nToken: nextToken;
+    let idx: number = 0;
 
-    do {
-      nToken = lexeNextToken(code, newIdx);
+    while (true) {
+      const nToken: nextToken = lexeNextToken(code, idx);
 
-      if (nToken.value.type !== 'eof' && nToken.newidx === newIdx)
+      // stop the code if eof is reached
+      if (nToken.type === 'eof') {
+        yield nToken;
+        break;
+      }
+
+      // error message if idx would stay the same in the next iteration
+      // because of an internal error
+      if (
+        nToken.type === 'token'
+          ? nToken.value.lexeme.length === 0
+          : nToken.value.chars.length === 0
+      )
         throw new Error('Internal lexer error. Could not lexe the next token.');
 
-      newIdx = nToken.newidx;
+      idx =
+        nToken.type === 'token'
+          ? nToken.value.idx + nToken.value.lexeme.length
+          : nToken.value.idx + nToken.value.chars.length;
+
       yield nToken;
-    } while (nToken.value.type !== 'eof');
+    }
   }
 
   export function lexe(code: string):
@@ -774,10 +782,9 @@ export namespace Lexer {
     let eofIdx: number = NaN;
 
     for (const token of Lexer.lexeNextTokenIter(code))
-      if (token.valid) tokens.push(token.value);
-      else if (!token.valid && token.value.type !== 'eof')
-        errors.push(token.value);
-      else eofIdx = token.value.idx;
+      if (token.type === 'eof') eofIdx = token.idx;
+      else if (token.type === 'token') tokens.push(token.value);
+      else errors.push(token.value);
 
     return errors.length === 0
       ? { valid: true, tokens, eofIdx }
@@ -942,7 +949,6 @@ _
       ['534e354', 1],
       ['0.0e-0', 1],
       ['0e0', 1],
-      ['5.3.2', 3],
       [
         `type test {
         t1,
@@ -969,6 +975,8 @@ _
       ...keywords.map((e: string) => [e, 1] as [string, number])
     ];
     const mustNotLexe: string[] = [
+      '5.3.2',
+      '"""',
       `\\`,
       `'`,
       `\``,

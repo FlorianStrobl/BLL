@@ -52,13 +52,10 @@ class Larser {
     const lexerNextValue: Lexer.nextToken = lexerNext.value;
 
     const lexerIsNotDone: boolean = lexerNext.done === false;
-    const eof: boolean =
-      lexerIsNotDone &&
-      !lexerNextValue.valid &&
-      lexerNextValue.value.type === 'eof';
+    const eof: boolean = lexerIsNotDone && lexerNextValue.type === 'eof';
 
     // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
-    if (!eof && lexerNextValue.valid)
+    if (!eof && lexerNextValue.type === 'token')
       this.state = { eof: false, currentToken: lexerNextValue.value };
     else if (eof) this.state = { eof: true, currentToken: undefined };
     else this.errorHandling();
@@ -1937,6 +1934,11 @@ export namespace Parser {
   }
 
   function debugParser() {
+    const timerAndIO: boolean = true;
+
+    const timerName: string = 'Parser tests';
+    if (timerAndIO) console.time(timerName);
+
     const mustParse: string[] = [
       '',
       '      let f = func (x, a = 5, b = c) => a;',
@@ -2115,34 +2117,55 @@ export namespace Parser {
           .join(`/*comment ${i}*/`)
       );
 
+    let successfullTests: number = 0;
     for (const code of mustParse) {
-      let ans: any;
       try {
-        ans = parse(code);
+        let ans = parse(code);
+
+        if (!ans?.valid) {
+          console.error('Should parse:', code);
+          log(ans);
+        } else successfullTests++;
       } catch (e) {
         console.error('INTERNAL ERROR:', code, e);
       }
-      if (!ans?.valid) {
-        console.error('Should parse:', code);
-        log(ans);
-      }
     }
-
     for (const code of mustNotParseButLexe) {
       if (!Lexer.lexe(code).valid)
         throw new Error('this code should be lexable: ' + code);
 
-      let ans: any;
       try {
-        ans = parse(code);
+        let ans = parse(code);
+        if (ans.valid) {
+          console.log('Should not parse: ', code);
+          log(ans);
+        } else successfullTests++;
       } catch (e) {
         console.error('INTERNAL ERROR', code, e);
       }
-      if (ans?.valid) {
-        console.log('Should not parse: ', code);
-        log(ans);
-      }
     }
+
+    if (
+      timerAndIO &&
+      successfullTests === mustParse.length + mustNotParseButLexe.length
+    ) {
+      console.debug(
+        `Parsed successfully ${successfullTests} tests and ${
+          mustParse.map((e) => e[0]).reduce((a, b) => a + b).length +
+          mustNotParseButLexe.reduce((a, b) => a + b).length
+        } characters.`
+      );
+    } else if (
+      successfullTests !==
+      mustParse.length + mustNotParseButLexe.length
+    )
+      console.error(
+        `${
+          mustParse.length + mustNotParseButLexe.length - successfullTests
+        } failed tests in the Parser-stage!`
+      );
+
+    if (timerAndIO) console.timeEnd(timerName);
 
     // console.time('t');
     // // group test { let x = 5 + 2 * (func (x) => x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
@@ -2162,10 +2185,10 @@ export namespace Parser {
     // log(parsed);
   }
 
-  // for (let i = 0; i < 1; ++i) debugParser();
+  // for (let i = 0; i < 2; ++i) debugParser();
 }
 
-// console.log(Parser.parse("let x = 5;"));
+// log(Parser.parse('let x = 5;'));
 
 // #region debug
 const code = [
