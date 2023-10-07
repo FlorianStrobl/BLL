@@ -352,12 +352,12 @@ export namespace Formatter {
   }
 }
 
-console.log(
-  Formatter.beautify(
-    Parser.parse(`let x[A]: A = func (x: A = 4
-      +3): A => x;`).statements
-  )
-);
+// console.log(
+//   Formatter.beautify(
+//     Parser.parse(`let x[A]: A = func (x: A = 4
+//       +3): A => x;`).statements
+//   )
+// );
 
 if (false) {
   console.log(

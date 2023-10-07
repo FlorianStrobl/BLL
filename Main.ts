@@ -40,6 +40,15 @@ const filename = 'src';
 const code = `
 // **
 
+type binaryTree[T] {
+  Empty,
+  Tree(binaryTree, T, binaryTree)
+}
+//let main = func (arg: i32): i32 => 6(7, 8);
+
+//let fn = func () => 3
+//let test = func (x, y = fn()) => x % y;
+
 // let my_func = func (x) => - 2 - (x + 3);
 // with a=5 its -9
 // let main = func (a) => (3)(my_func(a+1), my_func(a-1));

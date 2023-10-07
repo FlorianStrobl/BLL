@@ -66,6 +66,8 @@ export namespace Lexer {
     ']'
   ];
 
+  const floatLiterals: string[] = ['nan', 'inf'];
+
   const whitespaces: string[] = [' ', '\t', '\n', '\r'];
 
   // new Array(10).fill(0).map((_, i) => i.toString());
@@ -193,8 +195,6 @@ export namespace Lexer {
   ];
 
   const firstCharSymbols: string[] = symbols.map((str) => str[0]);
-
-  const floatLiterals: string[] = ['nan', 'inf'];
   // #endregion
 
   // #region types, interfaces and enums
@@ -226,83 +226,71 @@ export namespace Lexer {
 
   // TODO
   export type lexerErrorToken =
-    | { codeInvalid: false; type: 'eof' /*reached end of file*/; idx: number }
+    | { type: 'eof' /*reached end of file*/; idx: number }
     | {
-        codeInvalid: true;
         type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
         idx: number;
       }
-    | { codeInvalid: true; type: 'invalid chars'; chars: string; idx: number }
+    | { type: 'invalid chars'; chars: string; idx: number }
     | {
-        codeInvalid: true;
         type: 'eof in /* comment';
         chars: string;
         idx: number;
       }
-    | { codeInvalid: true; type: 'string used'; chars: string; idx: number }
-    | { codeInvalid: true; type: 'eof in string'; chars: string; idx: number }
+    | { type: 'string used'; chars: string; idx: number }
+    | { type: 'eof in string'; chars: string; idx: number }
     | {
-        codeInvalid: true;
         type: 'used escape symbol not properly in string';
         chars: string;
         idxs: number[];
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'used escape symbol with u not properly in string';
         chars: string;
         idxs: number[];
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'invalid symbol';
         chars: string;
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'did not consume digits in numeric literal';
         chars: string;
         idxs: number[];
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'identifier connected to numeric literal';
         chars: string;
         invalidIdentifierIdx: number;
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'part of numeric literal ended with underscore';
         chars: string;
         underscores: number[];
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'repeating underscores in numeric literal';
         chars: string;
         underscores: number[];
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'not lexed digits after dot in numeric literal';
         chars: string;
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'got a dot or e in a numeric literal which cant have it at that place';
         chars: string;
         idx: number;
       }
     | {
-        codeInvalid: true;
         type: 'had wrong alphabet in numeric literal';
         chars: string;
         idxs: number[];
@@ -354,7 +342,6 @@ export namespace Lexer {
           valid: false,
           value: {
             type: 'eof in /* comment',
-            codeInvalid: true,
             chars: comment,
             idx
           },
@@ -483,7 +470,6 @@ export namespace Lexer {
           valid: false,
           value: {
             type: 'identifier connected to numeric literal',
-            codeInvalid: true,
             chars: literal + nextToken.value.lexeme,
             invalidIdentifierIdx: nextToken.value.idx,
             idx
@@ -501,7 +487,6 @@ export namespace Lexer {
         valid: false,
         value: {
           type: 'part of numeric literal ended with underscore',
-          codeInvalid: true,
           chars: literal,
           underscores: invalidUnderscoresEnd,
           idx
@@ -513,7 +498,6 @@ export namespace Lexer {
         valid: false,
         value: {
           type: 'repeating underscores in numeric literal',
-          codeInvalid: true,
           chars: literal,
           underscores: invalidDoubleUnderscore,
           idx
@@ -525,7 +509,6 @@ export namespace Lexer {
         valid: false,
         value: {
           type: 'got a dot or e in a numeric literal which cant have it at that place',
-          codeInvalid: true,
           chars: literal,
           idx
         },
@@ -536,7 +519,6 @@ export namespace Lexer {
         valid: false,
         value: {
           type: 'had wrong alphabet in numeric literal',
-          codeInvalid: true,
           chars: literal,
           idxs: invalidAlphabet,
           idx
@@ -548,7 +530,6 @@ export namespace Lexer {
         valid: false,
         value: {
           type: 'did not consume digits in numeric literal',
-          codeInvalid: true,
           chars: literal,
           idxs: invalidDidNotConsumDigits,
           idx
@@ -616,7 +597,6 @@ export namespace Lexer {
           valid: false,
           value: {
             type: 'invalid symbol',
-            codeInvalid: true,
             chars: symbolGot,
             idx
           },
@@ -684,7 +664,7 @@ export namespace Lexer {
     else
       return {
         valid: false,
-        value: { type: 'eof in string', codeInvalid: true, chars: string, idx },
+        value: { type: 'eof in string', chars: string, idx },
         newidx: i
       };
 
@@ -693,7 +673,6 @@ export namespace Lexer {
         valid: false,
         value: {
           type: 'used escape symbol not properly in string',
-          codeInvalid: true,
           chars: string,
           idxs: escapeErrorIdxs,
           idx
@@ -705,7 +684,6 @@ export namespace Lexer {
         valid: false,
         value: {
           type: 'used escape symbol with u not properly in string',
-          codeInvalid: true,
           chars: string,
           idxs: escapeErrorU,
           idx
@@ -715,7 +693,7 @@ export namespace Lexer {
 
     return {
       valid: false,
-      value: { type: 'string used', codeInvalid: true, chars: string, idx },
+      value: { type: 'string used', chars: string, idx },
       newidx: i
     };
   }
@@ -728,7 +706,7 @@ export namespace Lexer {
     if (!idxValid(idx, code))
       return {
         valid: false,
-        value: { type: 'eof', codeInvalid: false, idx },
+        value: { type: 'eof', /*HERE*/ idx },
         newidx: idx
       };
 
@@ -757,7 +735,6 @@ export namespace Lexer {
       valid: false,
       value: {
         type: 'invalid chars',
-        codeInvalid: true,
         chars: invalidChars,
         idx
       },
@@ -781,27 +758,30 @@ export namespace Lexer {
   }
 
   export function lexe(code: string):
-    | { valid: true; tokens: token[]; softErrors: lexerErrorToken[] }
+    | {
+        valid: true;
+        tokens: token[];
+        eofIdx: number;
+      }
     | {
         valid: false;
         tokens: token[];
         lexerErrors: lexerErrorToken[];
-        softErrors: lexerErrorToken[];
+        eofIdx: number;
       } {
     const tokens: token[] = [];
     const errors: lexerErrorToken[] = [];
-    const softErrors: lexerErrorToken[] = [];
+    let eofIdx: number = NaN;
 
     for (const token of Lexer.lexeNextTokenIter(code))
       if (token.valid) tokens.push(token.value);
-      else if (!token.valid && token.value.codeInvalid)
+      else if (!token.valid && token.value.type !== 'eof')
         errors.push(token.value);
-      else if (!token.valid && !token.value.codeInvalid)
-        softErrors.push(token.value);
+      else eofIdx = token.value.idx;
 
     return errors.length === 0
-      ? { valid: true, tokens, softErrors }
-      : { valid: false, tokens, lexerErrors: errors, softErrors };
+      ? { valid: true, tokens, eofIdx }
+      : { valid: false, tokens, lexerErrors: errors, eofIdx };
   }
   // #endregion
 

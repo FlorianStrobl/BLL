@@ -1909,26 +1909,31 @@ export namespace Parser {
   ):
     | { valid: true; statements: statement[] }
     | { valid: false; parseErrors: parseError[]; statements: statement[] } {
-    larser = new Larser(code);
-    parseErrors = [];
+    try {
+      larser = new Larser(code);
+      parseErrors = [];
 
-    const statements: statement[] = [];
+      const statements: statement[] = [];
 
-    while (!isAtEnd()) {
-      try {
-        const statement: statement | parseError = parseStatement();
-        if (statement.type === 'error') break;
-        statements.push(statement);
-      } catch (error) {
-        if (error === 'eof') return { valid: false, parseErrors, statements };
-        else console.log('Internal error: ', code, error);
-        break;
+      while (!isAtEnd()) {
+        try {
+          const statement: statement | parseError = parseStatement();
+          if (statement.type === 'error') break;
+          statements.push(statement);
+        } catch (error) {
+          if (error === 'eof') return { valid: false, parseErrors, statements };
+          else console.log('Internal error: ', code, error);
+          break;
+        }
       }
-    }
 
-    return parseErrors.length === 0
-      ? { valid: true, statements }
-      : { valid: false, parseErrors, statements };
+      return parseErrors.length === 0
+        ? { valid: true, statements }
+        : { valid: false, parseErrors, statements };
+    } catch (e) {
+      console.log('ERROR HERE', e);
+      return {} as any;
+    }
   }
 
   function debugParser() {
@@ -2159,6 +2164,8 @@ export namespace Parser {
 
   // for (let i = 0; i < 1; ++i) debugParser();
 }
+
+// console.log(Parser.parse("let x = 5;"));
 
 // #region debug
 const code = [
