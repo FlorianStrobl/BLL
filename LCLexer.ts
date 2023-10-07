@@ -721,6 +721,7 @@ export namespace Lexer {
     // the current char does not match any valid token type
     // return an error in this case
 
+    const invalidIdx: number = idx;
     let invalidChars: string = '';
     while (idxValid(idx, code) && !matches(code[idx], validChars))
       invalidChars += code[idx++];
@@ -730,7 +731,7 @@ export namespace Lexer {
       value: {
         type: 'invalid chars',
         chars: invalidChars,
-        idx
+        idx: invalidIdx
       }
     };
   }
@@ -782,8 +783,10 @@ export namespace Lexer {
     let eofIdx: number = NaN;
 
     for (const token of Lexer.lexeNextTokenIter(code))
-      if (token.type === 'eof') eofIdx = token.idx;
-      else if (token.type === 'token') tokens.push(token.value);
+      if (token.type === 'eof') {
+        eofIdx = token.idx;
+        break;
+      } else if (token.type === 'token') tokens.push(token.value);
       else errors.push(token.value);
 
     return errors.length === 0

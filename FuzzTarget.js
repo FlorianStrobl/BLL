@@ -1,5 +1,7 @@
-const { Parser } = require('./LCParser.js');
 const { Lexer } = require('./LCLexer.js');
+const { Parser } = require('./LCParser.js');
+// import { Lexer } from "./LCLexer.mjs";
+// const { Parser } = require('./LCParser.js');
 
 const validChars = [
   ' ',
@@ -74,18 +76,25 @@ const validChars = [
   //'`',
   ...'+-*/%&|^~=!><;:,.(){}[]'.split('')
 ];
-
-// npx jazzer FuzzTarget
-
 // file "FuzzTarget.js"
+
+// npx jazzer FuzzTarget corpus
 module.exports.fuzz = function (data /*: Buffer */) {
   const fuzzerData = data.toString();
 
-  for (const char of fuzzerData) if (!validChars.includes(char)) return;
-  if (Lexer.lexe(fuzzerData).valid === true) {
-    console.log(`TEST THIS CODE "${fuzzerData}"
-    because "${JSON.stringify(Lexer.lexe(fuzzerData))}" or "${JSON.stringify(Lexer.lexeNextTokenIter(fuzzerData).next())}"`);
-
-    Parser.parse(fuzzerData);
+  if (Lexer.lexe(fuzzerData).valid) {
+    const parsed = Parser.parse(fuzzerData);
+    console.log(`valid: ${parsed.valid}`);
   }
+
+  // for (const char of fuzzerData) if (!validChars.includes(char)) return;
+
+  // if (Lexer.lexe(fuzzerData).valid === true) {
+  //   console.log(`TEST THIS CODE "${fuzzerData}"
+  //   because "${JSON.stringify(Lexer.lexe(fuzzerData))}" or "${JSON.stringify(
+  //     Lexer.lexeNextTokenIter(fuzzerData).next()
+  //   )}"`);
+
+  //   // Parser.parse(fuzzerData);
+  // }
 };

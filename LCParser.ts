@@ -491,6 +491,80 @@ export namespace Parser {
   // #endregion
   // #endregion
 
+  // TODO local comments and eof
+  function parseComplexeTypeLine(): complexTypeValue {
+    const localComments: [] = []; // TODO add special comments to each complex type
+
+    consumeComments(localComments);
+
+    checkEofWithError(
+      'Invalid eof while parsing a line in a complex type statement'
+    );
+
+    const identifierToken: token = matchTypeAdvanceOrError(
+      tokenType.identifier,
+      'TODO invalid complex type statement: missing identifier'
+    );
+
+    consumeComments(localComments);
+
+    checkEofWithError(
+      'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
+    );
+
+    const openingBracketToken: optToken = optionalMatchAdvance('(');
+
+    if (isPresent(openingBracketToken)) consumeComments(localComments);
+
+    checkEofWithError(
+      'invalid eof in complex type statement after getting a "("'
+    );
+
+    const parameterValues: argumentList<typeExpression, false> =
+      callOnPresent(openingBracketToken, () =>
+        parseArgumentList<typeExpression, false>(
+          parseTypeExpression,
+          localComments,
+          false, // TODO does this make sense??
+          ')',
+          ',',
+          'TODO missing comma between two parameters in complex type value',
+          'TODO invalid value while parsing arguments for a complex type line',
+          'TODO invalid eof while parsing arguments from a complex type line',
+          { noEmptyList: false }
+        )
+      ) ?? [];
+
+    if (isPresent(openingBracketToken)) consumeComments(localComments);
+
+    const closingBracketToken: optToken = callOnPresent(
+      openingBracketToken,
+      () => matchAdvanceOrError(')', 'missing closing bracket in complex type')
+    );
+
+    checkEofWithError('Invalid eof at the end of a complex type expression');
+
+    // TODO what about `type Test { id id id, id id };`
+
+    const parameters: complexTypeValParams =
+      isPresent(openingBracketToken) ||
+      isPresent(closingBracketToken) ||
+      parameterValues.length !== 0
+        ? {
+            hasParameters: true,
+            value: parameterValues,
+            openingBracketToken: openingBracketToken!,
+            closingBracketToken: closingBracketToken!
+          }
+        : { hasParameters: false };
+
+    return {
+      identifierToken,
+      parameters,
+      comments: localComments
+    };
+  }
+
   // #region parser
   // can throw eof
   function parseStatement(): statement | parseError {
@@ -735,83 +809,6 @@ export namespace Parser {
       return newParseError(
         'TODO invalid type expression: cannot resolve which type it should be. Missing "=" or "{"'
       );
-
-      // TODO local comments and eof
-      function parseComplexeTypeLine(): complexTypeValue {
-        const localComments: [] = []; // TODO add special comments to each complex type
-
-        consumeComments(localComments);
-
-        checkEofWithError(
-          'Invalid eof while parsing a line in a complex type statement'
-        );
-
-        const identifierToken: token = matchTypeAdvanceOrError(
-          tokenType.identifier,
-          'TODO invalid complex type statement: missing identifier'
-        );
-
-        consumeComments(localComments);
-
-        checkEofWithError(
-          'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
-        );
-
-        const openingBracketToken: optToken = optionalMatchAdvance('(');
-
-        if (isPresent(openingBracketToken)) consumeComments(localComments);
-
-        checkEofWithError(
-          'invalid eof in complex type statement after getting a "("'
-        );
-
-        const parameterValues: argumentList<typeExpression, false> =
-          callOnPresent(openingBracketToken, () =>
-            parseArgumentList<typeExpression, false>(
-              parseTypeExpression,
-              localComments,
-              false, // TODO does this make sense??
-              ')',
-              ',',
-              'TODO missing comma between two parameters in complex type value',
-              'TODO invalid value while parsing arguments for a complex type line',
-              'TODO invalid eof while parsing arguments from a complex type line',
-              { noEmptyList: false }
-            )
-          ) ?? [];
-
-        if (isPresent(openingBracketToken)) consumeComments(localComments);
-
-        const closingBracketToken: optToken = callOnPresent(
-          openingBracketToken,
-          () =>
-            matchAdvanceOrError(')', 'missing closing bracket in complex type')
-        );
-
-        checkEofWithError(
-          'Invalid eof at the end of a complex type expression'
-        );
-
-        // TODO what about `type Test { id id id, id id };`
-
-        const parameters: complexTypeValParams =
-          isPresent(openingBracketToken) ||
-          isPresent(closingBracketToken) ||
-          parameterValues.length !== 0
-            ? {
-                hasParameters: true,
-                value: parameterValues,
-                openingBracketToken: openingBracketToken!,
-                closingBracketToken: closingBracketToken!
-              }
-            : { hasParameters: false };
-
-        return {
-          identifierToken,
-          parameters,
-          comments: localComments
-        };
-      }
     }
 
     if (match('let')) {
@@ -1940,6 +1937,28 @@ export namespace Parser {
     if (timerAndIO) console.time(timerName);
 
     const mustParse: string[] = [
+      `use std;
+
+    let x: i32 = 5 << 3;
+    let y: f32 = nan / inf;
+    let a[X] = func (x: X = 5): f32 => 5.3;
+
+    let b = (func (x) => x == x)(5);
+
+    type time[T,] = f32 -> (T, f32,) -> (i32);
+    type other = i32;
+
+    type hey[A] {
+      day1,
+      day2(time),
+      day3
+    }
+
+    type alias = hey;
+
+    group test {
+      let val = 4 + 3 * 3 % 3 & 3 - a(3);
+    }`,
       '',
       '      let f = func (x, a = 5, b = c) => a;',
       '//comment',
@@ -2187,7 +2206,6 @@ export namespace Parser {
 
   // for (let i = 0; i < 2; ++i) debugParser();
 }
-
 // log(Parser.parse('let x = 5;'));
 
 // #region debug
