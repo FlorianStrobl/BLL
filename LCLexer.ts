@@ -314,13 +314,17 @@ export namespace Lexer {
     let i: number = idx + 1; // safe because assertion
 
     if (matches(code[i], commentType1Start)) {
-      while (idxValid(i, code) && !matches(code[i], commentType1Stop))
+      while (
+        idxValid(i, code) &&
+        !matches(code[i], commentType1Stop) &&
+        matches(code[i], validChars) // TODO
+      )
         comment += code[i++];
     } else if (matches(code[i], commentType2Start)) {
       comment += code[i++]; // *
 
       let hadCommentType2Stop1: boolean = false;
-      while (idxValid(i, code)) {
+      while (idxValid(i, code) && matches(code[i], validChars)/*TODO*/) {
         const char: string = code[i++];
         comment += char;
 

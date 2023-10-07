@@ -78,23 +78,13 @@ const validChars = [
 ];
 // file "FuzzTarget.js"
 
-// npx jazzer FuzzTarget corpus
+// tsc .\LCParser.ts --downlevelIteration --allowJs
+// npx jazzer FuzzTarget corpus --timeout=5 --sync
 module.exports.fuzz = function (data /*: Buffer */) {
   const fuzzerData = data.toString();
 
-  if (Lexer.lexe(fuzzerData).valid) {
+  //const lexed = Lexer.lexe(fuzzerData);
+  //if (lexed.valid && lexed.tokens.length > 0) {
     const parsed = Parser.parse(fuzzerData);
-    console.log(`valid: ${parsed.valid}`);
-  }
-
-  // for (const char of fuzzerData) if (!validChars.includes(char)) return;
-
-  // if (Lexer.lexe(fuzzerData).valid === true) {
-  //   console.log(`TEST THIS CODE "${fuzzerData}"
-  //   because "${JSON.stringify(Lexer.lexe(fuzzerData))}" or "${JSON.stringify(
-  //     Lexer.lexeNextTokenIter(fuzzerData).next()
-  //   )}"`);
-
-  //   // Parser.parse(fuzzerData);
-  // }
+ // }
 };

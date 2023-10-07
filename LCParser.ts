@@ -19,9 +19,7 @@ class Larser {
     this.state = { eof: false, currentToken: undefined as any };
     this.advanceToken();
     if (!this.state.eof && this.state.currentToken === undefined)
-      throw new Error(
-        'Internal error, could not lexe the very first token correctly in the parsing step.'
-      );
+      throw 'lexe first token';
   }
 
   public isEof(): boolean {
@@ -30,20 +28,14 @@ class Larser {
 
   // assertion: not eof
   public getCurrentToken(): Lexer.token {
-    if (this.isEof())
-      throw new Error(
-        'Internal error while parsing. Tried getting the current token, even tho the code is eof.'
-      );
+    if (this.isEof()) throw 'current token eof';
 
     return this.state.currentToken!;
   }
 
   // assertion: not eof
   public advanceToken(): void {
-    if (this.isEof())
-      throw new Error(
-        'Internal error while parsing. Tried advancing to next token, even tho the code is eof.'
-      );
+    if (this.isEof()) throw 'current token eof advance';
 
     // this.previousToken = this.currentToken;
 
@@ -70,8 +62,8 @@ class Larser {
           tokens.tokens?.toString()
       );
 
-    console.error(tokens);
-    throw 'TODO';
+    // console.error(tokens);
+    throw 'lexer can not lexe';
   }
 }
 // #endregion
@@ -303,7 +295,7 @@ export namespace Parser {
   // #endregion
   // #endregion
 
-  // #region helper
+  // #region helperF
   // #region traditional
   function isAtEnd(): boolean {
     return larser.isEof();
@@ -1916,8 +1908,10 @@ export namespace Parser {
           statements.push(statement);
         } catch (error) {
           if (error === 'eof') return { valid: false, parseErrors, statements };
-          else console.log('Internal error: ', code, error);
-          break;
+          else
+            throw `Internal error while parsing: "${JSON.stringify(
+              code
+            )}"\nINTERNAL ERROR: ${JSON.stringify(error)}`;
         }
       }
 
@@ -1925,7 +1919,12 @@ export namespace Parser {
         ? { valid: true, statements }
         : { valid: false, parseErrors, statements };
     } catch (e) {
-      console.log('ERROR HERE', e);
+      if (
+        !e?.toString().includes('eof') &&
+        !e?.toString().includes('lexer can not lexe')
+      )
+        throw e;
+      // else console.error('eof');
       return {} as any;
     }
   }
@@ -2206,7 +2205,8 @@ export namespace Parser {
 
   // for (let i = 0; i < 2; ++i) debugParser();
 }
-// log(Parser.parse('let x = 5;'));
+
+// log(Parser.parse('let x = 3;'));
 
 // #region debug
 const code = [
