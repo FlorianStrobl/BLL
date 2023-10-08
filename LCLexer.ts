@@ -46,6 +46,7 @@ export namespace Lexer {
     '<', // less than (binary, i32/f32)
     '>', // greater than (binary, i32/f32)
 
+    // misc
     '=', // assigments of values to identifiers in let and type statements
     '->', // used for func signatures
     '=>', // used in func definitions and match expressions
@@ -67,7 +68,6 @@ export namespace Lexer {
 
   const whitespaces: string[] = [' ', '\t', '\n', '\r'];
 
-  // new Array(10).fill(0).map((_, i) => i.toString());
   const decimalDigits: string[] = [
     '0',
     '1',
@@ -79,7 +79,7 @@ export namespace Lexer {
     '7',
     '8',
     '9'
-  ];
+  ]; // new Array(10).fill(0).map((_, i) => i.toString());
   const octalDigits: string[] = ['0', '1', '2', '3', '4', '5', '6', '7'];
   const binaryDigits: string[] = ['0', '1'];
   const hexDigits: string[] = [
@@ -109,7 +109,6 @@ export namespace Lexer {
   const nonDecimalLiteralStart: string = '0';
   const nonDecimalLiteralTypes: string[] = ['x', 'b', 'o'];
 
-  //...new Array(26).fill('').map((_, i) => String.fromCharCode(65 /*97*/ + i)),
   const identifierStart: string[] = [
     '_',
     'A',
@@ -164,7 +163,7 @@ export namespace Lexer {
     'x',
     'y',
     'z'
-  ];
+  ]; //...new Array(26).fill('').map((_, i) => String.fromCharCode(65 /*97*/ + i)),
   const alphaNumeric: string[] = [
     // _, a-z, A-Z
     ...identifierStart,
@@ -223,6 +222,7 @@ export namespace Lexer {
 
   // TODO
   export type lexerErrorToken =
+    | { type: 'invalid chars in comment'; chars: string; idx: number }
     | {
         type: 'missing space' /* "5let" is not allowed aka: literal followed by an identifier/keyword/literal or keyword followed by operator?? or identifier followed by literal */;
         chars: string;
@@ -314,17 +314,13 @@ export namespace Lexer {
     let i: number = idx + 1; // safe because assertion
 
     if (matches(code[i], commentType1Start)) {
-      while (
-        idxValid(i, code) &&
-        !matches(code[i], commentType1Stop) &&
-        matches(code[i], validChars) // TODO
-      )
+      while (idxValid(i, code) && !matches(code[i], commentType1Stop))
         comment += code[i++];
     } else if (matches(code[i], commentType2Start)) {
       comment += code[i++]; // *
 
       let hadCommentType2Stop1: boolean = false;
-      while (idxValid(i, code) && matches(code[i], validChars)/*TODO*/) {
+      while (idxValid(i, code)) {
         const char: string = code[i++];
         comment += char;
 
@@ -348,6 +344,12 @@ export namespace Lexer {
         };
     }
 
+    // if (comment.split('').some((char) => char !== "*" && !validChars.includes(char)))
+    //   return {
+    //     type: 'error',
+    //     value: { type: 'invalid chars in comment', chars: comment, idx }
+    //   };
+    // else
     return {
       type: 'token',
       value: { type: tokenType.comment, lexeme: comment, idx }
@@ -709,6 +711,7 @@ export namespace Lexer {
       idxValid(idx + 1, code) &&
       matches(code[idx + 1], commentTypes)
     )
+      // before consumeSymbol
       return consumeComment(code, idx);
 
     if (matches(code[idx], identifierStart))
@@ -762,9 +765,10 @@ export namespace Lexer {
         throw new Error('Internal lexer error. Could not lexe the next token.');
 
       idx =
-        nToken.type === 'token'
-          ? nToken.value.idx + nToken.value.lexeme.length
-          : nToken.value.idx + nToken.value.chars.length;
+        nToken.value.idx +
+        (nToken.type === 'token'
+          ? nToken.value.lexeme.length
+          : nToken.value.chars.length);
 
       yield nToken;
     }
@@ -783,19 +787,17 @@ export namespace Lexer {
         eofIdx: number;
       } {
     const tokens: token[] = [];
-    const errors: lexerErrorToken[] = [];
+    const lexerErrors: lexerErrorToken[] = [];
     let eofIdx: number = NaN;
 
     for (const token of Lexer.lexeNextTokenIter(code))
-      if (token.type === 'eof') {
-        eofIdx = token.idx;
-        break;
-      } else if (token.type === 'token') tokens.push(token.value);
-      else errors.push(token.value);
+      if (token.type === 'token') tokens.push(token.value);
+      else if (token.type === 'error') lexerErrors.push(token.value);
+      else if (token.type === 'eof') eofIdx = token.idx;
 
-    return errors.length === 0
+    return lexerErrors.length === 0
       ? { valid: true, tokens, eofIdx }
-      : { valid: false, tokens, lexerErrors: errors, eofIdx };
+      : { valid: false, tokens, lexerErrors, eofIdx };
   }
   // #endregion
 

@@ -16,9 +16,9 @@ class Larser {
     this.code = code;
     this.lexer = Lexer.lexeNextTokenIter(code);
 
-    this.state = { eof: false, currentToken: undefined as any };
+    this.state = { eof: false, currentToken: undefined as never };
     this.advanceToken();
-    if (!this.state.eof && this.state.currentToken === undefined)
+    if (this.state.eof === false && this.state.currentToken === undefined)
       throw 'lexe first token';
   }
 
@@ -126,7 +126,7 @@ export namespace Parser {
       | ({
           type: 'complex-type';
           identifierToken: token;
-          body: argumentList<complexTypeValue, true>;
+          body: argumentList<complexTypeLine, true>;
           typeToken: token;
           openingBracketToken: token;
           closingBracketToken: token;
@@ -142,20 +142,19 @@ export namespace Parser {
           explicitType)
     );
 
-  type complexTypeValue = comment & {
+  type complexTypeLine = comment & {
     identifierToken: token;
     parameters: complexTypeValParams;
   };
 
   type complexTypeValParams =
     | {
-        hasParameters: true;
+        hasParametersList: true;
         value: argumentList<typeExpression, false>;
         openingBracketToken: token;
         closingBracketToken: token;
-        // comments: lexTokenType[] // TODO, add for better formatting in prettier
       }
-    | { hasParameters: false };
+    | { hasParametersList: false };
 
   type genericAnnotation =
     | {
@@ -236,8 +235,8 @@ export namespace Parser {
   type funcExprParamDefaultVal =
     | {
         hasDefaultValue: true;
-        defaultValueEqualsToken: token;
         value: expression;
+        defaultValueEqualsToken: token;
       }
     | { hasDefaultValue: false };
   // #endregion
@@ -295,7 +294,7 @@ export namespace Parser {
   // #endregion
   // #endregion
 
-  // #region helperF
+  // #region helper
   // #region traditional
   function isAtEnd(): boolean {
     return larser.isEof();
@@ -317,38 +316,45 @@ export namespace Parser {
 
   // check if the current token matches the tokens
   // assertion: not eof
-  function match(...tokens: string[]): boolean {
-    return tokens.includes(peek().lexeme);
+  function match(tokens: string | string[]): boolean {
+    // return tokens.includes(peek().lexeme);
+    return (
+      tokens === peek().lexeme ||
+      (Array.isArray(tokens) && tokens.includes(peek().lexeme))
+    );
   }
 
-  // check if the current token type matches the tokenTypes
+  // check if the current token type matches the tokenType
   // assertion: not eof
-  function matchType(...tokenTypes: tokenType[]): boolean {
-    return tokenTypes.includes(peek().type);
+  function matchType(tokenType: tokenType): boolean {
+    return tokenType === peek().type;
   }
   // #endregion
 
   // #region functional
+  // take all incomming comments, and put them in the comments array
   function consumeComments(comments: token[]): void {
     while (!isAtEnd() && matchType(tokenType.comment)) comments.push(advance());
   }
 
+  // an error happend, store it in the error array and return it
   function newParseError(arg: string | parseError): parseError & never {
-    const currentToken: optToken = !isAtEnd() ? peek() : undefined;
-
-    const parseError: parseError =
+    // cast arg to parseError type
+    arg =
       typeof arg === 'string'
         ? {
             type: 'error',
             message: arg,
             value: arg,
-            currentToken
+            currentToken: !isAtEnd() ? peek() : undefined
           }
         : arg;
-    parseErrors.push(parseError);
-    return parseError as never;
+
+    parseErrors.push(arg);
+    return arg as never;
   }
 
+  // checks if an unexpected eof happend, and throw an error if so
   function checkEofWithError(errorOnEof: string): void {
     if (!isAtEnd()) return;
 
@@ -482,80 +488,6 @@ export namespace Parser {
   }
   // #endregion
   // #endregion
-
-  // TODO local comments and eof
-  function parseComplexeTypeLine(): complexTypeValue {
-    const localComments: [] = []; // TODO add special comments to each complex type
-
-    consumeComments(localComments);
-
-    checkEofWithError(
-      'Invalid eof while parsing a line in a complex type statement'
-    );
-
-    const identifierToken: token = matchTypeAdvanceOrError(
-      tokenType.identifier,
-      'TODO invalid complex type statement: missing identifier'
-    );
-
-    consumeComments(localComments);
-
-    checkEofWithError(
-      'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
-    );
-
-    const openingBracketToken: optToken = optionalMatchAdvance('(');
-
-    if (isPresent(openingBracketToken)) consumeComments(localComments);
-
-    checkEofWithError(
-      'invalid eof in complex type statement after getting a "("'
-    );
-
-    const parameterValues: argumentList<typeExpression, false> =
-      callOnPresent(openingBracketToken, () =>
-        parseArgumentList<typeExpression, false>(
-          parseTypeExpression,
-          localComments,
-          false, // TODO does this make sense??
-          ')',
-          ',',
-          'TODO missing comma between two parameters in complex type value',
-          'TODO invalid value while parsing arguments for a complex type line',
-          'TODO invalid eof while parsing arguments from a complex type line',
-          { noEmptyList: false }
-        )
-      ) ?? [];
-
-    if (isPresent(openingBracketToken)) consumeComments(localComments);
-
-    const closingBracketToken: optToken = callOnPresent(
-      openingBracketToken,
-      () => matchAdvanceOrError(')', 'missing closing bracket in complex type')
-    );
-
-    checkEofWithError('Invalid eof at the end of a complex type expression');
-
-    // TODO what about `type Test { id id id, id id };`
-
-    const parameters: complexTypeValParams =
-      isPresent(openingBracketToken) ||
-      isPresent(closingBracketToken) ||
-      parameterValues.length !== 0
-        ? {
-            hasParameters: true,
-            value: parameterValues,
-            openingBracketToken: openingBracketToken!,
-            closingBracketToken: closingBracketToken!
-          }
-        : { hasParameters: false };
-
-    return {
-      identifierToken,
-      parameters,
-      comments: localComments
-    };
-  }
 
   // #region parser
   // can throw eof
@@ -762,8 +694,8 @@ export namespace Parser {
 
         // no consume for better local comments
 
-        const body: argumentList<complexTypeValue, true> = parseArgumentList<
-          complexTypeValue,
+        const body: argumentList<complexTypeLine, true> = parseArgumentList<
+          complexTypeLine,
           true
         >(
           parseComplexeTypeLine,
@@ -1081,7 +1013,7 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
 
-      while (match('==', '!=')) {
+      while (match(['==', '!='])) {
         const operatorToken: token = advance();
 
         consumeComments(comments);
@@ -1116,7 +1048,7 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
 
-      while (match('<', '>', '<=', '>=')) {
+      while (match(['<', '>', '<=', '>='])) {
         const operatorToken: token = advance();
 
         consumeComments(comments);
@@ -1151,7 +1083,7 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
 
-      while (match('<<', '>>')) {
+      while (match(['<<', '>>'])) {
         const operatorToken: token = advance();
 
         consumeComments(comments);
@@ -1186,7 +1118,7 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
 
-      while (match('-', '+')) {
+      while (match(['-', '+'])) {
         const operatorToken: token = advance();
 
         consumeComments(comments);
@@ -1221,7 +1153,7 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
 
-      while (match('*', '/', '%')) {
+      while (match(['*', '/', '%'])) {
         const operatorToken: token = advance();
 
         consumeComments(comments);
@@ -1258,7 +1190,7 @@ export namespace Parser {
 
       // right to left precedence:
       // if because precedence order
-      if (match('**', '***')) {
+      if (match(['**', '***'])) {
         const operatorToken: token = advance();
 
         consumeComments(comments);
@@ -1289,7 +1221,7 @@ export namespace Parser {
       checkEofWithError('invalid eof while parsing an expression');
 
       // unary:
-      if (match('!', '-', '+', '~')) {
+      if (match(['!', '-', '+', '~'])) {
         const operatorToken: token = advance();
 
         consumeComments(comments);
@@ -1324,7 +1256,7 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
 
-      while (match('(', '.')) {
+      while (match(['(', '.'])) {
         const token: token = advance();
 
         consumeComments(comments);
@@ -1654,6 +1586,80 @@ export namespace Parser {
     return parseExprLvl0();
   }
 
+  // TODO local comments and eof
+  function parseComplexeTypeLine(): complexTypeLine {
+    const localComments: [] = []; // TODO add special comments to each complex type
+
+    consumeComments(localComments);
+
+    checkEofWithError(
+      'Invalid eof while parsing a line in a complex type statement'
+    );
+
+    const identifierToken: token = matchTypeAdvanceOrError(
+      tokenType.identifier,
+      'TODO invalid complex type statement: missing identifier'
+    );
+
+    consumeComments(localComments);
+
+    checkEofWithError(
+      'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
+    );
+
+    const openingBracketToken: optToken = optionalMatchAdvance('(');
+
+    if (isPresent(openingBracketToken)) consumeComments(localComments);
+
+    checkEofWithError(
+      'invalid eof in complex type statement after getting a "("'
+    );
+
+    const parameterValues: argumentList<typeExpression, false> =
+      callOnPresent(openingBracketToken, () =>
+        parseArgumentList<typeExpression, false>(
+          parseTypeExpression,
+          localComments,
+          false, // TODO does this make sense??
+          ')',
+          ',',
+          'TODO missing comma between two parameters in complex type value',
+          'TODO invalid value while parsing arguments for a complex type line',
+          'TODO invalid eof while parsing arguments from a complex type line',
+          { noEmptyList: false }
+        )
+      ) ?? [];
+
+    if (isPresent(openingBracketToken)) consumeComments(localComments);
+
+    const closingBracketToken: optToken = callOnPresent(
+      openingBracketToken,
+      () => matchAdvanceOrError(')', 'missing closing bracket in complex type')
+    );
+
+    checkEofWithError('Invalid eof at the end of a complex type expression');
+
+    // TODO what about `type Test { id id id, id id };`
+
+    const parameters: complexTypeValParams =
+      isPresent(openingBracketToken) ||
+      isPresent(closingBracketToken) ||
+      parameterValues.length !== 0
+        ? {
+            hasParametersList: true,
+            value: parameterValues,
+            openingBracketToken: openingBracketToken!,
+            closingBracketToken: closingBracketToken!
+          }
+        : { hasParametersList: false };
+
+    return {
+      identifierToken,
+      parameters,
+      comments: localComments
+    };
+  }
+
   /*
   Type:
     i32
@@ -1924,6 +1930,7 @@ export namespace Parser {
         !e?.toString().includes('lexer can not lexe')
       )
         throw e;
+
       // else console.error('eof');
       return {} as any;
     }

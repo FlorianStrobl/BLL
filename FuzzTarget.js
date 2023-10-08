@@ -78,13 +78,15 @@ const validChars = [
 ];
 // file "FuzzTarget.js"
 
+let worked = 0;
+
 // tsc .\LCParser.ts --downlevelIteration --allowJs
 // npx jazzer FuzzTarget corpus --timeout=5 --sync
 module.exports.fuzz = function (data /*: Buffer */) {
   const fuzzerData = data.toString();
 
   //const lexed = Lexer.lexe(fuzzerData);
-  //if (lexed.valid && lexed.tokens.length > 0) {
-    const parsed = Parser.parse(fuzzerData);
- // }
+  const parsed = Parser.parse(fuzzerData);
+  if (parsed.valid)
+    if (++worked % 100 === 0) console.log(`did parse it: "${worked}" times`);
 };
