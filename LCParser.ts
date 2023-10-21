@@ -47,6 +47,8 @@ class Larser {
     const iteratorValue: Lexer.nextToken = iteratorNext.value;
     const isEof: boolean = iteratorValue.type === 'eof';
 
+    console.log('here', iteratorValue);
+
     // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
     if (!isEof && iteratorValue.type === 'token')
       this.state = { eof: false, currentToken: iteratorValue.value };
@@ -2215,9 +2217,10 @@ export namespace Parser {
     }
   }
 
-  debugParser();
+  // debugParser(0);
 }
 
+console.log(Lexer.lexe("let x = 5;"));
 const a = new Larser('let x = 5;');
 a.advanceToken();
 console.log(a.getCurrentToken());

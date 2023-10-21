@@ -1140,5 +1140,7 @@ _
     }
   }
 
-  // debugLexer();
+  // debugLexer(0);
 }
+
+console.log("CALLED");
