@@ -98,7 +98,7 @@ group Math {
   let exp[T] = func (b: T, e: T): T => b ** e;
   let log[T] = func (x: T, b: T): T => x *** b; // truncs for i32
 
-  // trigonometric functions
+  // trigonometric functions (TODO csc()...)
   let sin = func (x: f32): f32 => x; // TODO
   let cos = func (x: f32): f32 => sin(x + Math.PI / 2.0);
   let tan = func (x: f32): f32 => sin(x) / cos(x);
