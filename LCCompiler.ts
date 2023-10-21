@@ -388,7 +388,7 @@ export namespace Compiler {
       case 'literal':
         return exp.value.toString();
       case 'identifier':
-        return '%' + exp.identifierToken.lexeme;
+        return '%' + exp.identifierToken.lex;
       case 'match':
         return 'NOT DONE YET';
       case 'propertyAccess':
@@ -408,15 +408,15 @@ export namespace Compiler {
 
     const funcReturnType = 'i32';
 
-    const funcIdentifier = func.identifierToken.lexeme;
+    const funcIdentifier = func.identifierToken.lex;
 
     let funcParameters = '';
     for (const [key, param] of Object.entries(func.body.parameters))
       if (Number(key) === func.body.parameters.length - 1)
-        funcParameters += `${'i32'} %${param.argument.identifierToken.lexeme}`;
+        funcParameters += `${'i32'} %${param.argument.identifierToken.lex}`;
       else
         funcParameters += `${'i32'} %${
-          param.argument.identifierToken.lexeme
+          param.argument.identifierToken.lex
         }, `;
 
     let idCounter = { c: 0 };

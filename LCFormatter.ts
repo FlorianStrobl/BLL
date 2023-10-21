@@ -31,13 +31,13 @@ export namespace Formatter {
         );
       case 'identifier':
         return addColor(
-          expression.identifierToken.lexeme,
+          expression.identifierToken.lex,
           Colors.identifier,
           withColor
         );
       case 'primitive-type':
         return addColor(
-          expression.primitiveToken.lexeme,
+          expression.primitiveToken.lex,
           Colors.standardKeyword,
           withColor
         );
@@ -68,13 +68,13 @@ export namespace Formatter {
         );
       case 'literal':
         return addColor(
-          expression.literalToken.lexeme,
+          expression.literalToken.lex,
           Colors.numberLiteral,
           withColor
         );
       case 'identifier':
         return addColor(
-          expression.identifierToken.lexeme,
+          expression.identifierToken.lex,
           Colors.identifier,
           withColor
         );
@@ -83,7 +83,7 @@ export namespace Formatter {
           printExpression(expression.source, withColor) +
           addColor('.', Colors.symbol, withColor) +
           addColor(
-            expression.propertyToken.lexeme,
+            expression.propertyToken.lex,
             Colors.identifier,
             withColor
           )
@@ -119,7 +119,7 @@ export namespace Formatter {
             .map(
               (e) =>
                 addColor(
-                  e.argument.identifierToken.lexeme,
+                  e.argument.identifierToken.lex,
                   Colors.identifier,
                   withColor
                 ) +
@@ -170,7 +170,7 @@ export namespace Formatter {
               (e) =>
                 indent +
                 moreIndent +
-                addColor(e.lexeme, Colors.comments, withColor)
+                addColor(e.lex, Colors.comments, withColor)
             )
             .join('\n') + '\n'
         );
@@ -191,7 +191,7 @@ export namespace Formatter {
           (indent +
             (addColor('use ', Colors.standardKeyword, withColor) +
               addColor(
-                statement.filename.lexeme,
+                statement.filename.lex,
                 Colors.identifier,
                 withColor
               ) +
@@ -204,7 +204,7 @@ export namespace Formatter {
             indent +
             addColor('group ', Colors.standardKeyword, withColor) +
             addColor(
-              statement.identifierToken.lexeme,
+              statement.identifierToken.lex,
               Colors.identifier,
               withColor
             ) +
@@ -216,7 +216,7 @@ export namespace Formatter {
           (indent +
             (addColor('group ', Colors.standardKeyword, withColor) +
               addColor(
-                statement.identifierToken.lexeme,
+                statement.identifierToken.lex,
                 Colors.identifier,
                 withColor
               ) +
@@ -232,7 +232,7 @@ export namespace Formatter {
           (indent +
             (addColor('let ', Colors.keywordLet, withColor) +
               addColor(
-                statement.identifierToken.lexeme,
+                statement.identifierToken.lex,
                 Colors.identifier,
                 withColor
               ) +
@@ -240,7 +240,7 @@ export namespace Formatter {
                 ? addColor('[', Colors.symbol, withColor) +
                   statement.genericIdentifiers
                     .map((e) =>
-                      addColor(e.argument.lexeme, Colors.identifier, withColor)
+                      addColor(e.argument.lex, Colors.identifier, withColor)
                     )
                     .join(addColor(', ', Colors.symbol, withColor)) +
                   addColor(']', Colors.symbol, withColor)
@@ -267,7 +267,7 @@ export namespace Formatter {
                     indent +
                     indentSize +
                     addColor(
-                      e.argument.identifierToken.lexeme,
+                      e.argument.identifierToken.lex,
                       Colors.identifier,
                       withColor
                     ) +
@@ -291,7 +291,7 @@ export namespace Formatter {
           (indent +
             (addColor('type ', Colors.keywordType, withColor) +
               addColor(
-                statement.identifierToken.lexeme,
+                statement.identifierToken.lex,
                 Colors.identifier,
                 withColor
               ) +
@@ -299,7 +299,7 @@ export namespace Formatter {
                 ? addColor('[', Colors.symbol, withColor) +
                   statement.genericIdentifiers
                     .map((e) =>
-                      addColor(e.argument.lexeme, Colors.identifier, withColor)
+                      addColor(e.argument.lex, Colors.identifier, withColor)
                     )
                     .join(addColor(', ', Colors.symbol, withColor)) +
                   addColor(']', Colors.symbol, withColor)
@@ -312,7 +312,7 @@ export namespace Formatter {
           (indent +
             (addColor('type ', Colors.keywordType, withColor) +
               addColor(
-                statement.identifierToken.lexeme,
+                statement.identifierToken.lex,
                 Colors.identifier,
                 withColor
               ) +
@@ -320,7 +320,7 @@ export namespace Formatter {
                 ? addColor('[', Colors.symbol, withColor) +
                   statement.genericIdentifiers
                     .map((e) =>
-                      addColor(e.argument.lexeme, Colors.identifier, withColor)
+                      addColor(e.argument.lex, Colors.identifier, withColor)
                     )
                     .join(addColor(', ', Colors.symbol, withColor)) +
                   addColor(']', Colors.symbol, withColor)

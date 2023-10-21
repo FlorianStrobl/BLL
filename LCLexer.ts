@@ -193,8 +193,8 @@ export namespace Lexer {
 
   // #region types, interfaces and enums
   export interface token {
-    lexeme: string; // the raw character sequence in the src code, matching a token pattern
-    type: tokenType;
+    lex: string; // the raw character sequence in the src code, matching a token pattern
+    ty: tokenType;
     idx: number; // index of the lexeme in the src code
   }
 
@@ -318,12 +318,12 @@ export namespace Lexer {
     return {
       type: 'token',
       value: {
-        type: floatLiterals.includes(identifier)
+        ty: floatLiterals.includes(identifier)
           ? tokenType.literal
           : keywords.includes(identifier)
           ? tokenType.keyword
           : tokenType.identifier,
-        lexeme: identifier,
+        lex: identifier,
         idx
       }
     };
@@ -361,7 +361,7 @@ export namespace Lexer {
 
     return {
       type: 'token',
-      value: { type: tokenType.symbol, lexeme: symbol, idx }
+      value: { ty: tokenType.symbol, lex: symbol, idx }
     };
   }
 
@@ -492,15 +492,15 @@ export namespace Lexer {
 
       if (
         nextToken.type === 'token' &&
-        (nextToken.value.type === tokenType.identifier ||
-          nextToken.value.type === tokenType.keyword ||
-          nextToken.value.type === tokenType.literal)
+        (nextToken.value.ty === tokenType.identifier ||
+          nextToken.value.ty === tokenType.keyword ||
+          nextToken.value.ty === tokenType.literal)
       ) {
         return {
           type: 'error',
           value: {
             type: 'identifier connected to numeric literal',
-            chars: literal + nextToken.value.lexeme,
+            chars: literal + nextToken.value.lex,
             invalidIdentifierIdx: nextToken.value.idx,
             idx
           }
@@ -568,7 +568,7 @@ export namespace Lexer {
 
     return {
       type: 'token',
-      value: { type: tokenType.literal, lexeme: literal, idx }
+      value: { ty: tokenType.literal, lex: literal, idx }
     };
   }
 
@@ -620,7 +620,7 @@ export namespace Lexer {
     )
       return {
         type: 'token',
-        value: { type: tokenType.comment, lexeme: comment, idx }
+        value: { ty: tokenType.comment, lex: comment, idx }
       };
     else
       return {
@@ -781,7 +781,7 @@ export namespace Lexer {
       // error message if idx would stay the same in the next iteration
       if (
         nToken.type === 'token'
-          ? nToken.value.lexeme.length === 0
+          ? nToken.value.lex.length === 0
           : nToken.value.chars.length === 0
       )
         throw new Error('Internal lexer error: could not lexe the next token.');
@@ -789,7 +789,7 @@ export namespace Lexer {
       idx =
         nToken.value.idx +
         (nToken.type === 'token'
-          ? nToken.value.lexeme.length
+          ? nToken.value.lex.length
           : nToken.value.chars.length);
 
       yield nToken;

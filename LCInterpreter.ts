@@ -58,7 +58,7 @@ export namespace Interpreter {
             // TODO what if namespace itself is not public: would change the public value of the var to the outside world (which is already different for each and every thing lol)
             const vals = extractValues(statement.body, [
               ...namespacePath,
-              statement.identifierToken.lexeme
+              statement.identifierToken.lex
             ]);
             lets.push(...vals.lets);
             types.push(...vals.types);
@@ -92,7 +92,7 @@ export namespace Interpreter {
     for (const l of val.lets) {
       globalLetIdentifiers.push({
         identifier: (l.statement.type === 'let' &&
-          l.statement.identifierToken.lexeme) as string,
+          l.statement.identifierToken.lex) as string,
         expr: (l.statement.type === 'let' && l.statement.body) as any
       });
     }
@@ -101,7 +101,7 @@ export namespace Interpreter {
     const mainFuncIdx = val.lets.findIndex(
       (obj) =>
         obj.statement.type === 'let' &&
-        obj.statement.identifierToken.lexeme === 'main' &&
+        obj.statement.identifierToken.lex === 'main' &&
         obj.path.length === 0
     );
     if (mainFuncIdx === -1)
@@ -147,7 +147,7 @@ export namespace Interpreter {
         return evaluateExpression(expression.body, localIdentifiers);
       case 'identifier':
         const localValue = localIdentifiers.find(
-          (id) => id[0] === expression.identifierToken.lexeme
+          (id) => id[0] === expression.identifierToken.lex
         );
         if (localValue !== undefined)
           // TODO
@@ -155,7 +155,7 @@ export namespace Interpreter {
         else
           return evaluateExpression(
             globalLetIdentifiers.find(
-              (id) => id.identifier === expression.identifierToken.lexeme
+              (id) => id.identifier === expression.identifierToken.lex
             )!.expr, // TODO invalid `!`
             localIdentifiers
           );
@@ -238,8 +238,8 @@ export namespace Interpreter {
             {
               argument: {
                 identifierToken: {
-                  lexeme: '$',
-                  type: Lexer.tokenType.identifier,
+                  lex: '$',
+                  ty: Lexer.tokenType.identifier,
                   idx: -1
                 },
                 typeAnnotation: { explicitType: false },
@@ -250,8 +250,8 @@ export namespace Interpreter {
             {
               argument: {
                 identifierToken: {
-                  lexeme: '$$',
-                  type: Lexer.tokenType.identifier,
+                  lex: '$$',
+                  ty: Lexer.tokenType.identifier,
                   idx: -1
                 },
                 typeAnnotation: { explicitType: false },
@@ -265,8 +265,8 @@ export namespace Interpreter {
               ? {
                   type: 'identifier',
                   identifierToken: {
-                    lexeme: '$',
-                    type: Lexer.tokenType.identifier,
+                    lex: '$',
+                    ty: Lexer.tokenType.identifier,
                     idx: -1
                   },
                   comments: []
@@ -274,8 +274,8 @@ export namespace Interpreter {
               : {
                   type: 'identifier',
                   identifierToken: {
-                    lexeme: '$$',
-                    type: Lexer.tokenType.identifier,
+                    lex: '$$',
+                    ty: Lexer.tokenType.identifier,
                     idx: -1
                   },
                   comments: []
@@ -318,7 +318,7 @@ export namespace Interpreter {
         for (let i = 0; i < funcParameters.length; ++i) {
           const curParam = funcParameters[i].argument;
           localIdentifiers.push([
-            curParam.identifierToken.lexeme,
+            curParam.identifierToken.lex,
             i < callingArguments.length
               ? callingArguments[i].argument
               : curParam.defaultValue.hasDefaultValue

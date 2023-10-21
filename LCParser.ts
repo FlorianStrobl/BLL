@@ -72,6 +72,23 @@ export namespace Parser {
   let parseErrors: parseError[] = [];
   let larser: Larser;
 
+  // an error happend, store it in the error array and return it
+  function newParseError(arg: string | parseError): parseError & never {
+    // cast arg to parseError type
+    arg =
+      typeof arg === 'string'
+        ? {
+            type: 'error',
+            message: arg,
+            value: arg,
+            currentToken: !isAtEnd() ? peek() : undefined
+          }
+        : arg;
+
+    parseErrors.push(arg);
+    return arg as never;
+  }
+
   // #region types
   type optional<T> = T | undefined;
 
@@ -314,52 +331,31 @@ export namespace Parser {
   // check if the current token matches the tokens
   // assertion: not eof
   function match(tokens: string | string[]): boolean {
-    // return tokens.includes(peek().lexeme);
     return (
-      tokens === peek().lexeme ||
-      (Array.isArray(tokens) && tokens.includes(peek().lexeme))
+      tokens === peek().lex ||
+      (Array.isArray(tokens) && tokens.includes(peek().lex))
     );
   }
 
   // check if the current token type matches the tokenType
   // assertion: not eof
   function matchType(tokenType: tokenType): boolean {
-    return tokenType === peek().type;
+    return tokenType === peek().ty;
   }
   // #endregion
 
   // #region functional
-  // take all incomming comments, and put them in the comments array
-  function consumeComments(comments: token[]): void {
-    while (!isAtEnd() && matchType(tokenType.comment)) comments.push(advance());
-  }
-
-  // an error happend, store it in the error array and return it
-  function newParseError(arg: string | parseError): parseError & never {
-    // cast arg to parseError type
-    arg =
-      typeof arg === 'string'
-        ? {
-            type: 'error',
-            message: arg,
-            value: arg,
-            currentToken: !isAtEnd() ? peek() : undefined
-          }
-        : arg;
-
-    parseErrors.push(arg);
-    return arg as never;
-  }
-
   // checks if an unexpected eof happend, and throw an error if so
   function checkEofWithError(errorOnEof: string): void {
     if (!isAtEnd()) return;
 
     newParseError('Invalid eof while parsing code: ' + errorOnEof);
     throw 'eof';
+  }
 
-    // TODO should print out all errors in a formatted way, aswell as the eof error
-    // then stop the program *but* then the parser would have to import logger...
+  // take all incomming comments, and put them in the comments array
+  function consumeComments(comments: token[]): void {
+    while (!isAtEnd() && matchType(tokenType.comment)) comments.push(advance());
   }
 
   // on match: advance
@@ -389,7 +385,7 @@ export namespace Parser {
     return value !== undefined;
   }
 
-  // calls the callback function if and only if present is not undefined
+  // calls the callback function if and only if present is there
   function callOnPresent<T, U>(
     present: NonNullable<U> | undefined,
     callBack: () => T
@@ -405,13 +401,12 @@ export namespace Parser {
     comments: token[],
     hasLocalComments: localComments,
     endToken: string,
-    delimiterToken: string,
-    missingDelimiterError: string | parseError,
-    invalidArgumentError: string,
-    eofError: string,
+    delimiter: { token: string; missingError: string | parseError },
     emptyList:
       | { noEmptyList: true; errorMessage: string | parseError }
-      | { noEmptyList: false }
+      | { noEmptyList: false },
+    invalidArgumentError: string,
+    eofError: string
   ): argumentList<T, localComments> {
     const argumentList: argumentList<T, localComments> = [];
     let lastDelimiterToken: optToken = undefined;
@@ -428,20 +423,20 @@ export namespace Parser {
       checkEofWithError(eofError);
 
       if (argumentList.length !== 0 && !isPresent(lastDelimiterToken))
-        newParseError(missingDelimiterError);
+        newParseError(delimiter.missingError);
 
       const debugCurrentTokenIdx: number = peek().idx;
 
-      const argument: T = match(delimiterToken) /*better error msgs*/
+      const argument: T = match(delimiter.token) /*better error msgs*/
         ? newParseError(invalidArgumentError)
         : parseArgument();
 
       if (hasLocalComments) consumeComments(localComments);
       else consumeComments(comments);
 
-      // no isAtEnd check!
+      checkEofWithError(eofError);
 
-      lastDelimiterToken = optionalMatchAdvance(delimiterToken);
+      lastDelimiterToken = optionalMatchAdvance(delimiter.token);
 
       if (hasLocalComments) {
         argumentList.push({
@@ -449,22 +444,22 @@ export namespace Parser {
           delimiterToken: lastDelimiterToken,
           localComments: [...localComments]
         });
-      } else
+
+        // clear comments for next run
+        localComments = [];
+        consumeComments(localComments);
+      } else {
         argumentList.push({
           argument,
           delimiterToken: lastDelimiterToken
         } as never);
 
-      // TODO get comments after the delimiter token?
-      if (hasLocalComments) {
-        // clear comments for next run
-        // TODO WHAT IF NOTHING COMES AFTER THIS ONE!!!!!
-        localComments = [];
-        consumeComments(localComments);
-      } else consumeComments(comments);
+        consumeComments(comments);
+      }
 
       checkEofWithError(eofError);
 
+      // better error messages
       if (debugCurrentTokenIdx === peek().idx) {
         newParseError(invalidArgumentError);
         break;
@@ -487,9 +482,10 @@ export namespace Parser {
   // #endregion
 
   // #region parser
-  // can throw eof
+  // assert: not eof
   function parseStatement(): statement | parseError {
-    checkEofWithError('could not parse any statement because of eof');
+    if (isAtEnd())
+      throw new Error('Internal parser error: assertion not met, code is eof.');
 
     const comments: token[] = [];
     consumeComments(comments);
@@ -525,14 +521,12 @@ export namespace Parser {
         'TODO cant have a group statement without an opening brackt "{"'
       );
 
-      checkEofWithError(
-        'unexpected eof in group statement after the opening bracket'
-      );
+      // no consume comments or eof check
 
       const body: statement[] = [];
       while (!isAtEnd() && !match('}')) {
         const statement: statement | parseError = parseStatement();
-        if (statement.type === 'error') break;
+        if (statement.type === 'error') break; // handled somewhere else
         body.push(statement);
       }
 
@@ -540,7 +534,7 @@ export namespace Parser {
 
       const closingBracketToken: token = matchAdvanceOrError(
         '}',
-        'TODO internal error, did not match what thought would have been matched'
+        'TODO internal error, did not match "}" but expected it for end of group statement'
       );
 
       return {
@@ -617,17 +611,19 @@ export namespace Parser {
             comments,
             false,
             ']',
-            ',',
-            'missing comma in generic type statement',
+            {
+              token: ',',
+              missingError: 'missing comma in generic type statement'
+            },
+            { noEmptyList: true, errorMessage: 'TODO' },
             'invalid token in generic type statement',
-            'unexpected eof in generic type statement',
-            { noEmptyList: true, errorMessage: 'TODO' }
+            'unexpected eof in generic type statement'
           )
         );
 
       consumeComments(comments);
 
-      checkEofWithError('TODO');
+      checkEofWithError('eof inside type statement');
 
       const genericClosingBracketToken: optToken = callOnPresent(
         genericOpeningBracketToken,
@@ -640,7 +636,7 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      checkEofWithError('TODO');
+      checkEofWithError('eof inside type statement');
 
       const generic: genericAnnotation = isPresent(genericOpeningBracketToken)
         ? {
@@ -675,11 +671,11 @@ export namespace Parser {
           type: 'type-alias',
           identifierToken,
           body,
+          ...generic,
           typeToken,
           equalsToken,
           semicolonToken,
-          comments,
-          ...generic
+          comments
         };
       }
       if (match('{')) {
@@ -699,11 +695,10 @@ export namespace Parser {
           comments,
           true,
           '}',
-          ',',
-          'missing comma in complex type body',
+          { token: ',', missingError: 'missing comma in complex type body' },
+          { noEmptyList: false },
           'invalid or missing argument in complex type body',
-          'eof inside complex type statement',
-          { noEmptyList: false }
+          'eof inside complex type statement'
         );
 
         consumeComments(comments);
@@ -719,11 +714,11 @@ export namespace Parser {
           type: 'complex-type',
           identifierToken,
           body,
+          ...generic,
           typeToken,
           openingBracketToken,
           closingBracketToken,
-          comments,
-          ...generic
+          comments
         };
       }
 
@@ -769,15 +764,18 @@ export namespace Parser {
             comments,
             false,
             ']',
-            ',',
-            'missing comma token in generic let statement declaration',
-            'did not match an identifier in generic let statement',
-            'unexpected eof in generic let statement',
+            {
+              token: ',',
+              missingError:
+                'missing comma token in generic let statement declaration'
+            },
             {
               noEmptyList: true,
               errorMessage:
                 'must have identifiers in let generic let statement list'
-            }
+            },
+            'did not match an identifier in generic let statement',
+            'unexpected eof in generic let statement'
           )
         );
 
@@ -888,7 +886,7 @@ export namespace Parser {
       // probably this case: group g { /*comment*/ }
       return { type: 'comment', comments };
 
-    return newParseError('TODO could not parse any statement properly');
+    return newParseError('could not parse any statement properly');
   }
 
   // isEof checks
@@ -918,7 +916,7 @@ export namespace Parser {
 
         leftSide = {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -929,6 +927,7 @@ export namespace Parser {
       return leftSide;
     }
 
+    // TODO fix boilerplate
     function parseExprLvl1(): expression {
       const comments: token[] = [];
 
@@ -953,7 +952,7 @@ export namespace Parser {
 
         leftSide = {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -988,7 +987,7 @@ export namespace Parser {
 
         leftSide = {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -1023,7 +1022,7 @@ export namespace Parser {
 
         leftSide = {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -1058,7 +1057,7 @@ export namespace Parser {
 
         leftSide = {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -1093,7 +1092,7 @@ export namespace Parser {
 
         leftSide = {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -1128,7 +1127,7 @@ export namespace Parser {
 
         leftSide = {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -1163,7 +1162,7 @@ export namespace Parser {
 
         leftSide = {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -1200,7 +1199,7 @@ export namespace Parser {
 
         return {
           type: 'binary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           leftSide,
           rightSide,
           operatorToken,
@@ -1231,7 +1230,7 @@ export namespace Parser {
 
         return {
           type: 'unary',
-          operator: operatorToken.lexeme,
+          operator: operatorToken.lex,
           body,
           operatorToken,
           comments
@@ -1259,7 +1258,7 @@ export namespace Parser {
         consumeComments(comments);
         checkEofWithError('invalid eof while parsing an expression');
 
-        if (token.lexeme === '.') {
+        if (token.lex === '.') {
           // f.
           const propertyToken: token = matchTypeAdvanceOrError(
             tokenType.identifier,
@@ -1286,11 +1285,13 @@ export namespace Parser {
             comments,
             false,
             ')',
-            ',',
-            'TODO, missing comma in function call argument list',
+            {
+              token: ',',
+              missingError: 'TODO, missing comma in function call argument list'
+            },
+            { noEmptyList: false },
             'TODO wrong type expression in function call argument list',
-            'TODO unexpected eof while parsing a function call argument list',
-            { noEmptyList: false }
+            'TODO unexpected eof while parsing a function call argument list'
           );
 
           checkEofWithError('Had eof in function calling expression');
@@ -1360,7 +1361,7 @@ export namespace Parser {
         consumeComments(comments);
         checkEofWithError('invalid eof while parsing an expression');
 
-        const lexeme: string = literalToken.lexeme;
+        const lexeme: string = literalToken.lex;
         const literalType: 'i32' | 'f32' =
           lexeme.includes('.') ||
           (!lexeme.startsWith('0x') && lexeme.includes('e')) ||
@@ -1508,11 +1509,14 @@ export namespace Parser {
         comments,
         false,
         ')',
-        ',',
-        'Invalid func expression: missing comma in argument list',
+        {
+          token: ',',
+          missingError:
+            'Invalid func expression: missing comma in argument list'
+        },
+        { noEmptyList: false },
         'TODO invalid function argument parsed',
-        'TODO unexpected eof while parsing function arguments',
-        { noEmptyList: false }
+        'TODO unexpected eof while parsing function arguments'
       );
 
       consumeComments(comments);
@@ -1619,11 +1623,14 @@ export namespace Parser {
           localComments,
           false, // TODO does this make sense??
           ')',
-          ',',
-          'TODO missing comma between two parameters in complex type value',
+          {
+            token: ',',
+            missingError:
+              'TODO missing comma between two parameters in complex type value'
+          },
+          { noEmptyList: false },
           'TODO invalid value while parsing arguments for a complex type line',
-          'TODO invalid eof while parsing arguments from a complex type line',
-          { noEmptyList: false }
+          'TODO invalid eof while parsing arguments from a complex type line'
         )
       ) ?? [];
 
@@ -1669,13 +1676,14 @@ export namespace Parser {
     ( TYPE { , TYPE }+  { , }? ) -> TYPE // none empty grouping: arg list
     TYPE -> TYPE // parse as binary operator with check
 */
+  // TODO complexTypeVal[i32] for complex type subsitution
   function parseTypeExpression(): typeExpression {
     type argList = {
       type: 'arglist';
       body: argumentList<typeExpression, false>;
-      openingBracketToken: Lexer.token;
-      closingBracketToken: Lexer.token;
-      comments: Lexer.token[];
+      openingBracketToken: token;
+      closingBracketToken: token;
+      comments: token[];
     };
 
     function parseTypeExpression0(): typeExpression {
@@ -1813,14 +1821,16 @@ export namespace Parser {
           comments,
           false,
           ']',
-          ',',
-          'missing comma in generic type substitution',
-          'TODO invalid argument in generic type substitution',
-          'unexpected eof while parsing ',
+          {
+            token: ',',
+            missingError: 'missing comma in generic type substitution'
+          },
           {
             noEmptyList: true,
             errorMessage: 'a type substition needs at least one argument'
-          }
+          },
+          'TODO invalid argument in generic type substitution',
+          'unexpected eof while parsing '
         );
 
         // TODO probably not needed since handled above
@@ -1864,11 +1874,14 @@ export namespace Parser {
           comments,
           false,
           ')',
-          ',',
-          'missing comma token while parsing an argument list in type expression',
+          {
+            token: ',',
+            missingError:
+              'missing comma token while parsing an argument list in type expression'
+          },
+          { noEmptyList: false },
           'invalid value for grouping expression or argument list: expected a type but got something else',
-          'unexpected eof while parsing an argument list in type expression',
-          { noEmptyList: false }
+          'unexpected eof while parsing an argument list in type expression'
         );
 
         consumeComments(comments);
@@ -2175,7 +2188,7 @@ export namespace Parser {
         .fill(0)
         .map((_, i) =>
           Lexer.lexe(mustParse[i][0])
-            .tokens.map((t) => t.lexeme)
+            .tokens.map((t) => t.lex)
             .join(`/*comment ${i}*/`)
         );
 
@@ -2280,7 +2293,7 @@ const code = [
 const codeWithComments: string =
   '/**/' +
   Lexer.lexe(code[0])
-    .tokens.map((t) => t.lexeme)
+    .tokens.map((t) => t.lex)
     .join(' /*comment*/ ') +
   '/**/';
 
