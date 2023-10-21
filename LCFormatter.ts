@@ -271,7 +271,7 @@ export namespace Formatter {
                       Colors.identifier,
                       withColor
                     ) +
-                    (e.argument.parameters.hasParameters
+                    (e.argument.parameters.hasParametersList
                       ? addColor('(', Colors.symbol, withColor) +
                         e.argument.parameters.value
                           .map((a) =>

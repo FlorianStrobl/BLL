@@ -5,6 +5,10 @@ import { Compiler } from './LCCompiler';
 import { Formatter } from './LCFormatter';
 import * as errs from './FErrorMsgs';
 import * as test from './LCIdentifierCheck';
+import * as fs from 'fs';
+
+const ans = fs.readFileSync('./std.bll').toString();
+console.log('HERE', Parser.parse(ans));
 
 // @ts-ignore
 import { inspect } from 'util';
@@ -69,9 +73,9 @@ let f[T]: (T, T -> T) -> T
 
 
 // with any arg: 22
-let main = func (arg: i32): i32 => f1();
+let main = func (arg: f32): f32 => f1();
 // with arg2=5: 3
-let f1 = func (arg2: i32 = 22): i32 => f(arg2);
+let f1 = func (arg2: f32 = 22.5): f32 => f(arg2);
 
 // with arg=5: 16
 // let main = func (arg: i32): i32 => f2(arg+2);

@@ -1,6 +1,10 @@
 import { Lexer } from './LCLexer';
 // @ts-ignore
 import { inspect } from 'util';
+import * as F from './FErrorMsgs';
+
+const log = (args: any) =>
+  console.log(inspect(args, { depth: 999, colors: true }));
 
 // #region lexer code for parser
 // can throw internal errors when assertions are not met
@@ -39,17 +43,14 @@ class Larser {
 
     // this.previousToken = this.currentToken;
 
-    const lexerNext: IteratorResult<Lexer.nextToken, Lexer.nextToken> =
-      this.lexer.next();
-    const lexerNextValue: Lexer.nextToken = lexerNext.value;
-
-    const lexerIsNotDone: boolean = lexerNext.done === false;
-    const eof: boolean = lexerIsNotDone && lexerNextValue.type === 'eof';
+    const iteratorNext: IteratorResult<Lexer.nextToken> = this.lexer.next();
+    const iteratorValue: Lexer.nextToken = iteratorNext.value;
+    const isEof: boolean = iteratorValue.type === 'eof';
 
     // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
-    if (!eof && lexerNextValue.type === 'token')
-      this.state = { eof: false, currentToken: lexerNextValue.value };
-    else if (eof) this.state = { eof: true, currentToken: undefined };
+    if (!isEof && iteratorValue.type === 'token')
+      this.state = { eof: false, currentToken: iteratorValue.value };
+    else if (isEof) this.state = { eof: true, currentToken: undefined };
     else this.errorHandling();
   }
 
@@ -58,18 +59,14 @@ class Larser {
 
     if (tokens.valid)
       throw new Error(
-        'Internal error, parser does not accepped the valid tokens from the lexer: ' +
-          tokens.tokens?.toString()
+        'Internal parser error: did not accept the valid tokens from the lexer: ' +
+          JSON.stringify(tokens.tokens)
       );
 
-    // console.error(tokens);
     throw 'lexer can not lexe';
   }
 }
 // #endregion
-
-const log = (args: any) =>
-  console.log(inspect(args, { depth: 999, colors: true }));
 
 export namespace Parser {
   let parseErrors: parseError[] = [];
@@ -1936,14 +1933,21 @@ export namespace Parser {
     }
   }
 
-  function debugParser() {
+  function debugParser(times: number = 2) {
     const timerAndIO: boolean = true;
 
-    const timerName: string = 'Parser tests';
-    if (timerAndIO) console.time(timerName);
+    console.log(
+      `[Debug Parser] Example parser: '${JSON.stringify(
+        Parser.parse('let x: i32 = 5;')
+      )}'`
+    );
 
-    const mustParse: string[] = [
-      `use std;
+    for (let i = 0; i < times; ++i) {
+      const timerName: string = 'Parser tests';
+      if (timerAndIO) console.time(timerName);
+
+      const mustParse: string[] = [
+        `use std;
 
     let x: i32 = 5 << 3;
     let y: f32 = nan / inf;
@@ -1965,11 +1969,11 @@ export namespace Parser {
     group test {
       let val = 4 + 3 * 3 % 3 & 3 - a(3);
     }`,
-      '',
-      '      let f = func (x, a = 5, b = c) => a;',
-      '//comment',
-      `let x = func (a, b) => a + 4 - 2;`,
-      `type
+        '',
+        '      let f = func (x, a = 5, b = c) => a;',
+        '//comment',
+        `let x = func (a, b) => a + 4 - 2;`,
+        `type
       simpleType =
 
   f32 ->  (f32     ,     f32,) -> i32
@@ -1977,9 +1981,9 @@ export namespace Parser {
   ; // test
   ;/*test*/; group t {//ok
   }`,
-      `let x[A]: A = func (x: A = 4
+        `let x[A]: A = func (x: A = 4
     +3): A => x;`,
-      `
+        `
       let a: () -> A = 0;
       let b: B -> C = 1;
       let c: (D,) -> E = 2;
@@ -1987,19 +1991,19 @@ export namespace Parser {
       let e: (J,K,L) -> M = 4;
       let f: (N) -> O = 5;
       `,
-      'let x: A -> (B) -> (C,) -> (D, E) -> (F) = 5;',
-      'let x: A -> ((B) -> (C )) -> (D, E) -> (F) = 5;',
-      '// test',
-      '/* test */',
-      '/*test*/ /*hey*/ ; /*tast*/ /*ok*/',
-      'group test { let a[T, T2] = 5; let b = 3; let c = 2; }',
-      'use test;',
-      'let test = 5;',
-      'type test = i32;',
-      'type test { }',
-      'group test { }',
-      'let test = ! ~ + - 1 + 1 - 1 * 1 / 1 ** 1 *** 1 % 1 & 1 | 1 ^ 1 << 1 >> 1 == 1 != 1 <= 1 >= 1 < 1 > 1;',
-      `let a: f32 = 4.5e3;
+        'let x: A -> (B) -> (C,) -> (D, E) -> (F) = 5;',
+        'let x: A -> ((B) -> (C )) -> (D, E) -> (F) = 5;',
+        '// test',
+        '/* test */',
+        '/*test*/ /*hey*/ ; /*tast*/ /*ok*/',
+        'group test { let a[T, T2] = 5; let b = 3; let c = 2; }',
+        'use test;',
+        'let test = 5;',
+        'type test = i32;',
+        'type test { }',
+        'group test { }',
+        'let test = ! ~ + - 1 + 1 - 1 * 1 / 1 ** 1 *** 1 % 1 & 1 | 1 ^ 1 << 1 >> 1 == 1 != 1 <= 1 >= 1 < 1 > 1;',
+        `let a: f32 = 4.5e3;
       // a
       type cmpx[hey] {
         // b
@@ -2017,41 +2021,41 @@ export namespace Parser {
       }
       // other
       // test two`,
-      // `type weekdays {
-      //   Saturday,
-      //   Sunday,
-      //   Monday,
-      //   Tuesday,
-      //   Wednesday,
-      //   Thursday,
-      //   Friday
-      // }
+        // `type weekdays {
+        //   Saturday,
+        //   Sunday,
+        //   Monday,
+        //   Tuesday,
+        //   Wednesday,
+        //   Thursday,
+        //   Friday
+        // }
 
-      // let f = func (weekday: weekdays): i32 =>
-      //   match (weekday): i32 {
-      //     case Saturday => 1;
-      //     case Sunday => 1;
-      //     0; // default for the other days
-      //   };`,
-      'let x = func (x: i32 -> i32,) => 5;',
-      'let a = func (x: (i32) -> i32) => x(5);',
-      'let a = func (x: () -> i32) => 5;',
-      '/* comment */ let /*0*/ x /*1*/ : /*2*/ ( /*3*/ i32 /*4*/ , /*5*/ ) /*6*/ -> /*7*/ i32 /*8*/ = /*9*/ func /*10*/ ( /*11*/ x /*12*/ , /*13*/ ) /*14*/ => /*15*/ 5 /*16*/ ; /*17*/',
-      'group test /*0*/ { /*1*/ let x = 5; /*2*/ } /*3*/',
-      `group test {
+        // let f = func (weekday: weekdays): i32 =>
+        //   match (weekday): i32 {
+        //     case Saturday => 1;
+        //     case Sunday => 1;
+        //     0; // default for the other days
+        //   };`,
+        'let x = func (x: i32 -> i32,) => 5;',
+        'let a = func (x: (i32) -> i32) => x(5);',
+        'let a = func (x: () -> i32) => 5;',
+        '/* comment */ let /*0*/ x /*1*/ : /*2*/ ( /*3*/ i32 /*4*/ , /*5*/ ) /*6*/ -> /*7*/ i32 /*8*/ = /*9*/ func /*10*/ ( /*11*/ x /*12*/ , /*13*/ ) /*14*/ => /*15*/ 5 /*16*/ ; /*17*/',
+        'group test /*0*/ { /*1*/ let x = 5; /*2*/ } /*3*/',
+        `group test {
         type t = i32;
         let a: ((t,t,) -> t,) -> t =
           func (x: (t,t,) -> t,): t => x(5, 3,);
       }`,
-      `type t {
+        `type t {
         identifier1(),
         identifier2(i32),
         identifier3,
       }
 
       type t2 = t;`,
-      'type complexType { test, test2(), test3(i32 -> f32, hey, ) }',
-      `
+        'type complexType { test, test2(), test3(i32 -> f32, hey, ) }',
+        `
   use file;
 
   let i = nan;
@@ -2077,142 +2081,152 @@ export namespace Parser {
     let b = 6.0;
   }
   `
-    ];
-    const mustNotParseButLexe: string[] = [
-      '}',
-      `let f = func (x, a = 5, b) => a;`,
-      'x = 5',
-      'let x: A -> ((B) -> (C,)) -> (D, E) -> (F) = 5;',
-      'test',
-      '5',
-      '5.0',
-      'i32',
-      'f32',
-      'nan',
-      'inf',
-      'use',
-      'let',
-      'type',
-      'group',
-      'func',
-      'match',
-      'func (x) => x',
-      'let x = func ( => 5;',
-      'let x = func () 5;',
-      'let x = func () => 5',
-      '+',
-      '!',
-      'use;',
-      'use',
-      'use test',
-      'group p {',
-      'let nan',
-      'let func',
-      'let () => )',
-      'let x',
-      'let x]',
-      'let x[',
-      'let func ] =>',
-      'let x = func (x: i32 => i32) => 5;',
-      'let x = func (x: i32 -> i32) -> 5;',
-      'let x',
-      'let y =',
-      'let x = 5',
-      'let x = ;',
-      'let x 5 ;',
-      'let = 5 ;',
-      'x = 5 ;',
-      'let x: = 5;',
-      `type t {
+      ];
+      const mustNotParseButLexe: string[] = [
+        '}',
+        `let f = func (x, a = 5, b) => a;`,
+        'x = 5',
+        'let x: A -> ((B) -> (C,)) -> (D, E) -> (F) = 5;',
+        'test',
+        '5',
+        '5.0',
+        'i32',
+        'f32',
+        'nan',
+        'inf',
+        'use',
+        'let',
+        'type',
+        'group',
+        'func',
+        'match',
+        'func (x) => x',
+        'let x = func ( => 5;',
+        'let x = func () 5;',
+        'let x = func () => 5',
+        '+',
+        '!',
+        'use;',
+        'use',
+        'use test',
+        'group p {',
+        'let nan',
+        'let func',
+        'let () => )',
+        'let x',
+        'let x]',
+        'let x[',
+        'let func ] =>',
+        'let x = func (x: i32 => i32) => 5;',
+        'let x = func (x: i32 -> i32) -> 5;',
+        'let x',
+        'let y =',
+        'let x = 5',
+        'let x = ;',
+        'let x 5 ;',
+        'let = 5 ;',
+        'x = 5 ;',
+        'let x: = 5;',
+        `type t {
         identifier1()
         identifier2(i32)
         identifier3
       }`
-    ];
+      ];
 
-    // TODO add for each mustParse a comment in between each value
-    // TODO for each mustParse, remove one by one the last token,
-    // and check if the code does not crash
+      // TODO add for each mustParse a comment in between each value
+      // TODO for each mustParse, remove one by one the last token,
+      // and check if the code does not crash
 
-    const mustParseWithComments: string[] = new Array(mustParse.length)
-      .fill(0)
-      .map((_, i) =>
-        Lexer.lexe(mustParse[i])
-          .tokens.map((t) => t.lexeme)
-          .join(`/*comment ${i}*/`)
-      );
+      const mustParseWithComments: string[] = new Array(mustParse.length)
+        .fill(0)
+        .map((_, i) =>
+          Lexer.lexe(mustParse[i])
+            .tokens.map((t) => t.lexeme)
+            .join(`/*comment ${i}*/`)
+        );
 
-    let successfullTests: number = 0;
-    for (const code of mustParse) {
-      try {
-        let ans = parse(code);
+      let successfullTests: number = 0;
+      for (const code of mustParse) {
+        try {
+          let ans = parse(code);
 
-        if (!ans?.valid) {
-          console.error('Should parse:', code);
-          log(ans);
-        } else successfullTests++;
-      } catch (e) {
-        console.error('INTERNAL ERROR:', code, e);
+          if (!ans?.valid) {
+            console.error('Should parse:', code);
+            log(ans);
+          } else successfullTests++;
+        } catch (e) {
+          console.error('INTERNAL ERROR:', code, e);
+        }
       }
-    }
-    for (const code of mustNotParseButLexe) {
-      if (!Lexer.lexe(code).valid)
-        throw new Error('this code should be lexable: ' + code);
+      for (const code of mustNotParseButLexe) {
+        if (!Lexer.lexe(code).valid)
+          throw new Error('this code should be lexable: ' + code);
 
-      try {
-        let ans = parse(code);
-        if (ans.valid) {
-          console.log('Should not parse: ', code);
-          log(ans);
-        } else successfullTests++;
-      } catch (e) {
-        console.error('INTERNAL ERROR', code, e);
+        try {
+          let ans = parse(code);
+          if (ans.valid) {
+            console.log('Should not parse: ', code);
+            log(ans);
+          } else successfullTests++;
+        } catch (e) {
+          console.error('INTERNAL ERROR', code, e);
+        }
       }
+
+      if (
+        timerAndIO &&
+        successfullTests === mustParse.length + mustNotParseButLexe.length
+      ) {
+        console.debug(
+          `Parsed successfully ${successfullTests} tests and ${
+            mustParse.map((e) => e[0]).reduce((a, b) => a + b).length +
+            mustNotParseButLexe.reduce((a, b) => a + b).length
+          } characters.`
+        );
+      } else if (
+        successfullTests !==
+        mustParse.length + mustNotParseButLexe.length
+      )
+        console.error(
+          `${
+            mustParse.length + mustNotParseButLexe.length - successfullTests
+          } failed tests in the Parser-stage!`
+        );
+
+      if (timerAndIO) console.timeEnd(timerName);
+
+      // console.time('t');
+      // // group test { let x = 5 + 2 * (func (x) => x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
+      // // let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
+      // // invalid to do: `a.(b).c` but (a.b).c is ok
+      // // let _ = a(5+32,4)
+
+      // // use std; let _ = (func (x) => 3 * x)(5);
+
+      // // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
+      // // TODO where are the opening brackets of tust??
+      // const parsed = parse(
+      //   'let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;'
+      // );
+      // console.timeEnd('t');
+
+      // log(parsed);
     }
-
-    if (
-      timerAndIO &&
-      successfullTests === mustParse.length + mustNotParseButLexe.length
-    ) {
-      console.debug(
-        `Parsed successfully ${successfullTests} tests and ${
-          mustParse.map((e) => e[0]).reduce((a, b) => a + b).length +
-          mustNotParseButLexe.reduce((a, b) => a + b).length
-        } characters.`
-      );
-    } else if (
-      successfullTests !==
-      mustParse.length + mustNotParseButLexe.length
-    )
-      console.error(
-        `${
-          mustParse.length + mustNotParseButLexe.length - successfullTests
-        } failed tests in the Parser-stage!`
-      );
-
-    if (timerAndIO) console.timeEnd(timerName);
-
-    // console.time('t');
-    // // group test { let x = 5 + 2 * (func (x) => x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }
-    // // let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
-    // // invalid to do: `a.(b).c` but (a.b).c is ok
-    // // let _ = a(5+32,4)
-
-    // // use std; let _ = (func (x) => 3 * x)(5);
-
-    // // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
-    // // TODO where are the opening brackets of tust??
-    // const parsed = parse(
-    //   'let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;'
-    // );
-    // console.timeEnd('t');
-
-    // log(parsed);
   }
 
-  // for (let i = 0; i < 2; ++i) debugParser();
+  debugParser();
 }
 
+const a = new Larser('let x = 5;');
+a.advanceToken();
+console.log(a.getCurrentToken());
+a.advanceToken();
+console.log(a.getCurrentToken());
+a.advanceToken();
+console.log(a.getCurrentToken());
+a.advanceToken();
+console.log(a.getCurrentToken());
 // log(Parser.parse('let x = 3;'));
 
 // #region debug
