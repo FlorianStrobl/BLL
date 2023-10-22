@@ -72,23 +72,6 @@ export namespace Parser {
   let parseErrors: parseError[] = [];
   let larser: Larser;
 
-  // an error happend, store it in the error array and return it
-  function newParseError(arg: string | parseError): parseError & never {
-    // cast arg to parseError type
-    arg =
-      typeof arg === 'string'
-        ? {
-            type: 'error',
-            message: arg,
-            value: arg,
-            currentToken: !isAtEnd() ? peek() : undefined
-          }
-        : arg;
-
-    parseErrors.push(arg);
-    return arg as never;
-  }
-
   // #region types
   type optional<T> = T | undefined;
 
@@ -309,6 +292,23 @@ export namespace Parser {
   // #endregion
 
   // #region helper
+  // an error happend, store it in the error array and return it
+  function newParseError(arg: string | parseError): parseError & never {
+    // cast arg to parseError type
+    arg =
+      typeof arg === 'string'
+        ? {
+            type: 'error',
+            message: arg,
+            value: arg,
+            currentToken: !isAtEnd() ? peek() : undefined
+          }
+        : arg;
+
+    parseErrors.push(arg);
+    return arg as never;
+  }
+
   // #region traditional
   function isAtEnd(): boolean {
     return larser.isEof();
@@ -779,13 +779,9 @@ export namespace Parser {
           )
         );
 
-      if (
-        isPresent(genericOpeningBracketToken) &&
-        (!isPresent(genericIdentifiers) || genericIdentifiers.length === 0)
-      )
-        newParseError('missing generic token values in generic let statement');
+      consumeComments(comments);
 
-      if (isPresent(genericOpeningBracketToken)) consumeComments(comments);
+      checkEofWithError('in let statement');
 
       const genericClosingBracketToken: optToken = callOnPresent(
         genericOpeningBracketToken,
@@ -806,8 +802,8 @@ export namespace Parser {
 
       consumeComments(comments);
 
-      if (isPresent(colonToken))
-        checkEofWithError('unexpected eof in let statement after getting ":"');
+      // error message must be true, else it would have errored above
+      checkEofWithError('unexpected eof in let statement after getting ":"');
 
       const typeAnnotation: optional<typeExpression> = callOnPresent(
         colonToken,
@@ -889,355 +885,173 @@ export namespace Parser {
     return newParseError('could not parse any statement properly');
   }
 
-  // isEof checks
+  // TODO isEof checks
   function parseExpression(): expression {
-    function parseExprLvl0(): expression {
+    function parseExprLvl(
+      symbols: string | string[],
+      nextLevel: () => expression,
+      arity: 'binary' | 'unary',
+      associativity: 'left-to-right' | 'right-to-left' | 'unary'
+    ): expression {
       const comments: token[] = [];
 
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
 
-      let leftSide: expression = parseExprLvl1();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      // TODO isAtEnd() and consumeComment()
-      while (match('|')) {
-        const operatorToken: token = advance();
+      if (arity === 'binary') {
+        let leftSide: expression = nextLevel();
 
         consumeComments(comments);
         checkEofWithError('invalid eof while parsing an expression');
 
-        const rightSide: expression = parseExprLvl1();
+        if (associativity === 'left-to-right') {
+          while (match(symbols)) {
+            const operatorToken: token = advance();
 
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
+            consumeComments(comments);
+            checkEofWithError('invalid eof while parsing an expression');
 
-        leftSide = {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
+            const rightSide: expression = nextLevel();
 
-      return leftSide;
+            consumeComments(comments);
+            checkEofWithError('invalid eof while parsing an expression');
+
+            leftSide = {
+              type: 'binary',
+              operator: operatorToken.lex,
+              leftSide,
+              rightSide,
+              operatorToken,
+              comments
+            };
+          }
+        } else if (associativity === 'right-to-left') {
+          if (match(symbols)) {
+            const operatorToken: token = advance();
+
+            consumeComments(comments);
+            checkEofWithError('invalid eof while parsing an expression');
+
+            // ourself because of associativity
+            const rightSide: expression = parseExprLvl(
+              symbols,
+              nextLevel,
+              arity,
+              associativity
+            );
+
+            consumeComments(comments);
+            checkEofWithError('invalid eof while parsing an expression');
+
+            return {
+              type: 'binary',
+              operator: operatorToken.lex,
+              leftSide,
+              rightSide,
+              operatorToken,
+              comments
+            };
+          }
+        } else
+          throw new Error('Internal error, misuse of typescripts type system');
+
+        return leftSide;
+      } else if (arity === 'unary') {
+        if (match(symbols)) {
+          const operatorToken: token = advance();
+
+          consumeComments(comments);
+          checkEofWithError('invalid eof while parsing an expression');
+
+          // parse same level as body
+          const body: expression = parseExprLvl(
+            symbols,
+            nextLevel,
+            arity,
+            associativity
+          );
+
+          consumeComments(comments);
+          checkEofWithError('invalid eof while parsing an expression');
+
+          return {
+            type: 'unary',
+            operator: operatorToken.lex,
+            body,
+            operatorToken,
+            comments
+          };
+        } else return nextLevel();
+      } else
+        throw new Error('Internal error, misuse of typescripts type system');
     }
 
-    // TODO fix boilerplate
-    function parseExprLvl1(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      let leftSide: expression = parseExprLvl2();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      while (match('^')) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const rightSide: expression = parseExprLvl2();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        leftSide = {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
-
-      return leftSide;
-    }
-
-    function parseExprLvl2(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      let leftSide: expression = parseExprLvl3();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      while (match('&')) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const rightSide: expression = parseExprLvl3();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        leftSide = {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
-
-      return leftSide;
-    }
-
-    function parseExprLvl3(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      let leftSide: expression = parseExprLvl4();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      while (match(['==', '!='])) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const rightSide: expression = parseExprLvl4();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        leftSide = {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
-
-      return leftSide;
-    }
-
-    function parseExprLvl4(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      let leftSide: expression = parseExprLvl5();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      while (match(['<', '>', '<=', '>='])) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const rightSide: expression = parseExprLvl5();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        leftSide = {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
-
-      return leftSide;
-    }
-
-    function parseExprLvl5(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      let leftSide: expression = parseExprLvl6();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      while (match(['<<', '>>'])) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const rightSide: expression = parseExprLvl6();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        leftSide = {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
-
-      return leftSide;
-    }
-
-    function parseExprLvl6(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      let leftSide: expression = parseExprLvl7();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      while (match(['-', '+'])) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const rightSide: expression = parseExprLvl7();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        leftSide = {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
-
-      return leftSide;
-    }
-
-    function parseExprLvl7(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      let leftSide: expression = parseExprLvl8();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      while (match(['*', '/', '%'])) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const rightSide: expression = parseExprLvl8();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        leftSide = {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
-
-      return leftSide;
-    }
-
-    function parseExprLvl8(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      const leftSide: expression = parseExprLvl9();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      // right to left precedence:
-      // if because precedence order
-      if (match(['**', '***'])) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const rightSide: expression = parseExprLvl8(); // TODO right? same level because precedence order
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        return {
-          type: 'binary',
-          operator: operatorToken.lex,
-          leftSide,
-          rightSide,
-          operatorToken,
-          comments
-        };
-      }
-
-      return leftSide;
-    }
-
-    function parseExprLvl9(): expression {
-      const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      // unary:
-      if (match(['!', '-', '+', '~'])) {
-        const operatorToken: token = advance();
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        const body: expression = parseExprLvl9(); // same level?? TODO
-
-        consumeComments(comments);
-        checkEofWithError('invalid eof while parsing an expression');
-
-        return {
-          type: 'unary',
-          operator: operatorToken.lex,
-          body,
-          operatorToken,
-          comments
-        };
-      }
-
-      return parseExprLvl10();
+    // returns the first parse expression level
+    function generateLvls(finalLevels: () => expression): () => expression {
+      type precedenceInformation = {
+        symbols: string | string[];
+        arity: 'binary' | 'unary';
+        associativity: 'left-to-right' | 'right-to-left' | 'unary';
+      };
+
+      const table: precedenceInformation[] = [
+        { symbols: '|', arity: 'binary', associativity: 'left-to-right' },
+        { symbols: '^', arity: 'binary', associativity: 'left-to-right' },
+        { symbols: '&', arity: 'binary', associativity: 'left-to-right' },
+        {
+          symbols: ['==', '!='],
+          arity: 'binary',
+          associativity: 'left-to-right'
+        },
+        {
+          symbols: ['<', '>', '<=', '>='],
+          arity: 'binary',
+          associativity: 'left-to-right'
+        },
+        {
+          symbols: ['<<', '>>'],
+          arity: 'binary',
+          associativity: 'left-to-right'
+        },
+        {
+          symbols: ['-', '+'],
+          arity: 'binary',
+          associativity: 'left-to-right'
+        },
+        {
+          symbols: ['*', '/', '%'],
+          arity: 'binary',
+          associativity: 'left-to-right'
+        },
+        {
+          symbols: ['**', '***'],
+          arity: 'binary',
+          associativity: 'right-to-left'
+        },
+        {
+          symbols: ['!', '-', '+', '~'],
+          arity: 'unary',
+          associativity: 'unary'
+        }
+      ];
+      // inverse the levels for easier time in funcArr
+      table.reverse();
+
+      const funcArray: (() => expression)[] = [];
+      for (let i = 0; i < table.length; ++i)
+        funcArray.push(() =>
+          parseExprLvl(
+            table[i].symbols,
+            i === 0 ? finalLevels : funcArray[i - 1],
+            table[i].arity,
+            table[i].associativity
+          )
+        );
+
+      // bring them back in the original order
+      //funcArray.reverse();
+
+      return funcArray[funcArray.length - 1];
     }
 
     // TODO debug and consumeComments(comments)/isAtEnd()
@@ -1265,9 +1079,6 @@ export namespace Parser {
             'TODO invalid property access'
           );
 
-          // TODO error: what about having e.g. just a `5` for propertyToken
-          // wrong error rn...
-
           left = {
             type: 'propertyAccess',
             source: left,
@@ -1290,15 +1101,17 @@ export namespace Parser {
               missingError: 'TODO, missing comma in function call argument list'
             },
             { noEmptyList: false },
-            'TODO wrong type expression in function call argument list',
-            'TODO unexpected eof while parsing a function call argument list'
+            'wrong type expression in function call argument list',
+            'unexpected eof while parsing a function call argument list'
           );
 
-          checkEofWithError('Had eof in function calling expression');
+          checkEofWithError('eof in function calling expression');
+
           const closingBracketToken: token = matchAdvanceOrError(
             ')',
-            'TODO internal error'
+            'TODO internal error' // yes?
           );
+
           left = {
             type: 'functionCall',
             function: left,
@@ -1584,7 +1397,7 @@ export namespace Parser {
       return {} as any;
     }
 
-    return parseExprLvl0();
+    return generateLvls(parseExprLvl10)();
   }
 
   // TODO local comments and eof
@@ -1948,6 +1761,11 @@ export namespace Parser {
     if (times !== 0 && timerAndIO && example)
       console.log(`[Debug Parser] Example parser: '${JSON.stringify(x)}'`);
 
+    if (times !== 0 && timerAndIO)
+      console.log('lexer works: ', Lexer.debugLexer(1, false, false));
+
+    // TODO test all operator precedences
+
     for (let i = 0; i < times; ++i) {
       const timerName: string = 'Parser tests';
       if (timerAndIO) console.time(timerName);
@@ -1960,6 +1778,14 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
+        [
+          `let x = func (a) =>
+        (- (2 - 3 - 4) == - -5)                  &
+        (2 ** 3 ** 4  == 2.4178516392292583e+24) &
+        (2 * 3 * 4 == 24)                        &
+        ((2 + 3 * 4 == 2 + (3 * 4)) & ((2 + 3) * 4 != 2 + 3 * 4));`,
+          1
+        ],
         [
           `group test { let x = 5 + 2 * (func (x) => x + 3 | 1 << 2 > 4).a.b() + nan + inf + 3e-3; }`,
           1
@@ -2250,10 +2076,10 @@ export namespace Parser {
     }
   }
 
-  debugParser(1, true, false);
+  debugParser(0, true, false);
 }
 
-// log(Parser.parse('let x = 3;'));
+// log(Parser.parse('let x = 2 ** 3 ** 4;'));
 
 // #region debug
 const code = [

@@ -820,14 +820,16 @@ export namespace Lexer {
   }
   // #endregion
 
-  function debugLexer(
+  export function debugLexer(
     times: number = 2,
     timerAndIO: boolean = true,
     example: boolean = false
-  ): void {
+  ): boolean {
     const x = Lexer.lexe('let xyz: i32 = 52 == 0x5a; // test');
     if (times !== 0 && timerAndIO && example)
       console.log(`[Debug Lexer] Example tokens: '${JSON.stringify(x)}'`);
+
+    let correct: boolean = false;
 
     for (let i = 0; i < times; ++i) {
       const timerName: string = 'Lexer tests';
@@ -1119,17 +1121,15 @@ _
         else successfullTests++;
       }
 
-      if (
-        timerAndIO &&
-        successfullTests === mustLexe.length + mustNotLexe.length
-      ) {
+      correct = successfullTests === mustLexe.length + mustNotLexe.length;
+      if (timerAndIO && correct) {
         console.debug(
           `Lexer successfully lexed ${successfullTests} tests and ${
             mustLexe.map((e) => e[0]).join('').length +
             mustNotLexe.map((e) => e[0]).join('').length
           } characters.`
         );
-      } else if (successfullTests !== mustLexe.length + mustNotLexe.length)
+      } else if (!correct)
         console.error(
           `${
             mustLexe.length + mustNotLexe.length - successfullTests
@@ -1139,7 +1139,9 @@ _
 
       if (timerAndIO) console.timeEnd(timerName);
     }
+
+    return correct;
   }
 
-  debugLexer(0, true, false);
+  debugLexer(1, false, false);
 }

@@ -394,7 +394,30 @@ export namespace Compiler {
       case 'propertyAccess':
         return 'NOT DONE YET';
       case 'functionCall':
-        return 'NOT DONE YET';
+        let _str: string = '';
+        const idxBefore: number = varCounter.c;
+        // TODO even wrong, because of lazy evaluation... (do not exec all the expr beforhand)
+        for (const arg of exp.arguments) {
+          console.log('called this with ', JSON.stringify(arg));
+          _str += `%Z${varCounter.c++} = i32 ${todoCompileSimpleExpression(
+            arg.argument,
+            varCounter
+          )}\n`;
+        }
+        const difference: number = varCounter.c - idxBefore;
+
+        let funcName: string = 'DEBUG';
+        funcName =
+          exp.function.type === 'identifier'
+            ? exp.function.identifierToken.lex
+            : funcName;
+
+        return `${_str} %Z${varCounter.c++} = call i32 @${funcName}(${new Array(
+          difference
+        )
+          .fill(0)
+          .map((_, i) => `i32 %Z${i}`)
+          .join(', ')})`;
       case 'func':
         return 'NOT DONE YET';
     }
@@ -415,9 +438,7 @@ export namespace Compiler {
       if (Number(key) === func.body.parameters.length - 1)
         funcParameters += `${'i32'} %${param.argument.identifierToken.lex}`;
       else
-        funcParameters += `${'i32'} %${
-          param.argument.identifierToken.lex
-        }, `;
+        funcParameters += `${'i32'} %${param.argument.identifierToken.lex}, `;
 
     let idCounter = { c: 0 };
     const funcBody = todoCompileSimpleExpression(func.body.body, idCounter);
@@ -434,12 +455,13 @@ export namespace Compiler {
     code: string,
     fileName: string
   ): string {
-    let str = '';
+    let str = `target triple = "i386-pc-linux-gnu"
+@.str = private constant [12 x i8] c"answer: %i\\0A\\00"\n`;
 
     for (let i = 0; i < ast.length; ++i)
       if (ast[i].type === 'let' && (ast[i] as any).body.type === 'func')
         str += todoCompileSimpleFunction(ast[i]) + '\n\n';
 
-    return str;
+    return str + "\ndeclare i32 @printf(i8*, ...)";
   }
 }

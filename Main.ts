@@ -64,16 +64,28 @@ type binaryTree[T] {
 // let fac = func (n, erg) => n(erg, fac (n-1, erg+n));
 // let main = func (arg: i32) => fac(arg, 0);
 
-let f[T]: (T, T -> T) -> T
-  = func (
-     v: T,
-     fn: T -> T = func (x: T): T => x
-    ): T => fn(v);
+// let f[T]: (T, T -> T) -> T
+//   = func (
+//      v: T,
+//      fn: T -> T = func (x: T): T => x
+//     ): T => fn(v);
 
 
+let main = func (a) => (
+  (- (2 - 3 - 4) == - -5)                  &
+  (2 ** 3 ** 4  == 2.4178516392292583e+24) &
+  (2 * 3 * 4 == 24)                        &
+  ((2 + 3 * 4 == 2 + (3 * 4)) & ((2 + 3) * 4 != 2 + 3 * 4)));
+
+//let add = func (a, b) => a + b;
+
+// let my_function = func (x, y) => x % y;
+//let main = func (arg) => add(arg, 2);
+
+// let factorial = func (n: i32): i32 => n( /*n==0*/ 1, /*n!=0*/ n * factorial(n-1) );
 
 // with any arg: 22
-let main = func (arg: f32): f32 => f1();
+//let main = func (arg: f32): f32 => f1();
 // with arg2=5: 3
 let f1 = func (arg2: f32 = 22.5): f32 => f(arg2);
 
