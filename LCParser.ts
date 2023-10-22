@@ -85,6 +85,11 @@ export namespace Parser {
     delimiterToken: optToken;
   } & (localComments extends true ? { localComments: token[] } : {}))[];
   type comment = { comments: token[] };
+  type precedenceInformation = {
+    symbols: string | string[];
+    arity: 'binary' | 'unary';
+    associativity: 'left-to-right' | 'right-to-left' | 'unary';
+  };
 
   // TODO
   export type parseError = {
@@ -887,6 +892,48 @@ export namespace Parser {
 
   // TODO isEof checks
   function parseExpression(): expression {
+    const precedenceTable: precedenceInformation[] = [
+      { symbols: '|', arity: 'binary', associativity: 'left-to-right' },
+      { symbols: '^', arity: 'binary', associativity: 'left-to-right' },
+      { symbols: '&', arity: 'binary', associativity: 'left-to-right' },
+      {
+        symbols: ['==', '!='],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['<', '>', '<=', '>='],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['<<', '>>'],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['-', '+'],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['*', '/', '%'],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['**', '***'],
+        arity: 'binary',
+        associativity: 'right-to-left'
+      },
+      {
+        symbols: ['!', '-', '+', '~'],
+        arity: 'unary',
+        associativity: 'unary'
+      }
+    ];
+
+    // parse an expression level, given the next inner level of precedence
     function parseExprLvl(
       symbols: string | string[],
       nextLevel: () => expression,
@@ -898,7 +945,40 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
 
-      if (arity === 'binary') {
+      if (arity === 'unary') {
+        // skip
+        if (!match(symbols)) return nextLevel();
+
+        const operatorToken: token = advance();
+
+        consumeComments(comments);
+        checkEofWithError('invalid eof while parsing an expression');
+
+        // parse same level as body
+        const body: expression = parseExprLvl(
+          symbols,
+          nextLevel,
+          arity,
+          associativity
+        );
+
+        consumeComments(comments);
+        checkEofWithError('invalid eof while parsing an expression');
+
+        return {
+          type: 'unary',
+          operator: operatorToken.lex,
+          body,
+          operatorToken,
+          comments
+        };
+      } else if (arity === 'binary') {
+        if (
+          associativity !== 'left-to-right' &&
+          associativity !== 'right-to-left'
+        )
+          throw new Error('Internal error, misuse of typescripts type system');
+
         let leftSide: expression = nextLevel();
 
         consumeComments(comments);
@@ -952,106 +1032,37 @@ export namespace Parser {
               comments
             };
           }
-        } else
-          throw new Error('Internal error, misuse of typescripts type system');
+        }
 
         return leftSide;
-      } else if (arity === 'unary') {
-        if (match(symbols)) {
-          const operatorToken: token = advance();
+      }
 
-          consumeComments(comments);
-          checkEofWithError('invalid eof while parsing an expression');
-
-          // parse same level as body
-          const body: expression = parseExprLvl(
-            symbols,
-            nextLevel,
-            arity,
-            associativity
-          );
-
-          consumeComments(comments);
-          checkEofWithError('invalid eof while parsing an expression');
-
-          return {
-            type: 'unary',
-            operator: operatorToken.lex,
-            body,
-            operatorToken,
-            comments
-          };
-        } else return nextLevel();
-      } else
-        throw new Error('Internal error, misuse of typescripts type system');
+      throw new Error('Internal error, misuse of typescripts type system');
     }
 
     // returns the first parse expression level
-    function generateLvls(finalLevels: () => expression): () => expression {
-      type precedenceInformation = {
-        symbols: string | string[];
-        arity: 'binary' | 'unary';
-        associativity: 'left-to-right' | 'right-to-left' | 'unary';
-      };
+    function generateLvlFromTable(
+      precedenceTable: precedenceInformation[],
+      finalLevel: () => expression
+    ): () => expression {
+      // inverse the levels for easier time in funcs
+      precedenceTable = [...precedenceTable].reverse();
 
-      const table: precedenceInformation[] = [
-        { symbols: '|', arity: 'binary', associativity: 'left-to-right' },
-        { symbols: '^', arity: 'binary', associativity: 'left-to-right' },
-        { symbols: '&', arity: 'binary', associativity: 'left-to-right' },
-        {
-          symbols: ['==', '!='],
-          arity: 'binary',
-          associativity: 'left-to-right'
-        },
-        {
-          symbols: ['<', '>', '<=', '>='],
-          arity: 'binary',
-          associativity: 'left-to-right'
-        },
-        {
-          symbols: ['<<', '>>'],
-          arity: 'binary',
-          associativity: 'left-to-right'
-        },
-        {
-          symbols: ['-', '+'],
-          arity: 'binary',
-          associativity: 'left-to-right'
-        },
-        {
-          symbols: ['*', '/', '%'],
-          arity: 'binary',
-          associativity: 'left-to-right'
-        },
-        {
-          symbols: ['**', '***'],
-          arity: 'binary',
-          associativity: 'right-to-left'
-        },
-        {
-          symbols: ['!', '-', '+', '~'],
-          arity: 'unary',
-          associativity: 'unary'
-        }
-      ];
-      // inverse the levels for easier time in funcArr
-      table.reverse();
-
-      const funcArray: (() => expression)[] = [];
-      for (let i = 0; i < table.length; ++i)
-        funcArray.push(() =>
+      const funcs: (() => expression)[] = [];
+      for (let i = 0; i < precedenceTable.length; ++i)
+        funcs.push(() =>
           parseExprLvl(
-            table[i].symbols,
-            i === 0 ? finalLevels : funcArray[i - 1],
-            table[i].arity,
-            table[i].associativity
+            precedenceTable[i].symbols,
+            i === 0 ? finalLevel : funcs[i - 1],
+            precedenceTable[i].arity,
+            precedenceTable[i].associativity
           )
         );
 
       // bring them back in the original order
-      //funcArray.reverse();
+      //funcs.reverse();
 
-      return funcArray[funcArray.length - 1];
+      return funcs[funcs.length - 1];
     }
 
     // TODO debug and consumeComments(comments)/isAtEnd()
@@ -1397,7 +1408,7 @@ export namespace Parser {
       return {} as any;
     }
 
-    return generateLvls(parseExprLvl10)();
+    return generateLvlFromTable(precedenceTable, parseExprLvl10)();
   }
 
   // TODO local comments and eof
