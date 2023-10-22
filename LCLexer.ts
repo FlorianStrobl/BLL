@@ -318,12 +318,12 @@ export namespace Lexer {
     return {
       type: 'token',
       value: {
+        lex: identifier,
         ty: floatLiterals.includes(identifier)
           ? tokenType.literal
           : keywords.includes(identifier)
           ? tokenType.keyword
           : tokenType.identifier,
-        lex: identifier,
         idx
       }
     };
@@ -361,7 +361,7 @@ export namespace Lexer {
 
     return {
       type: 'token',
-      value: { ty: tokenType.symbol, lex: symbol, idx }
+      value: { lex: symbol, ty: tokenType.symbol, idx }
     };
   }
 
@@ -568,7 +568,7 @@ export namespace Lexer {
 
     return {
       type: 'token',
-      value: { ty: tokenType.literal, lex: literal, idx }
+      value: { lex: literal, ty: tokenType.literal, idx }
     };
   }
 
@@ -620,7 +620,7 @@ export namespace Lexer {
     )
       return {
         type: 'token',
-        value: { ty: tokenType.comment, lex: comment, idx }
+        value: { lex: comment, ty: tokenType.comment, idx }
       };
     else
       return {
