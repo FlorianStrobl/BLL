@@ -250,7 +250,7 @@ export namespace Parser {
       }
     | { hasDefaultValue: false };
 
-  type matchBodyLine = {
+  type matchBodyLine = comment & {
     identifierToken: token;
     parameters: matchBodyLineArgs;
     body: expression;
@@ -509,187 +509,6 @@ export namespace Parser {
 
     return argumentList;
   }
-  // #endregion
-
-  // #region expression parsing
-  const precedenceTable: precedenceInformation[] = [
-    { symbols: '|', arity: 'binary', associativity: 'left-to-right' },
-    { symbols: '^', arity: 'binary', associativity: 'left-to-right' },
-    { symbols: '&', arity: 'binary', associativity: 'left-to-right' },
-    {
-      symbols: ['==', '!='],
-      arity: 'binary',
-      associativity: 'left-to-right'
-    },
-    {
-      symbols: ['<', '>', '<=', '>='],
-      arity: 'binary',
-      associativity: 'left-to-right'
-    },
-    {
-      symbols: ['<<', '>>'],
-      arity: 'binary',
-      associativity: 'left-to-right'
-    },
-    {
-      symbols: ['-', '+'],
-      arity: 'binary',
-      associativity: 'left-to-right'
-    },
-    {
-      symbols: ['*', '/', '%'],
-      arity: 'binary',
-      associativity: 'left-to-right'
-    },
-    {
-      symbols: ['**', '***'],
-      arity: 'binary',
-      associativity: 'right-to-left'
-    },
-    {
-      symbols: ['!', '-', '+', '~'],
-      arity: 'unary',
-      associativity: 'unary'
-    }
-  ];
-
-  // parse an expression level, given the next inner level of precedence
-  function parseExprLvl(
-    symbols: string | string[],
-    nextLevel: () => expression,
-    arity: 'binary' | 'unary',
-    associativity: 'left-to-right' | 'right-to-left' | 'unary'
-  ): expression {
-    const comments: token[] = [];
-
-    consumeComments(comments);
-    checkEofWithError('invalid eof while parsing an expression');
-
-    if (arity === 'unary') {
-      // skip
-      if (!match(symbols)) return nextLevel();
-
-      const operatorToken: token = advance();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      // parse same level as body
-      const body: expression = parseExprLvl(
-        symbols,
-        nextLevel,
-        arity,
-        associativity
-      );
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      return {
-        type: 'unary',
-        operator: operatorToken.lex,
-        body,
-        operatorToken,
-        comments
-      };
-    } else if (arity === 'binary') {
-      if (
-        associativity !== 'left-to-right' &&
-        associativity !== 'right-to-left'
-      )
-        throw new Error('Internal error, misuse of typescripts type system');
-
-      let leftSide: expression = nextLevel();
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
-      if (associativity === 'left-to-right') {
-        while (match(symbols)) {
-          const operatorToken: token = advance();
-
-          consumeComments(comments);
-          checkEofWithError('invalid eof while parsing an expression');
-
-          const rightSide: expression = nextLevel();
-
-          consumeComments(comments);
-          checkEofWithError('invalid eof while parsing an expression');
-
-          leftSide = {
-            type: 'binary',
-            operator: operatorToken.lex,
-            leftSide,
-            rightSide,
-            operatorToken,
-            comments
-          };
-        }
-      } else if (associativity === 'right-to-left') {
-        if (match(symbols)) {
-          const operatorToken: token = advance();
-
-          consumeComments(comments);
-          checkEofWithError('invalid eof while parsing an expression');
-
-          // ourself because of associativity
-          const rightSide: expression = parseExprLvl(
-            symbols,
-            nextLevel,
-            arity,
-            associativity
-          );
-
-          consumeComments(comments);
-          checkEofWithError('invalid eof while parsing an expression');
-
-          return {
-            type: 'binary',
-            operator: operatorToken.lex,
-            leftSide,
-            rightSide,
-            operatorToken,
-            comments
-          };
-        }
-      }
-
-      return leftSide;
-    }
-
-    throw new Error('Internal error, misuse of typescripts type system');
-  }
-
-  // returns the first parse expression level
-  function generateLvlFromTable(
-    precedenceTable: precedenceInformation[],
-    finalLevel: () => expression
-  ): () => expression {
-    // inverse the levels for easier time in funcs
-    precedenceTable = [...precedenceTable].reverse();
-
-    const funcs: (() => expression)[] = [];
-    for (let i = 0; i < precedenceTable.length; ++i)
-      funcs.push(() =>
-        parseExprLvl(
-          precedenceTable[i].symbols,
-          i === 0 ? finalLevel : funcs[i - 1],
-          precedenceTable[i].arity,
-          precedenceTable[i].associativity
-        )
-      );
-
-    // bring them back in the original order
-    // not possible this way, because it overwrites some functions
-    //funcs.reverse();
-
-    return funcs[funcs.length - 1];
-  }
-
-  // TODO, caching must not be delayed
-  const parseFirstExprLevels: (_: () => expression) => expression = (
-    nextLevel: () => expression
-  ) => generateLvlFromTable(precedenceTable, nextLevel)();
   // #endregion
   // #endregion
 
@@ -1178,8 +997,229 @@ export namespace Parser {
 
   // TODO isEof checks
   function parseExpression(): expression {
+    const precedenceTable: precedenceInformation[] = [
+      { symbols: '|', arity: 'binary', associativity: 'left-to-right' },
+      { symbols: '^', arity: 'binary', associativity: 'left-to-right' },
+      { symbols: '&', arity: 'binary', associativity: 'left-to-right' },
+      {
+        symbols: ['==', '!='],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['<', '>', '<=', '>='],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['<<', '>>'],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['-', '+'],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['*', '/', '%'],
+        arity: 'binary',
+        associativity: 'left-to-right'
+      },
+      {
+        symbols: ['**', '***'],
+        arity: 'binary',
+        associativity: 'right-to-left'
+      },
+      {
+        symbols: ['!', '-', '+', '~'],
+        arity: 'unary',
+        associativity: 'unary'
+      }
+    ];
+
+    // parse an expression level, given the next inner level of precedence
+    function parseExprLvl(
+      symbols: string | string[],
+      arity: 'binary' | 'unary',
+      associativity: 'left-to-right' | 'right-to-left' | 'unary',
+      nextLevel: () => expression
+    ): expression {
+      const comments: token[] = [];
+
+      consumeComments(comments);
+      checkEofWithError('invalid eof while parsing an expression');
+
+      if (arity === 'unary') {
+        // skip
+        if (!match(symbols)) return nextLevel();
+
+        const operatorToken: token = advance();
+
+        consumeComments(comments);
+        checkEofWithError('invalid eof while parsing an expression');
+
+        // parse same level as body
+        const body: expression = parseExprLvl(
+          symbols,
+          arity,
+          associativity,
+          nextLevel
+        );
+
+        consumeComments(comments);
+        checkEofWithError('invalid eof while parsing an expression');
+
+        return {
+          type: 'unary',
+          operator: operatorToken.lex,
+          body,
+          operatorToken,
+          comments
+        };
+      } else if (arity === 'binary') {
+        if (
+          associativity !== 'left-to-right' &&
+          associativity !== 'right-to-left'
+        )
+          throw new Error('Internal error, misuse of typescripts type system');
+
+        let leftSide: expression = nextLevel();
+
+        consumeComments(comments);
+        checkEofWithError('invalid eof while parsing an expression');
+
+        if (associativity === 'left-to-right') {
+          while (match(symbols)) {
+            const operatorToken: token = advance();
+
+            consumeComments(comments);
+            checkEofWithError('invalid eof while parsing an expression');
+
+            const rightSide: expression = nextLevel();
+
+            consumeComments(comments);
+            checkEofWithError('invalid eof while parsing an expression');
+
+            leftSide = {
+              type: 'binary',
+              operator: operatorToken.lex,
+              leftSide,
+              rightSide,
+              operatorToken,
+              comments
+            };
+          }
+        } else if (associativity === 'right-to-left') {
+          if (match(symbols)) {
+            const operatorToken: token = advance();
+
+            consumeComments(comments);
+            checkEofWithError('invalid eof while parsing an expression');
+
+            // ourself because of associativity
+            const rightSide: expression = parseExprLvl(
+              symbols,
+              arity,
+              associativity,
+              nextLevel
+            );
+
+            consumeComments(comments);
+            checkEofWithError('invalid eof while parsing an expression');
+
+            return {
+              type: 'binary',
+              operator: operatorToken.lex,
+              leftSide,
+              rightSide,
+              operatorToken,
+              comments
+            };
+          }
+        }
+
+        return leftSide;
+      }
+
+      throw new Error('Internal error, misuse of typescripts type system');
+    }
+
+    // #region first expr levels
+    const parseExpr0 = () =>
+      parseExprLvl(
+        precedenceTable[0].symbols,
+        precedenceTable[0].arity,
+        precedenceTable[0].associativity,
+        parseExpr1
+      );
+    const parseExpr1 = () =>
+      parseExprLvl(
+        precedenceTable[1].symbols,
+        precedenceTable[1].arity,
+        precedenceTable[1].associativity,
+        parseExpr2
+      );
+    const parseExpr2 = () =>
+      parseExprLvl(
+        precedenceTable[2].symbols,
+        precedenceTable[2].arity,
+        precedenceTable[2].associativity,
+        parseExpr3
+      );
+    const parseExpr3 = () =>
+      parseExprLvl(
+        precedenceTable[3].symbols,
+        precedenceTable[3].arity,
+        precedenceTable[3].associativity,
+        parseExpr4
+      );
+    const parseExpr4 = () =>
+      parseExprLvl(
+        precedenceTable[4].symbols,
+        precedenceTable[4].arity,
+        precedenceTable[4].associativity,
+        parseExpr5
+      );
+    const parseExpr5 = () =>
+      parseExprLvl(
+        precedenceTable[5].symbols,
+        precedenceTable[5].arity,
+        precedenceTable[5].associativity,
+        parseExpr6
+      );
+    const parseExpr6 = () =>
+      parseExprLvl(
+        precedenceTable[6].symbols,
+        precedenceTable[6].arity,
+        precedenceTable[6].associativity,
+        parseExpr7
+      );
+    const parseExpr7 = () =>
+      parseExprLvl(
+        precedenceTable[7].symbols,
+        precedenceTable[7].arity,
+        precedenceTable[7].associativity,
+        parseExpr8
+      );
+    const parseExpr8 = () =>
+      parseExprLvl(
+        precedenceTable[8].symbols,
+        precedenceTable[8].arity,
+        precedenceTable[8].associativity,
+        parseExpr9
+      );
+    const parseExpr9 = () =>
+      parseExprLvl(
+        precedenceTable[9].symbols,
+        precedenceTable[9].arity,
+        precedenceTable[9].associativity,
+        parseExpr10
+      );
+    // #endregion
+
     // TODO debug and consumeComments(comments)/isAtEnd()
-    function parseExprLvl10(): expression {
+    function parseExpr10(): expression {
       const comments: token[] = [];
 
       consumeComments(comments);
@@ -1197,6 +1237,9 @@ export namespace Parser {
         checkEofWithError('invalid eof while parsing an expression');
 
         if (token.lex === '.') {
+          // TODO left-to-right precedence
+          // wrong rn!?
+
           // f.
           const propertyToken: token = matchTypeAdvanceOrError(
             tokenType.identifier,
@@ -1525,6 +1568,8 @@ export namespace Parser {
       // TODO parse comments per branch!!!
 
       function parseMatchBodyLine(): matchBodyLine {
+        const comments: token[] = [];
+
         const identifierToken: token = matchTypeAdvanceOrError(
           tokenType.identifier,
           'TODO Invalid match expression: expected an identifier'
@@ -1612,7 +1657,8 @@ export namespace Parser {
           identifierToken,
           parameters,
           body,
-          arrowToken
+          arrowToken,
+          comments
         };
       }
 
@@ -1654,10 +1700,12 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing a match expression');
 
-      // TODO could improve error messages, by checking if it was directly followed by "=>"
       const typeAnnotation: optional<typeExpression> = callOnPresent(
         colonToken,
-        parseTypeExpression
+        () =>
+          !match('{')
+            ? parseTypeExpression()
+            : newParseError('missing type expression in typed match expr')
       );
 
       consumeComments(comments);
@@ -1671,7 +1719,10 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing a match expression');
 
-      const body = parseArgumentList(
+      const body: argumentList<matchBodyLine, true> = parseArgumentList<
+        matchBodyLine,
+        true
+      >(
         parseMatchBodyLine,
         comments,
         true,
@@ -1721,7 +1772,7 @@ export namespace Parser {
       };
     }
 
-    return parseFirstExprLevels(parseExprLvl10);
+    return parseExpr0();
   }
 
   /*
@@ -2020,6 +2071,14 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
+        [
+          `group t {
+        let t = match (t) {
+          f => match (x) { a() => f, g => c }
+        };
+      }`,
+          1
+        ],
         [
           `type Tree[T] {
         empty(),
@@ -2340,6 +2399,22 @@ export namespace Parser {
 
   debugParser(0, true, false);
 }
+
+`
+type Tree[T] {
+  empty(),
+  full(Tree, T, Tree)
+}
+
+let tree = Tree.empty();
+
+let value = match (tree): i32 {
+  empty => -1,
+  full(left, val, right) => val
+};
+
+let main = func (arg) => value == -1;
+`;
 
 // log(
 //   Parser.parse(`
