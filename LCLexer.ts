@@ -169,9 +169,9 @@ export namespace Lexer {
   ];
 
   const commentStart: string = '/';
-  const commentTypes: string[] = ['/', '*'];
-  const commentType1Start: string = '/';
-  const commentType2Start: string = '*';
+  const commentType1Start: '/' = '/';
+  const commentType2Start: '*' = '*';
+  const commentTypes: string[] = [commentType1Start, commentType2Start];
 
   const commentType1Stop: string = '\n';
   const commentType2Stop1: string = '*';
@@ -309,11 +309,10 @@ export namespace Lexer {
   // #region consume functions
   // assert: an identifier is at idx
   function consumeIdentifier(code: string, idx: number): nextToken {
-    let i: number = idx;
     let identifier: string = '';
 
-    while (idxValid(i, code) && matches(code[i], alphaNumeric))
-      identifier += code[i++];
+    for (let i = idx; idxValid(i, code) && matches(code[i], alphaNumeric); ++i)
+      identifier += code[i];
 
     return {
       type: 'token',
@@ -342,12 +341,15 @@ export namespace Lexer {
     )
       symbol += code[i++];
 
+    // fix the following case:
     // got: "->"; valid: "->*"; invalid: "-", "->"
     const symbolGot: string = symbol;
     while (!possibleSymbols.includes(symbol)) {
+      // remove the last character
       symbol = symbol.slice(0, -1);
       i--;
 
+      // no characters left, invalid symbol from the get-go
       if (symbol.length === 0)
         return {
           type: 'error',
@@ -578,7 +580,8 @@ export namespace Lexer {
     let i: number = idx + 1; // safe because assertion
 
     // safe because of assertion
-    const commentType: '/' | '*' = code[i] as any;
+    const commentType: typeof commentType1Start | typeof commentType2Start =
+      code[i] as any;
     comment += code[i++];
 
     if (commentType === '/') {
@@ -740,7 +743,7 @@ export namespace Lexer {
 
     if (matches(code[idx], firstCharOfSymbols)) return consumeSymbol(code, idx);
 
-    // for better error messages
+    // for better error messages also lexe strings
     if (matches(code[idx], possibleStringStarts))
       return consumeString(code, idx);
 
@@ -749,7 +752,7 @@ export namespace Lexer {
 
     if (idxValid(idx, code) && matches(code[idx], validChars))
       throw new Error(
-        `Internal lexer error: should be able to lexe the current character: ${code[idx]}`
+        `Internal lexer error: should be able to lexe the current character: "${code[idx]}"`
       );
 
     let invalidChars: string = '';
@@ -809,10 +812,17 @@ export namespace Lexer {
     const tokens: token[] = [];
     const lexerErrors: lexerError[] = [];
 
-    for (const token of Lexer.lexeNextTokenIter(code))
-      if (token.type === 'token') tokens.push(token.value);
-      else if (token.type === 'error') lexerErrors.push(token.value);
-      else if (token.type === 'eof') break;
+    loop: for (const token of Lexer.lexeNextTokenIter(code))
+      switch (token.type) {
+        case 'token':
+          tokens.push(token.value);
+          break;
+        case 'error':
+          lexerErrors.push(token.value);
+          break;
+        case 'eof':
+          break loop;
+      }
 
     return lexerErrors.length === 0
       ? { valid: true, tokens }
