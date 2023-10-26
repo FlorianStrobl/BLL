@@ -3,6 +3,14 @@ import { Parser } from './LCParser';
 // @ts-ignore
 import { inspect } from 'util';
 
+/**
+ * remove all groups by doing groupName/identifierName
+ * check if vars are accessible in current context and not double
+ *
+ * check types later
+ *
+ */
+
 const log = (args: any) => console.log(inspect(args, { depth: 999 }));
 
 // TODO
