@@ -60,7 +60,7 @@ export namespace Formatter {
           ) +
           (expression.generic.hasGenericSubstitution
             ? addColor('[', Colors.symbol, withColor) +
-              expression.generic.values
+              expression.generic.substitutions
                 .map((e) => printTypeExpression(e.argument, withColor))
                 .join(addColor(', ', Colors.symbol, withColor)) +
               addColor(']', Colors.symbol, withColor)
@@ -186,7 +186,7 @@ export namespace Formatter {
         return (
           addColor('match ', Colors.standardKeyword, withColor) +
           addColor('(', Colors.symbol, withColor) +
-          printExpression(expression.argBody, withColor, indentation) +
+          printExpression(expression.header, withColor, indentation) +
           addColor(')', Colors.symbol, withColor) +
           (expression.explicitType.explicitType
             ? addColor(': ', Colors.symbol, withColor) +
