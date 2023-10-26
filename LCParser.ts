@@ -1286,7 +1286,7 @@ export namespace Parser {
             {
               delimiterToken: ',',
               missingDelimiterError:
-                'TODO, missing comma in function call argument list'
+                'missing comma in function call argument list'
             },
             { parseComments: true, comments },
             { noEmptyList: false },
@@ -1294,12 +1294,12 @@ export namespace Parser {
             'unexpected eof while parsing a function call argument list'
           );
 
-          // TODO consume comments?
+          consumeComments(comments);
           checkEofWithError('eof in function calling expression');
 
           const closingBracketToken: token = matchAdvanceOrError(
             ')',
-            'TODO internal error' // yes?
+            'missing closing bracket in function call'
           );
 
           consumeComments(comments);
@@ -1313,7 +1313,10 @@ export namespace Parser {
             closingBracketToken,
             comments
           };
-        }
+        } else
+          throw new Error(
+            `Internal parser error: expected the tokens "(" or "." in this expression.`
+          );
       }
 
       return left;

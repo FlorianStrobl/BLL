@@ -319,7 +319,7 @@ export namespace Formatter {
                 .map(
                   (e) =>
                     printComments(
-                      e.localComments,
+                      e.argument.comments,
                       indent,
                       withColor,
                       indentSize
@@ -331,7 +331,7 @@ export namespace Formatter {
                       Colors.identifier,
                       withColor
                     ) +
-                    (e.argument.parameters.hasParametersList
+                    (e.argument.parameters.hasParameterList
                       ? addColor('(', Colors.symbol, withColor) +
                         e.argument.parameters.value
                           .map((a) =>
