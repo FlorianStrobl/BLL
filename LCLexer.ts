@@ -1,3 +1,4 @@
+// TODO: consumeNumericLiteral fix
 // compiler/interpreter frontend: scanner
 export namespace Lexer {
   // #region valid lexemes signatures
@@ -218,80 +219,59 @@ export namespace Lexer {
     | { type: 'eof'; /*end of file*/ idx: number };
 
   // TODO, number errors merged into one big message
-  export type lexerError =
+  export type lexerError = { chars: string; idx: number } & (
     | {
         type: 'invalid chars in comment';
-        chars: string;
-        idx: number;
         idxs: number[];
       }
-    | { type: 'invalid chars'; chars: string; idx: number }
+    | { type: 'invalid chars' }
     | {
         type: 'eof in /* comment';
-        chars: string;
-        idx: number;
       }
-    | { type: 'string used'; chars: string; idx: number }
-    | { type: 'eof in string'; chars: string; idx: number }
+    | { type: 'string used' }
+    | { type: 'eof in string' }
     | {
         type: 'used escape symbol not properly in string';
-        chars: string;
-        idx: number;
         idxs: number[];
       }
     | {
         type: 'used escape symbol with \\u not properly in string';
-        chars: string;
-        idx: number;
         idxs: number[];
       }
     | {
         type: 'invalid operator';
-        chars: string;
-        idx: number;
       }
     | {
         type: 'did not consume digits in numeric literal';
-        chars: string;
-        idx: number;
         idxs: number[];
       }
     | {
         type: 'identifier connected to numeric literal';
-        chars: string;
-        idx: number;
         invalidIdentifierIdx: number;
       }
     | {
         type: 'part of numeric literal ended with underscore';
-        chars: string;
-        idx: number;
         underscores: number[];
       }
     | {
         type: 'repeating underscores in numeric literal';
-        chars: string;
-        idx: number;
         underscores: number[];
       }
     | {
-        type: 'TODO not digits after dot in numeric literal';
-        chars: string;
-        idx: number;
+        // TODO unused
+        type: 'not digits after dot in numeric literal';
         dotIdx: number;
       }
     | {
         type: 'got a dot or e in a numeric literal which cant have it at that place';
-        chars: string;
-        idx: number;
         // TODO idx
       }
     | {
         type: 'had wrong alphabet in numeric literal';
-        chars: string;
-        idx: number;
         idxs: number[];
-      };
+      }
+    | { type: 'invalid character in string'; idxs: number[] }
+  );
   // #endregion
 
   // #region helper functions
@@ -368,7 +348,6 @@ export namespace Lexer {
   }
 
   // assert: a numeric literal is at idx
-  // TODO
   function consumeNumericLiteral(code: string, idx: number): nextToken {
     function consumeDigits(): boolean {
       let consumedSomething: boolean = false;
@@ -650,15 +629,17 @@ export namespace Lexer {
 
     const stringEnd: string = string;
     const toEscapeChars: string[] = [stringEnd, ...escapableStringChars];
+    const invalidSymbolIdxs: number[] = [];
     const escapeErrorIdxs: number[] = [];
     const escapeErrorU: number[] = [];
-
-    // TODO only valid chars consumed
 
     let lastCharWasEscape: boolean = false;
     while (idxValid(i, code)) {
       const char: string = code[i++];
       string += char;
+
+      // TODO
+      if (!validChars.includes(char)) invalidSymbolIdxs.push(i - 1);
 
       if (!lastCharWasEscape && matches(char, stringEnd)) break;
       else if (!lastCharWasEscape)
@@ -703,6 +684,16 @@ export namespace Lexer {
           chars: string,
           idx,
           idxs: escapeErrorU
+        }
+      };
+    else if (invalidSymbolIdxs.length !== 0)
+      return {
+        type: 'error',
+        value: {
+          type: 'invalid character in string',
+          chars: string,
+          idx,
+          idxs: invalidSymbolIdxs
         }
       };
 

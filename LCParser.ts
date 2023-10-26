@@ -442,51 +442,52 @@ export namespace Parser {
     emptyList:
       | { noEmptyList: true; errorMessage: string | parseError }
       | { noEmptyList: false },
-    invalidArgumentError: string,
+    noArgumentError: string,
     eofError: string
   ): argumentList<T> {
-    const argumentList: argumentList<T> = []; // TODO type
+    const argumentList: argumentList<T> = [];
     let lastDelimiterToken: optToken = undefined;
 
-    // TODO, how to get them into the object of type T then?
     let outerComments: token[] = [];
-    consumeComments(outerComments);
 
-    if (commentInfo.parseComments) commentInfo.comments.push(...outerComments);
-
-    // TODO working without parsing comments at this step!?
+    if (commentInfo.parseComments) consumeComments(commentInfo.comments);
+    else consumeComments(outerComments);
 
     while (!isAtEnd() && !match(endToken)) {
-      if (commentInfo.parseComments) consumeComments(commentInfo.comments);
-
-      checkEofWithError(eofError);
-
       if (argumentList.length !== 0 && !isPresent(lastDelimiterToken))
         newParseError(delimiter.missingDelimiterError);
 
+      if (commentInfo.parseComments) consumeComments(commentInfo.comments);
+      checkEofWithError(eofError);
+
       const debugCurrentTokenIdx: number = peek().idx;
 
-      const argument: T = match(
+      const argument: T = !match(
         delimiter.delimiterToken
       ) /*better error message*/
-        ? newParseError(invalidArgumentError)
-        : parseArgument();
+        ? parseArgument()
+        : newParseError(noArgumentError);
 
       if (commentInfo.parseComments) consumeComments(commentInfo.comments);
       else if (outerComments.length !== 0) {
-        // TODO, especially, what if argument was a parseError and does not have comments
-        if (
-          typeof argument === 'object' &&
-          argument !== null &&
-          'comments' in argument &&
-          Array.isArray(argument.comments)
-        ) {
-          argument.comments.push(...outerComments);
-          outerComments = [];
-        } else {
-          // TODO
-          throw new Error('argument was wrong!?');
-        }
+        // comments consumed before executing this loop
+        // belong to the current argument
+
+        if (typeof argument === 'object' && argument !== null) {
+          if ('comments' in argument && Array.isArray(argument.comments))
+            argument.comments.push(...outerComments);
+          else
+            newParseError(
+              `Could not save local comments: "${JSON.stringify(
+                outerComments
+              )}"`
+            );
+        } else
+          throw new Error(
+            'Internal parser error: unexpected type of argument while parsing an argument list'
+          );
+
+        outerComments = [];
       }
 
       checkEofWithError(eofError);
@@ -499,21 +500,18 @@ export namespace Parser {
       });
 
       if (commentInfo.parseComments) consumeComments(commentInfo.comments);
-      else consumeComments(outerComments); // TODO
+      else consumeComments(outerComments); // save comments into outerComments, in case that after them comes the endToken
 
       checkEofWithError(eofError);
 
       // better error message
       if (debugCurrentTokenIdx === peek().idx) {
-        newParseError(invalidArgumentError);
+        newParseError(noArgumentError);
         break;
       }
-
-      // TODO, if commentInfo.parseComments === false
-      // now could come comments which are then followed by the final token
     }
 
-    // no consume comments
+    // no consume comments since next token is endToken
 
     checkEofWithError(eofError);
 
@@ -521,22 +519,29 @@ export namespace Parser {
       newParseError(emptyList.errorMessage);
 
     if (!commentInfo.parseComments && outerComments.length !== 0) {
-      if (argumentList.length === 0) {
+      if (argumentList.length === 0)
+        // outer comments belongt from the beginning on, to the outer scope because there are no arguments
         commentInfo.globalComments.push(...outerComments);
-      } else {
-        const lastObj = argumentList[argumentList.length - 1].argument;
-        if (
-          typeof lastObj === 'object' &&
-          lastObj !== null &&
-          'comments' in lastObj &&
-          Array.isArray(lastObj.comments)
-        ) {
-          lastObj.comments.push(...outerComments);
-          outerComments = [];
-        } else {
-          // TODO
-          throw new Error('argument was wrong!?');
-        }
+      else {
+        // comments belong to the very last argument
+        const lastArgument: T = argumentList[argumentList.length - 1].argument;
+
+        if (typeof lastArgument === 'object' && lastArgument !== null) {
+          if (
+            'comments' in lastArgument &&
+            Array.isArray(lastArgument.comments)
+          )
+            lastArgument.comments.push(...outerComments);
+          else
+            newParseError(
+              `Could not save local comments: "${JSON.stringify(
+                outerComments
+              )}"`
+            );
+        } else
+          throw new Error(
+            'Internal parser error: unexpected type of argument while parsing an argument list'
+          );
       }
     }
 
@@ -549,7 +554,9 @@ export namespace Parser {
   // assert: not eof
   function parseStatement(): statement | parseError {
     if (isAtEnd())
-      throw new Error('Internal parser error: assertion not met, code is eof.');
+      throw new Error(
+        'Internal parser error: assertion not met, code is eof but tried to parse a statement.'
+      );
 
     // TODO local comments and eof
     function parseComplexeTypeLine(): complexTypeLine {
@@ -632,247 +639,14 @@ export namespace Parser {
     consumeComments(comments);
 
     if (isAtEnd() && comments.length !== 0)
-      // else use those comments for the next statement
-      // and if nothing matches, return these at the end
       return { type: 'comment', comments };
-
-    if (match(';'))
-      return { type: 'empty', semicolonToken: advance(), comments };
-
-    if (match('group')) {
-      const groupToken: token = advance();
-
-      consumeComments(comments);
-
-      checkEofWithError('unexpected eof in group statement');
-
-      const identifierToken: token = matchTypeAdvanceOrError(
-        tokenType.identifier,
-        'TODO can not have an undefined identifier for a group statement'
-      );
-
-      consumeComments(comments);
-
-      checkEofWithError(
-        'unexpected eof in group statement after getting an identifier'
-      );
-
-      const openingBracketToken: token = matchAdvanceOrError(
-        '{',
-        'TODO cant have a group statement without an opening brackt "{"'
-      );
-
-      // no consume comments or eof check
-
-      const body: statement[] = [];
-      while (!isAtEnd() && !match('}')) {
-        const statement: statement | parseError = parseStatement();
-        if (statement.type === 'error') break; // handled somewhere else
-        body.push(statement);
-      }
-
-      checkEofWithError('unexpected eof in group statement');
-
-      const closingBracketToken: token = matchAdvanceOrError(
-        '}',
-        'TODO internal error, did not match "}" but expected it for end of group statement'
-      );
-
-      return {
-        type: 'group',
-        identifierToken,
-        body,
-        groupToken,
-        openingBracketToken,
-        closingBracketToken,
-        comments
-      };
-    }
-
-    if (match('use')) {
-      const useToken: token = advance();
-
-      consumeComments(comments);
-
-      checkEofWithError('no use body in use statement');
-
-      const filename: token = matchTypeAdvanceOrError(
-        tokenType.identifier,
-        'did not get an identifier in use statement'
-      );
-
-      consumeComments(comments);
-
-      checkEofWithError('unexpected eof in use statement: missing semicolon');
-
-      const semicolonToken: token = matchAdvanceOrError(
-        ';',
-        'TODO did not get semicolon in a use statement'
-      );
-
-      return {
-        type: 'import',
-        filename,
-        useToken,
-        semicolonToken,
-        comments
-      };
-    }
-
-    if (match('type')) {
-      const typeToken: token = advance();
-
-      consumeComments(comments);
-
-      checkEofWithError('TODO nothing after type keyword');
-
-      const identifierToken: token = matchTypeAdvanceOrError(
-        tokenType.identifier,
-        'TODO invalid type expression: missing identifier'
-      );
-
-      consumeComments(comments);
-
-      checkEofWithError('eof after identifier token in type statement');
-
-      const genericOpeningBracketToken: optToken = optionalMatchAdvance('[');
-
-      consumeComments(comments);
-
-      checkEofWithError('eof after getting "[" in type statement');
-
-      const genericIdentifiers: optional<argumentList<token>> = callOnPresent(
-        genericOpeningBracketToken,
-        () =>
-          parseArgumentList<token>(
-            () =>
-              matchTypeAdvanceOrError(
-                tokenType.identifier,
-                'invalid token in generic type statement'
-              ),
-            ']',
-            {
-              delimiterToken: ',',
-              missingDelimiterError: 'missing comma in generic type statement'
-            },
-            { parseComments: true, comments },
-            { noEmptyList: true, errorMessage: 'TODO' },
-            'invalid token in generic type statement',
-            'unexpected eof in generic type statement'
-          )
-      );
-
-      consumeComments(comments);
-
-      checkEofWithError('eof inside type statement');
-
-      const genericClosingBracketToken: optToken = callOnPresent(
-        genericOpeningBracketToken,
-        () =>
-          matchAdvanceOrError(
-            ']',
-            'missing closing bracket in generic type statement'
-          )
-      );
-
-      consumeComments(comments);
-
-      checkEofWithError('eof inside type statement');
-
-      const generic: genericAnnotation = isPresent(genericOpeningBracketToken)
-        ? {
-            isGeneric: true,
-            genericIdentifiers: genericIdentifiers!,
-            genericOpeningBracketToken: genericOpeningBracketToken!,
-            genericClosingBracketToken: genericClosingBracketToken!
-          }
-        : { isGeneric: false };
-
-      if (match('=')) {
-        const equalsToken: token = advance();
-
-        consumeComments(comments);
-
-        checkEofWithError('got nothing after "=" in type statement');
-
-        const body: typeExpression = !match(';') // better error message
-          ? parseTypeExpression()
-          : newParseError('got no type expression in type alias');
-
-        consumeComments(comments);
-
-        checkEofWithError('TODO got nothing after type expression');
-
-        const semicolonToken: token = matchAdvanceOrError(
-          ';',
-          'TODO did not finish the type expression'
-        );
-
-        return {
-          type: 'type-alias',
-          identifierToken,
-          body,
-          ...generic,
-          typeToken,
-          equalsToken,
-          semicolonToken,
-          comments
-        };
-      }
-      if (match('{')) {
-        const openingBracketToken: token = advance();
-
-        checkEofWithError(
-          'unexpected eof after getting a "{" in complex type statement'
-        );
-
-        // no consume for better local comments
-
-        const body: argumentList<complexTypeLine> =
-          parseArgumentList<complexTypeLine>(
-            parseComplexeTypeLine,
-            '}',
-            {
-              delimiterToken: ',',
-              missingDelimiterError: 'missing comma in complex type body'
-            },
-            { parseComments: false, globalComments: comments },
-            { noEmptyList: false },
-            'invalid or missing argument in complex type body',
-            'eof inside complex type statement'
-          );
-
-        consumeComments(comments);
-
-        checkEofWithError('eof in complex type statement');
-
-        const closingBracketToken: token = matchAdvanceOrError(
-          '}',
-          'TODO internal error'
-        );
-
-        return {
-          type: 'complex-type',
-          identifierToken,
-          body,
-          ...generic,
-          typeToken,
-          openingBracketToken,
-          closingBracketToken,
-          comments
-        };
-      }
-
-      return newParseError(
-        'TODO invalid type expression: cannot resolve which type it should be. Missing "=" or "{"'
-      );
-    }
+    // else use those comments for the next statement
+    // and if nothing matches, return these at the end
 
     if (match('let')) {
       const letToken: token = advance();
 
       consumeComments(comments);
-
       checkEofWithError('unexpected eof in let statement');
 
       const identifierToken: token = matchTypeAdvanceOrError(
@@ -881,7 +655,6 @@ export namespace Parser {
       );
 
       consumeComments(comments);
-
       checkEofWithError(
         'unexpected eof in let statement after asuming an identifier'
       );
@@ -889,9 +662,8 @@ export namespace Parser {
       const genericOpeningBracketToken: optToken = optionalMatchAdvance('[');
 
       consumeComments(comments);
-
       checkEofWithError(
-        'error after getting opening bracket for generic in let statement'
+        'eof after getting opening bracket for generic in let statement'
       );
 
       const genericIdentifiers: optional<argumentList<token>> = callOnPresent(
@@ -915,14 +687,15 @@ export namespace Parser {
               errorMessage:
                 'must have identifiers in let generic let statement list'
             },
-            'did not match an identifier in generic let statement',
-            'unexpected eof in generic let statement'
+            'missing identifier in generic let statement',
+            'unexpected eof in generic let statement before getting a closing bracket'
           )
       );
 
       consumeComments(comments);
-
-      checkEofWithError('in let statement');
+      checkEofWithError(
+        'eof in let statement after generic identifiers before getting a closing bracket'
+      );
 
       const genericClosingBracketToken: optToken = callOnPresent(
         genericOpeningBracketToken,
@@ -934,7 +707,6 @@ export namespace Parser {
       );
 
       consumeComments(comments);
-
       checkEofWithError(
         'error after getting closing bracket for generic in let statement'
       );
@@ -942,8 +714,6 @@ export namespace Parser {
       const colonToken: optToken = optionalMatchAdvance(':');
 
       consumeComments(comments);
-
-      // error message must be true, else it would have errored above
       checkEofWithError('unexpected eof in let statement after getting ":"');
 
       const typeAnnotation: optional<typeExpression> = callOnPresent(
@@ -957,7 +727,6 @@ export namespace Parser {
       );
 
       consumeComments(comments);
-
       checkEofWithError(
         'unexpected eof in let statement while expecting a "="'
       );
@@ -968,15 +737,13 @@ export namespace Parser {
       );
 
       consumeComments(comments);
-
       checkEofWithError('unexpected eof in let statement after "="');
 
       const body: expression = !match(';') // better error message
         ? parseExpression()
-        : newParseError('TODO no body in let expression');
+        : newParseError('missing body in let expression');
 
       consumeComments(comments);
-
       checkEofWithError('unexpected eof in let statement');
 
       const semicolonToken: token = matchAdvanceOrError(
@@ -1013,6 +780,228 @@ export namespace Parser {
         ...genericAnnotation,
         letToken,
         equalsToken,
+        semicolonToken,
+        comments
+      };
+    }
+
+    if (match('type')) {
+      const typeToken: token = advance();
+
+      consumeComments(comments);
+      checkEofWithError('TODO nothing after type keyword');
+
+      const identifierToken: token = matchTypeAdvanceOrError(
+        tokenType.identifier,
+        'TODO invalid type expression: missing identifier'
+      );
+
+      consumeComments(comments);
+      checkEofWithError('eof after identifier token in type statement');
+
+      const genericOpeningBracketToken: optToken = optionalMatchAdvance('[');
+
+      consumeComments(comments);
+      checkEofWithError('eof after getting "[" in type statement');
+
+      const genericIdentifiers: optional<argumentList<token>> = callOnPresent(
+        genericOpeningBracketToken,
+        () =>
+          parseArgumentList<token>(
+            () =>
+              matchTypeAdvanceOrError(
+                tokenType.identifier,
+                'invalid token in generic type statement'
+              ),
+            ']',
+            {
+              delimiterToken: ',',
+              missingDelimiterError: 'missing comma in generic type statement'
+            },
+            { parseComments: true, comments },
+            { noEmptyList: true, errorMessage: 'TODO' },
+            'invalid token in generic type statement',
+            'unexpected eof in generic type statement'
+          )
+      );
+
+      consumeComments(comments);
+      checkEofWithError('eof inside type statement');
+
+      const genericClosingBracketToken: optToken = callOnPresent(
+        genericOpeningBracketToken,
+        () =>
+          matchAdvanceOrError(
+            ']',
+            'missing closing bracket in generic type statement'
+          )
+      );
+
+      consumeComments(comments);
+      checkEofWithError('eof inside type statement');
+
+      const generic: genericAnnotation = isPresent(genericOpeningBracketToken)
+        ? {
+            isGeneric: true,
+            genericIdentifiers: genericIdentifiers!,
+            genericOpeningBracketToken: genericOpeningBracketToken!,
+            genericClosingBracketToken: genericClosingBracketToken!
+          }
+        : { isGeneric: false };
+
+      if (match('=')) {
+        const equalsToken: token = advance();
+
+        consumeComments(comments);
+        checkEofWithError('got nothing after "=" in type statement');
+
+        const body: typeExpression = !match(';') // better error message
+          ? parseTypeExpression()
+          : newParseError('got no type expression in type alias');
+
+        consumeComments(comments);
+        checkEofWithError('TODO got nothing after type expression');
+
+        const semicolonToken: token = matchAdvanceOrError(
+          ';',
+          'TODO did not finish the type expression'
+        );
+
+        return {
+          type: 'type-alias',
+          identifierToken,
+          body,
+          ...generic,
+          typeToken,
+          equalsToken,
+          semicolonToken,
+          comments
+        };
+      }
+      if (match('{')) {
+        const openingBracketToken: token = advance();
+
+        checkEofWithError(
+          'unexpected eof after getting a "{" in complex type statement'
+        );
+
+        // TODO sure!? no consume for better local comments
+
+        const body: argumentList<complexTypeLine> =
+          parseArgumentList<complexTypeLine>(
+            parseComplexeTypeLine,
+            '}',
+            {
+              delimiterToken: ',',
+              missingDelimiterError: 'missing comma in complex type body'
+            },
+            { parseComments: false, globalComments: comments },
+            { noEmptyList: false },
+            'invalid or missing argument in complex type body',
+            'eof inside complex type statement'
+          );
+
+        consumeComments(comments);
+        checkEofWithError('eof in complex type statement');
+
+        const closingBracketToken: token = matchAdvanceOrError(
+          '}',
+          'TODO internal error'
+        );
+
+        return {
+          type: 'complex-type',
+          identifierToken,
+          body,
+          ...generic,
+          typeToken,
+          openingBracketToken,
+          closingBracketToken,
+          comments
+        };
+      }
+
+      return newParseError(
+        'TODO invalid type expression: cannot resolve which type it should be. Missing "=" or "{"'
+      );
+    }
+
+    if (match('group')) {
+      const groupToken: token = advance();
+
+      consumeComments(comments);
+      checkEofWithError('unexpected eof in group statement');
+
+      const identifierToken: token = matchTypeAdvanceOrError(
+        tokenType.identifier,
+        'TODO can not have an undefined identifier for a group statement'
+      );
+
+      consumeComments(comments);
+      checkEofWithError(
+        'unexpected eof in group statement after getting an identifier'
+      );
+
+      const openingBracketToken: token = matchAdvanceOrError(
+        '{',
+        'TODO cant have a group statement without an opening brackt "{"'
+      );
+
+      // no consume comments or eof check
+
+      const body: statement[] = [];
+      while (!isAtEnd() && !match('}')) {
+        const statement: statement | parseError = parseStatement();
+        if (statement.type === 'error') break; // handled somewhere else
+        body.push(statement);
+      }
+
+      checkEofWithError(
+        'unexpected eof in group statement before getting the closing bracket'
+      );
+
+      const closingBracketToken: token = matchAdvanceOrError(
+        '}',
+        'TODO internal error, did not match "}" but expected it for end of group statement'
+      );
+
+      return {
+        type: 'group',
+        identifierToken,
+        body,
+        groupToken,
+        openingBracketToken,
+        closingBracketToken,
+        comments
+      };
+    }
+
+    if (match(';'))
+      return { type: 'empty', semicolonToken: advance(), comments };
+
+    if (match('use')) {
+      const useToken: token = advance();
+
+      consumeComments(comments);
+      checkEofWithError('no use body in use statement');
+
+      const filename: token = matchTypeAdvanceOrError(
+        tokenType.identifier,
+        'did not get an identifier in use statement'
+      );
+
+      consumeComments(comments);
+      checkEofWithError('unexpected eof in use statement: missing semicolon');
+
+      const semicolonToken: token = matchAdvanceOrError(
+        ';',
+        'TODO did not get semicolon in a use statement'
+      );
+
+      return {
+        type: 'import',
+        filename,
+        useToken,
         semicolonToken,
         comments
       };
@@ -1310,7 +1299,7 @@ export namespace Parser {
             'TODO internal error' // yes?
           );
 
-          consumeComments(comments); // TODO
+          consumeComments(comments); // TODO eof and consumeComments at the end of an expression? (needed for next token...)
 
           left = {
             type: 'functionCall',
@@ -1771,7 +1760,6 @@ export namespace Parser {
 
       // TODO consume comments needed, since local ones?
       consumeComments(comments);
-
       checkEofWithError('invalid eof while parsing a match expression');
 
       const bodyClosingBracketToken: token = matchAdvanceOrError(
@@ -1832,21 +1820,18 @@ export namespace Parser {
       const comments: token[] = [];
 
       consumeComments(comments);
-
       checkEofWithError('unexpected eof while parsing a type expression');
 
       // val cant be grouping expression here
       let val: typeExpression | argList = primary();
 
       consumeComments(comments);
-
       checkEofWithError('unexpected eof while parsing a type expression');
 
       if (match('->')) {
         const arrowToken: token = advance();
 
         consumeComments(comments);
-
         checkEofWithError('unexpected eof while parsing a type expression');
 
         const returnType: typeExpression = parseTypeExpression0();
@@ -1919,7 +1904,6 @@ export namespace Parser {
       const comments: token[] = [];
 
       consumeComments(comments);
-
       checkEofWithError('TODO');
 
       if (match('i32') || match('f32')) {
@@ -1932,7 +1916,6 @@ export namespace Parser {
         const identifierToken: token = advance();
 
         consumeComments(comments);
-
         checkEofWithError(
           'unexpected eof in type expression after getting an identifier in a type expression'
         );
@@ -1950,7 +1933,6 @@ export namespace Parser {
         const openingBracketToken: token = advance();
 
         consumeComments(comments);
-
         checkEofWithError(
           'unexpected eof after getting a "[" in a type expression'
         );
@@ -1974,7 +1956,6 @@ export namespace Parser {
           );
 
         consumeComments(comments);
-
         checkEofWithError('TODO');
 
         const closingBracketToken: token = matchAdvanceOrError(
@@ -2000,6 +1981,8 @@ export namespace Parser {
           'unexpected eof after getting a ( in type expression'
         );
 
+        // TODO no comments for next statement
+
         const body: argumentList<typeExpression> =
           parseArgumentList<typeExpression>(
             parseTypeExpression,
@@ -2016,7 +1999,6 @@ export namespace Parser {
           );
 
         consumeComments(comments);
-
         checkEofWithError('unexpected eof while parsing an argument list');
 
         const closingBracketToken: token = matchAdvanceOrError(')', 'TODO');
@@ -2430,10 +2412,10 @@ export namespace Parser {
     }
   }
 
-  debugParser(0, true, false, true);
+  debugParser(2, true, false, true);
 }
 
-`
+const test = `
 type Tree[T] {
   empty(),
   full(Tree, T, Tree)
