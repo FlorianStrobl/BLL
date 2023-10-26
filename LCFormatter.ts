@@ -419,19 +419,19 @@ export namespace Formatter {
 //   )
 // );
 
-console.log(
-  Formatter.beautify(
-    Parser.parse(`
-    group t {
-      let t = match (t) {
-        f => match (x) { a() => f, g => c }
-      };
-    }
-`).statements
-  )
-);
-
 if (false) {
+  console.log(
+    Formatter.beautify(
+      Parser.parse(`
+      group t {
+        let t = match (t) {
+          f => match (x) { a() => f, g => c }
+        };
+      }
+  `).statements
+    )
+  );
+
   console.log(
     Formatter.beautify(
       Parser.parse(`

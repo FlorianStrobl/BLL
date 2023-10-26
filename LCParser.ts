@@ -423,9 +423,6 @@ export namespace Parser {
     return isPresent(present) ? callBack() : undefined;
   }
 
-  // TODO perLineComment type annotation
-  // TODO what if it is "(/*comment*/)" WHERE DOES THE COMMENT GET RETURNED, when it is localComments??
-  // TODO what about error messages for `(5,,)`
   function parseArgumentList<T>(
     parseArgument: () => T, // assertion: does not have delimiter as valid value
     endToken: string,
@@ -445,6 +442,9 @@ export namespace Parser {
     noArgumentError: string,
     eofError: string
   ): argumentList<T> {
+    // given `(/*comment*/)` and parseComments:false, the comment will get to globalComments
+    // error messages for `(5,,)`
+
     const argumentList: argumentList<T> = [];
     let lastDelimiterToken: optToken = undefined;
 
@@ -716,7 +716,7 @@ export namespace Parser {
       const typeAnnotation: optional<typeExpression> = callOnPresent(
         colonToken,
         () =>
-          !match('=') // better error messages
+          !match('=') // better error message
             ? parseTypeExpression()
             : newParseError(
                 'missing type annotation in let statement after getting a ":"'
@@ -748,26 +748,28 @@ export namespace Parser {
         'TODO let statements must be finished with a ";" symbol'
       );
 
-      const explicitType: explicitType = isPresent(colonToken)
-        ? {
-            explicitType: true,
-            typeExpression: typeAnnotation!,
-            colonToken
-          }
-        : {
-            explicitType: false
-          };
+      const explicitType: explicitType =
+        isPresent(colonToken) || isPresent(typeAnnotation)
+          ? {
+              explicitType: true,
+              typeExpression: typeAnnotation!,
+              colonToken: colonToken!
+            }
+          : {
+              explicitType: false
+            };
 
-      const genericAnnotation: genericAnnotation = isPresent(
-        genericOpeningBracketToken
-      )
-        ? {
-            isGeneric: true,
-            genericIdentifiers: genericIdentifiers!,
-            genericOpeningBracketToken: genericOpeningBracketToken!,
-            genericClosingBracketToken: genericClosingBracketToken!
-          }
-        : { isGeneric: false };
+      const genericAnnotation: genericAnnotation =
+        isPresent(genericOpeningBracketToken) ||
+        isPresent(genericClosingBracketToken) ||
+        isPresent(genericIdentifiers)
+          ? {
+              isGeneric: true,
+              genericIdentifiers: genericIdentifiers!,
+              genericOpeningBracketToken: genericOpeningBracketToken!,
+              genericClosingBracketToken: genericClosingBracketToken!
+            }
+          : { isGeneric: false };
 
       return {
         type: 'let',
@@ -837,14 +839,17 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('eof inside type statement');
 
-      const generic: genericAnnotation = isPresent(genericOpeningBracketToken)
-        ? {
-            isGeneric: true,
-            genericIdentifiers: genericIdentifiers!,
-            genericOpeningBracketToken: genericOpeningBracketToken!,
-            genericClosingBracketToken: genericClosingBracketToken!
-          }
-        : { isGeneric: false };
+      const generic: genericAnnotation =
+        isPresent(genericOpeningBracketToken) ||
+        isPresent(genericClosingBracketToken) ||
+        isPresent(genericIdentifiers)
+          ? {
+              isGeneric: true,
+              genericIdentifiers: genericIdentifiers!,
+              genericOpeningBracketToken: genericOpeningBracketToken!,
+              genericClosingBracketToken: genericClosingBracketToken!
+            }
+          : { isGeneric: false };
 
       if (match('=')) {
         const equalsToken: token = advance();
@@ -1322,11 +1327,10 @@ export namespace Parser {
       return left;
     }
 
-    // TODO, parse literals, highest precedence level
+    // highest precedence level
     function primary(): expression {
-      const comments: token[] = [];
-
       function floatLiteralToFloat(literal: string): number {
+        // NaN gets handled correctly
         return literal === 'inf' ? Infinity : Number(literal);
       }
 
@@ -1334,6 +1338,8 @@ export namespace Parser {
       function intLiteralToInt(literal: string): number {
         return Number(literal);
       }
+
+      const comments: token[] = [];
 
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing an expression');
@@ -1406,9 +1412,6 @@ export namespace Parser {
       } else if (match('func')) return parseFuncExpression();
       else if (match('match')) return parseMatchExpression();
 
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing an expression');
-
       return newParseError(
         'TODO could not match anything in parsing expressions'
       );
@@ -1417,9 +1420,6 @@ export namespace Parser {
     // assert: func token at current point
     function parseFuncExpression(): expression {
       const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing a func expression');
 
       const funcToken: token = advance();
 
@@ -1434,14 +1434,13 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing a func expression');
 
-      let lastParameterHadDefaultValue: boolean = false;
+      let lastHadDefaultVal: boolean = false;
       const params: argumentList<funcExprParameter> =
         parseArgumentList<funcExprParameter>(
           () => {
-            // TODO could also be, that the user forget a ")" and there was no identifier intended
             const identifierToken: token = matchTypeAdvanceOrError(
               tokenType.identifier,
-              'TODO Invalid func expression: expected an identifier'
+              'invalid func expression: expected an identifier'
             );
 
             consumeComments(comments);
@@ -1458,7 +1457,12 @@ export namespace Parser {
 
             const typeExpression: optional<typeExpression> = callOnPresent(
               colonToken,
-              parseTypeExpression
+              () =>
+                !match('=') && !match(',') // better error message
+                  ? parseTypeExpression()
+                  : newParseError(
+                      `missing type annotation after getting ":" in function arguments`
+                    )
             );
 
             consumeComments(comments);
@@ -1466,21 +1470,15 @@ export namespace Parser {
               'invalid eof while parsing arguments of a func expression'
             );
 
-            const defaultValueEqualsToken: optToken = optionalMatchAdvance('=');
+            const defaultValEqToken: optToken = optionalMatchAdvance('=');
 
-            // TODO if last one has a default value, this new one needs it too
-            if (
-              lastParameterHadDefaultValue &&
-              !isPresent(defaultValueEqualsToken)
-            )
+            if (lastHadDefaultVal && !isPresent(defaultValEqToken))
               newParseError(
-                'having, in a func expression, a parameter with a default value, then all the following parameters need a default value aswell'
+                'having a parameter with a default value followed by a parameter without a default value is not allowed in a func expression'
               );
+            if (isPresent(defaultValEqToken)) lastHadDefaultVal = true;
 
-            if (isPresent(defaultValueEqualsToken))
-              lastParameterHadDefaultValue = true;
-
-            callOnPresent(defaultValueEqualsToken, () => {
+            callOnPresent(defaultValEqToken, () => {
               consumeComments(comments);
               checkEofWithError(
                 'invalid eof while parsing arguments of a func expression'
@@ -1488,7 +1486,7 @@ export namespace Parser {
             });
 
             const value: optional<expression> = callOnPresent(
-              defaultValueEqualsToken,
+              defaultValEqToken,
               parseExpression
             );
 
@@ -1502,11 +1500,11 @@ export namespace Parser {
                 : { explicitType: false };
 
             const defaultValue: funcExprParamDefaultVal =
-              isPresent(defaultValueEqualsToken) || isPresent(value)
+              isPresent(defaultValEqToken) || isPresent(value)
                 ? {
                     hasDefaultValue: true,
                     value: value!,
-                    defaultValueEqualsToken: defaultValueEqualsToken!
+                    defaultValueEqualsToken: defaultValEqToken!
                   }
                 : { hasDefaultValue: false };
 
@@ -1520,12 +1518,12 @@ export namespace Parser {
           {
             delimiterToken: ',',
             missingDelimiterError:
-              'Invalid func expression: missing comma in argument list'
+              'invalid func expression: missing comma in argument list'
           },
           { parseComments: true, comments },
           { noEmptyList: false },
-          'TODO invalid function argument parsed',
-          'TODO unexpected eof while parsing function arguments'
+          'missing function argument',
+          'unexpected eof while parsing function arguments'
         );
 
       consumeComments(comments);
@@ -1565,15 +1563,16 @@ export namespace Parser {
       consumeComments(comments);
       checkEofWithError('invalid eof while parsing a func expression');
 
-      const returnType: explicitType = isPresent(colonToken)
-        ? {
-            explicitType: true,
-            typeExpression: typeExpression!,
-            colonToken
-          }
-        : {
-            explicitType: false
-          };
+      const returnType: explicitType =
+        isPresent(colonToken) || isPresent(typeExpression)
+          ? {
+              explicitType: true,
+              typeExpression: typeExpression!,
+              colonToken: colonToken!
+            }
+          : {
+              explicitType: false
+            };
 
       return {
         type: 'func',
@@ -1672,14 +1671,17 @@ export namespace Parser {
           ? parseExpression()
           : newParseError('missing body in match expression line');
 
-        const parameters: matchBodyLineArgs = isPresent(openingBracketToken)
-          ? {
-              hasParameters: true,
-              parameters: params!,
-              openingBracketToken: openingBracketToken!,
-              closingBracketToken: closingBracketToken!
-            }
-          : { hasParameters: false };
+        const parameters: matchBodyLineArgs =
+          isPresent(openingBracketToken) ||
+          isPresent(closingBracketToken) ||
+          isPresent(params)
+            ? {
+                hasParameters: true,
+                parameters: params!,
+                openingBracketToken: openingBracketToken!,
+                closingBracketToken: closingBracketToken!
+              }
+            : { hasParameters: false };
 
         return {
           identifierToken,
@@ -1691,9 +1693,6 @@ export namespace Parser {
       }
 
       const comments: token[] = [];
-
-      consumeComments(comments);
-      checkEofWithError('invalid eof while parsing a match expression');
 
       const matchToken: token = advance();
 
@@ -1774,13 +1773,14 @@ export namespace Parser {
         'missing closing bracket in match body expression'
       );
 
-      const explicitType: explicitType = isPresent(colonToken)
-        ? {
-            explicitType: true,
-            typeExpression: typeAnnotation!,
-            colonToken: colonToken!
-          }
-        : { explicitType: false };
+      const explicitType: explicitType =
+        isPresent(colonToken) || isPresent(typeAnnotation)
+          ? {
+              explicitType: true,
+              typeExpression: typeAnnotation!,
+              colonToken: colonToken!
+            }
+          : { explicitType: false };
 
       // TODO, check for bugs
       return {
@@ -2080,6 +2080,7 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
+        ['let x = a()()();', 1],
         [`let x = a.b().c().d;`, -1],
         [`type t { i, /*comment 33*/ }`, 1],
         [`type t { /*comment 33*/ }`, 1],

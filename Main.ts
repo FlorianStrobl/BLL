@@ -7,8 +7,8 @@ import * as errs from './FErrorMsgs';
 import * as test from './LCIdentifierCheck';
 import * as fs from 'fs';
 
-const ans = fs.readFileSync('./std.bll').toString();
-console.log('HERE', Parser.parse(ans));
+// const ans = fs.readFileSync('./std.bll').toString();
+// console.log('HERE', Parser.parse(ans));
 
 // @ts-ignore
 import { inspect } from 'util';
@@ -41,7 +41,13 @@ const log = (args: any) =>
  */
 
 const filename = 'src';
-const code = `
+const code = `let main = func (a) => (
+  (- (2 - 3 - 4) == - -5)                  &
+  (2 ** 3 ** 4  == 2.4178516392292583e+24) &
+  (2 * 3 * 4 == 24)                        &
+  ((2 + 3 * 4 == 2 + (3 * 4)) & ((2 + 3) * 4 != 2 + 3 * 4)));`;
+const argument: number = 5;
+const _code = `
 // **
 
 type binaryTree[T] {
@@ -70,13 +76,6 @@ type binaryTree[T] {
 //      fn: T -> T = func (x: T): T => x
 //     ): T => fn(v);
 
-
-let main = func (a) => (
-  (- (2 - 3 - 4) == - -5)                  &
-  (2 ** 3 ** 4  == 2.4178516392292583e+24) &
-  (2 * 3 * 4 == 24)                        &
-  ((2 + 3 * 4 == 2 + (3 * 4)) & ((2 + 3) * 4 != 2 + 3 * 4)));
-
 //let add = func (a, b) => a + b;
 
 // let my_function = func (x, y) => x % y;
@@ -97,7 +96,6 @@ let f1 = func (arg2: f32 = 22.5): f32 => f(arg2);
 // ((a.b).c().d);
 //let g = func (x, y) => x / y;
 `;
-const argument: number = 5;
 
 const lexedCode = Lexer.lexe(code);
 if (!lexedCode.valid)
@@ -123,10 +121,10 @@ Beautified code:`);
 console.log(formattedCode);
 console.log(`--------------------------------------------------------------------------
 AST:`);
-log(parsedCode.statements);
+//log(parsedCode.statements);
 console.log(`--------------------------------------------------------------------------
 Compiled code (asm):`);
-console.log(asm);
+//console.log(asm);
 console.log(`--------------------------------------------------------------------------
 Interpreted code with ${argument}:`);
 console.log(interpreterResult);

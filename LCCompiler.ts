@@ -398,7 +398,8 @@ export namespace Compiler {
         const idxBefore: number = varCounter.c;
         // TODO even wrong, because of lazy evaluation... (do not exec all the expr beforhand)
         for (const arg of exp.arguments) {
-          console.log('called this with ', JSON.stringify(arg));
+          // TODO
+          // console.log('called this with ', JSON.stringify(arg));
           _str += `%Z${varCounter.c++} = i32 ${todoCompileSimpleExpression(
             arg.argument,
             varCounter
