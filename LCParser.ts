@@ -3,6 +3,8 @@ import { Lexer } from './LCLexer';
 import { inspect } from 'util';
 // import * as F from './FErrorMsgs';
 
+// TODO identifiers seperate from the lexeme-token, because in next step, change the identifier to include the group/namespace path to it, in that field
+
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
 
@@ -185,7 +187,7 @@ export namespace Parser {
           openingBracketToken: token;
           closingBracketToken: token;
         }
-      | { type: 'identifier'; identifierToken: token }
+      | { type: 'identifier'; identifier: string; identifierToken: token }
       | {
           type: 'literal';
           literalType: 'i32' | 'f32';
@@ -245,21 +247,19 @@ export namespace Parser {
 
   type matchBodyLine = comment & {
     identifierToken: token;
-    parameters: matchBodyLineArgs;
+    parameters: argumentList<token>;
+    brackets:
+      | {
+          hasBrackets: true;
+          openingBracketToken: token;
+          closingBracketToken: token;
+        }
+      | {
+          hasBrackets: false;
+        };
     body: expression;
     arrowToken: token;
   };
-
-  type matchBodyLineArgs =
-    | {
-        hasParameters: true;
-        parameters: argumentList<token>;
-        openingBracketToken: token;
-        closingBracketToken: token;
-      }
-    | {
-        hasParameters: false;
-      };
   // #endregion
 
   // #region types
@@ -278,6 +278,7 @@ export namespace Parser {
         }
       | {
           type: 'identifier';
+          identifier: string;
           identifierToken: token; // generic/type identifier
           generic:
             | {
@@ -1398,6 +1399,7 @@ export namespace Parser {
 
         return {
           type: 'identifier',
+          identifier: identifierToken.lex,
           identifierToken,
           comments
         };
@@ -1674,21 +1676,19 @@ export namespace Parser {
           ? parseExpression()
           : newParseError('missing body in match expression line');
 
-        const parameters: matchBodyLineArgs =
-          isPresent(openingBracketToken) ||
-          isPresent(closingBracketToken) ||
-          isPresent(params)
-            ? {
-                hasParameters: true,
-                parameters: params!,
-                openingBracketToken: openingBracketToken!,
-                closingBracketToken: closingBracketToken!
-              }
-            : { hasParameters: false };
-
         return {
           identifierToken,
-          parameters,
+          parameters: params ?? [],
+          brackets:
+            isPresent(openingBracketToken) || isPresent(closingBracketToken)
+              ? {
+                  hasBrackets: true,
+                  openingBracketToken: openingBracketToken!,
+                  closingBracketToken: closingBracketToken!
+                }
+              : {
+                  hasBrackets: false
+                },
           body,
           arrowToken,
           comments
@@ -1930,8 +1930,9 @@ export namespace Parser {
         if (!match('['))
           return {
             type: 'identifier',
-            identifierToken,
+            identifier: identifierToken.lex,
             generic: { hasGenericSubstitution: false },
+            identifierToken,
             comments
           };
 
@@ -1969,13 +1970,14 @@ export namespace Parser {
 
         return {
           type: 'identifier',
-          identifierToken,
+          identifier: identifierToken.lex,
           generic: {
             hasGenericSubstitution: true,
             substitutions,
             openingBracketToken,
             closingBracketToken
           },
+          identifierToken,
           comments
         };
       } else if (match('(')) {

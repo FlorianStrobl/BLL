@@ -264,6 +264,7 @@ export namespace Interpreter {
             rawValue === 0
               ? {
                   type: 'identifier',
+                  identifier: '$',
                   identifierToken: {
                     lex: '$',
                     ty: Lexer.tokenType.identifier,
@@ -273,6 +274,7 @@ export namespace Interpreter {
                 }
               : {
                   type: 'identifier',
+                  identifier: '$$',
                   identifierToken: {
                     lex: '$$',
                     ty: Lexer.tokenType.identifier,

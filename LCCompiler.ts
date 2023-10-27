@@ -463,6 +463,6 @@ export namespace Compiler {
       if (ast[i].type === 'let' && (ast[i] as any).body.type === 'func')
         str += todoCompileSimpleFunction(ast[i]) + '\n\n';
 
-    return str + "\ndeclare i32 @printf(i8*, ...)";
+    return str + '\ndeclare i32 @printf(i8*, ...)';
   }
 }
