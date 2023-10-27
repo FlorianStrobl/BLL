@@ -22,7 +22,7 @@ class Larser {
 
     this.state = { eof: false, currentToken: undefined as never };
     this.advanceToken();
-    if (this.state.eof === false && this.state.currentToken === undefined)
+    if (!this.state.eof && this.state.currentToken === undefined)
       throw 'lexe first token';
   }
 
@@ -2420,7 +2420,7 @@ export namespace Parser {
     }
   }
 
-  debugParser(0, true, false, true);
+  debugParser(0, false, false, true);
 }
 
 const test = `

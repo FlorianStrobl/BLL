@@ -85,8 +85,11 @@ let worked = 0;
 module.exports.fuzz = function (data /*: Buffer */) {
   const fuzzerData = data.toString();
 
-  //const lexed = Lexer.lexe(fuzzerData);
-  const parsed = Parser.parse(fuzzerData);
-  if (parsed.valid)
-    if (++worked % 100 === 0) console.log(`did parse it: "${worked}" times`);
+  try {
+    const parsed = Parser.parse(fuzzerData);
+    if (parsed.valid)
+      if (++worked % 100 === 0) console.log(`did parse it: "${worked}" times`);
+  } catch (e) {
+    if (e !== 'lexer can not lexe') throw e;
+  }
 };
