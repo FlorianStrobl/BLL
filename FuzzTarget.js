@@ -90,6 +90,6 @@ module.exports.fuzz = function (data /*: Buffer */) {
     if (parsed.valid)
       if (++worked % 100 === 0) console.log(`did parse it: "${worked}" times`);
   } catch (e) {
-    if (e !== 'lexer can not lexe') throw e;
+    if (!(typeof e === 'string' && e.includes('lexer can not lexe'))) throw e;
   }
 };
