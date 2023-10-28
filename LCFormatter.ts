@@ -186,7 +186,7 @@ export namespace Formatter {
         return (
           addColor('match ', Colors.standardKeyword, withColor) +
           addColor('(', Colors.symbol, withColor) +
-          printExpression(expression.header, withColor, indentation) +
+          printExpression(expression.scrutinee, withColor, indentation) +
           addColor(')', Colors.symbol, withColor) +
           (expression.explicitType.explicitType
             ? addColor(': ', Colors.symbol, withColor) +

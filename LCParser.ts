@@ -209,7 +209,7 @@ export namespace Parser {
         }
       | {
           type: 'match' /*TODO ; put in comments[] for each and every branch!*/;
-          header: expression;
+          scrutinee: expression;
           body: argumentList<matchBodyLine>;
           explicitType: explicitType;
           matchToken: token;
@@ -892,10 +892,7 @@ export namespace Parser {
         consComments(comments);
         checkEofErr('eof in complex type statement');
 
-        const closingBracketToken: token = matchAdvOrErr(
-          '}',
-          'TODO internal error'
-        );
+        const closingBracketToken: token = matchAdvOrErr('}', 'TODO error');
 
         return {
           type: 'complex-type',
@@ -950,7 +947,7 @@ export namespace Parser {
 
       const closingBracketToken: token = matchAdvOrErr(
         '}',
-        'TODO internal error, did not match "}" but expected it for end of group statement'
+        'TODO error, did not match "}" but expected it for end of group statement'
       );
 
       return {
@@ -1005,13 +1002,11 @@ export namespace Parser {
 
   // TODO isEof checks
   function parseExpression(): expression {
-    type precedenceInformation = {
+    const precedenceTable: {
       symbols: string | string[];
       arity: 'binary' | 'unary';
       associativity: 'left-to-right' | 'right-to-left' | /*none:*/ 'unary';
-    };
-
-    const precedenceTable: precedenceInformation[] = [
+    }[] = [
       { symbols: '|', arity: 'binary', associativity: 'left-to-right' },
       { symbols: '^', arity: 'binary', associativity: 'left-to-right' },
       { symbols: '&', arity: 'binary', associativity: 'left-to-right' },
@@ -1710,7 +1705,7 @@ export namespace Parser {
       consComments(comments);
       checkEofErr('invalid eof while parsing a match expression');
 
-      const header: expression = !match(')') // better error message
+      const scrutinee: expression = !match(')') // better error message
         ? parseExpression()
         : newParseError('missing body of argument to match expression');
 
@@ -1786,7 +1781,7 @@ export namespace Parser {
 
       return {
         type: 'match',
-        header,
+        scrutinee,
         explicitType,
         body,
         matchToken,
@@ -2375,7 +2370,7 @@ export namespace Parser {
             );
           } else successfullTests++;
         } catch (e) {
-          console.error('INTERNAL ERROR:', code, e);
+          console.error('Internal parser error:', code, e);
         }
       }
       for (const code of mustNotParseButLexe) {
@@ -2389,7 +2384,7 @@ export namespace Parser {
             log(ans);
           } else successfullTests++;
         } catch (e) {
-          console.error('INTERNAL ERROR', code, e);
+          console.error('Internal parser error:', code, e);
         }
       }
 

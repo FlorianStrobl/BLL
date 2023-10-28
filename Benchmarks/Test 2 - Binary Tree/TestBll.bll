@@ -1,0 +1,13 @@
+type tree {
+  none,
+  node(i32, tree, tree)
+}
+
+let new_node = func (val: i32, left: tree = tree.none, right: tree = tree.none): tree => tree.node(val, left, right);
+
+let build_test_tree = func (): tree => new_node(5, new_node(4, new_node(7)), new_node(1));
+
+let tree_sum = func (t: tree) => match (t) {
+    none => 0,
+    node(value, left, right) => value + tree_sum(left) + tree_sum(right)
+  };
