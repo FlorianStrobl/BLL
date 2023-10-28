@@ -1173,7 +1173,9 @@ _
   //   //consumeIdentifier("jksfdjfsd234_jkfsd3", 0);
   //   //consumeSymbol("***", 0);
   //   //consumeNumericLiteral("03_2_6.3_5e-2_3", 0);
-  //   consumeComment('/* test */', 0);
+  //   //consumeNumericLiteral("0xAF04E8", 0);
+  //   //consumeComment('/* test */', 0);
+  //   //consumeComment('// test', 0);
   // }
   // console.timeEnd();
 }

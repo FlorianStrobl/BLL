@@ -2060,7 +2060,7 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
-        ["", 0],
+        ['', 0],
         ['let x = a()()();', 1],
         [`let x = a.b().c().d;`, -1],
         [`type t { i, /*comment 33*/ }`, 1],
@@ -2403,7 +2403,7 @@ export namespace Parser {
     }
   }
 
-  debugParser(1, true, false, true);
+  debugParser(0, true, false, true);
 }
 
 const test = `
