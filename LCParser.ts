@@ -1839,32 +1839,23 @@ export namespace Parser {
 
         const returnType: typeExpression = parseTypeExpression0();
 
-        const brackets:
-          | {
-              hasBrackets: true;
-              openingBracketToken: token;
-              closingBracketToken: token;
-            }
-          | { hasBrackets: false } =
-          val.type === 'arglist'
-            ? {
-                hasBrackets: true,
-                openingBracketToken: val.openingBracketToken,
-                closingBracketToken: val.closingBracketToken
-              }
-            : { hasBrackets: false };
-
         const parameters: argumentList<typeExpression> =
           val.type === 'arglist'
             ? val.body
             : [{ argument: val, delimiterToken: undefined }];
 
-        // TODO HERE merge brackets with parameters!?
         return {
           type: 'func-type',
           parameters,
           returnType,
-          brackets,
+          brackets:
+            val.type === 'arglist'
+              ? {
+                  hasBrackets: true,
+                  openingBracketToken: val.openingBracketToken,
+                  closingBracketToken: val.closingBracketToken
+                }
+              : { hasBrackets: false },
           arrowToken,
           comments
         };
@@ -1881,26 +1872,22 @@ export namespace Parser {
         };
       else {
         // invalid arglist
-        if (val.body.length === 1 && isPresent(val.body[0].delimiterToken))
-          return newParseError(
-            'invalid trailing comma in type grouping expression'
-          );
-        else if (val.body.length === 0)
+        if (val.body.length === 0)
           return newParseError(
             'got empty brackets in type expression, without being a func type'
           );
-        else if (val.body.length > 1)
+        else if (val.body.length === 1 && isPresent(val.body[0].delimiterToken))
           return newParseError(
-            'got more than one type expression in type grouping expression'
+            'invalid trailing comma in type grouping expression'
           );
+        // if (val.body.length > 1)
         else
           return newParseError(
-            'got arglist as type expression without being followed by an arrow for a func expression'
+            'got more than one type expression in type grouping expression'
           );
       }
     }
 
-    // isAtEnd and consumeComments
     function primary(): typeExpression | argList {
       const comments: token[] = [];
 
@@ -2073,6 +2060,7 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
+        ["", 0],
         ['let x = a()()();', 1],
         [`let x = a.b().c().d;`, -1],
         [`type t { i, /*comment 33*/ }`, 1],
@@ -2415,7 +2403,7 @@ export namespace Parser {
     }
   }
 
-  debugParser(0, false, false, true);
+  debugParser(1, true, false, true);
 }
 
 const test = `

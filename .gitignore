@@ -1,5 +1,7 @@
 corpus/
 LCLexer.js
+_LCLexer.js
 LCParser.js
+_LCParser.js
 Benchmarks/Test 3 - AoC 2022
 Benchmarks/*/*.exe

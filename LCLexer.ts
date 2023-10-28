@@ -837,6 +837,13 @@ export namespace Lexer {
     for (let i = 0; i < times; ++i) {
       // #region tests
       const mustLexe: [string, number][] = [
+        ['// ?', 1],
+        ['.5', 2],
+        [
+          'a id+a _a___b3c_ + ++ -+ => 3 0.4e2 0.5e-2 0xff 0b10101 0o4025 /**comment / with * ***/ let keywords // test comment ??',
+          21
+        ],
+        ['', 0],
         ['let x = (func (a) => a)(3+1);', 17],
         [
           `
@@ -980,8 +987,10 @@ _
         ['0xa+3', 3],
         ['0xE+3', 3],
         ['0xaE+3', 3],
+        ['03_4.2', 1],
         ['0xeee', 1],
         ['534e354', 1],
+        ['03_3.0_2', 1],
         ['0.0e-0', 1],
         ['0e0', 1],
         [
@@ -1010,6 +1019,20 @@ _
         ...keywords.map((e: string) => [e, 1] as [string, number])
       ];
       const mustNotLexe: [string, number][] = [
+        ['0xlk', 1],
+        ['// 😀', 1],
+        ['😀😀😀 3__4', 2],
+        ['0b12', 1],
+        ['0o78', 1],
+        ['0o79', 1],
+        ['0oA', 1],
+        ['0xAx', 1],
+        ['0bA', 1],
+        ['03_.2', 1],
+        ['03._2', 1],
+        ['03.0__2', 1],
+        ['03__3.0_2', 1],
+        ['"string"', 1],
         ['5.3.2', 1],
         ['"😀"', 1],
         ['/*😀*/', 1],
@@ -1144,4 +1167,13 @@ _
   }
 
   debugLexer(1, false, false);
+
+  // console.time();
+  // for (let i = 0; i < 1000 * 1000; ++i) {
+  //   //consumeIdentifier("jksfdjfsd234_jkfsd3", 0);
+  //   //consumeSymbol("***", 0);
+  //   //consumeNumericLiteral("03_2_6.3_5e-2_3", 0);
+  //   consumeComment('/* test */', 0);
+  // }
+  // console.timeEnd();
 }

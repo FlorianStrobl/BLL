@@ -9,5 +9,6 @@ let build_test_tree = func (): tree => new_node(5, new_node(4, new_node(7)), new
 
 let tree_sum = func (t: tree) => match (t) {
     none => 0,
-    node(value, left, right) => value + tree_sum(left) + tree_sum(right)
+    node(value, left, right) =>
+      value + tree_sum(left) + tree_sum(right)
   };
