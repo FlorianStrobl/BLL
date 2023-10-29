@@ -124,6 +124,7 @@ export namespace Lexer {
     ...possibleStringStarts // because of error messages
   ];
 
+  const firstCharOfKeywords: string[] = keywords.map((str) => str[0]);
   const firstCharOfSymbols: string[] = symbols
     .map((str) => str[0])
     .filter((e, i, t) => t.indexOf(e) === i);
@@ -235,18 +236,21 @@ export namespace Lexer {
   // #region consume functions
   // assert: an identifier is at idx
   function consumeIdentifier(code: string, idx: number): nextToken {
-    let identifier: string = '';
+    const canBeKeyword: boolean = firstCharOfKeywords.includes(code[idx]);
 
-    for (
-      let i = idx;
-      idxValid(i, code) &&
-      (matchRange(code[i], 'a', 'z') ||
-        matchRange(code[i], 'A', 'Z') ||
-        matchRange(code[i], '0', '9') ||
-        code[i] === '_');
-      ++i
+    let endIdx: number = idx;
+
+    // increase the index to the maximum possible identifier length
+    while (
+      idxValid(endIdx, code) &&
+      (matchRange(code[endIdx], 'a', 'z') ||
+        matchRange(code[endIdx], 'A', 'Z') ||
+        matchRange(code[endIdx], '0', '9') ||
+        matches(code[endIdx], '_'))
     )
-      identifier += code[i];
+      ++endIdx;
+
+    const identifier: string = code.substring(idx, endIdx);
 
     return {
       type: 'token',
@@ -255,7 +259,7 @@ export namespace Lexer {
         ty:
           identifier === 'nan' || identifier === 'inf'
             ? tokenType.literal
-            : keywords.includes(identifier)
+            : canBeKeyword && keywords.includes(identifier)
             ? tokenType.keyword
             : tokenType.identifier,
         idx
@@ -684,7 +688,7 @@ export namespace Lexer {
     if (
       matchRange(code[idx], 'a', 'z') ||
       matchRange(code[idx], 'A', 'Z') ||
-      code[idx] === '_'
+      matches(code[idx], '_')
     )
       return consumeIdentifier(code, idx);
 
@@ -1127,20 +1131,31 @@ _
 
   debugLexer(0, true, false);
 
+  // const st = 'jksfdjf_sd234_jkfsd3 let let3';
   // console.time();
   // for (let i = 0; i < 1000 * 1000; ++i) {
-  //   //consumeIdentifier('jksfdjf_sd234_jkfsd3', 0);
-  //   //Lexer.lexe('jksfdjf_sd234_jkfsd3');
+  //   //   // ~575ms
+  //   //consumeIdentifier(st, 0);
+  //   //consumeIdentifier(st, 21);
+  //   //consumeIdentifier(st, 25);
 
-  //   //consumeIdentifier('jksfdjf_s 234_jkfsd3', 0);
-  //   //consumeIdentifier('jksfdjf_s 234_jkfsd3', 10);
-
-  //   // Lexer.lexe('***+-=>/<=-^|*-<++(}');
-  //   //consumeNumericLiteral("03_2_6.3_5e-2_3", 0);
-  //   //consumeNumericLiteral("0xAF04E8", 0);
-  //   //consumeComment('/* test */', 0);
-  //   //consumeComment('// test', 0);
-  //   //Lexer.lexe(" \t \t \r \n\n\n   \r\t\t    ");
+  //   //   // ~625ms
+  //   //   // lexeNextToken(st, 0);
+  //   //   // lexeNextToken(st, 21);
+  //   //   // lexeNextToken(st, 25);
+  //   //   // ~800ms
+  //   //   //for (const _ of Lexer.lexeNextTokenIter(st));
+  //   //   // ~815ms
+  //   //   //Lexer.lexe(st);
+  //   //   //   //Lexer.lexe('jksfdjf_sd234_jkfsd3');
+  //   //   //   //consumeIdentifier('jksfdjf_s 234_jkfsd3', 0);
+  //   //   //   //consumeIdentifier('jksfdjf_s 234_jkfsd3', 10);
+  //   //   //   // Lexer.lexe('***+-=>/<=-^|*-<++(}');
+  //   //   //   //consumeNumericLiteral("03_2_6.3_5e-2_3", 0);
+  //   //   //   //consumeNumericLiteral("0xAF04E8", 0);
+  //   //   //   //consumeComment('/* test */', 0);
+  //   //   //   //consumeComment('// test', 0);
+  //   //   //   //Lexer.lexe(" \t \t \r \n\n\n   \r\t\t    ");
   // }
   // console.timeEnd();
 }

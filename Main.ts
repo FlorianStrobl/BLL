@@ -53,7 +53,7 @@ const code = `
 //     some(value) => value
 //   };
 
-let main = func (a) => (
+let main = func (a) => a + (
   (- (2 - 3 - 4) == - -5)                  &
   (2 ** 3 ** 4  == 2.4178516392292583e+24) &
   (2 * 3 * 4 == 24)                        &
