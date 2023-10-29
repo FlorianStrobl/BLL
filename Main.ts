@@ -41,11 +41,24 @@ const log = (args: any) =>
  */
 
 const filename = 'src';
-const code = `let main = func (a) => (
+const code = `
+// type complex[T] {
+//   none,
+//   some(T)
+// }
+
+// let get = func (x: complex[i32]) =>
+//   match (x) {
+//     none => 0,
+//     some(value) => value
+//   };
+
+let main = func (a) => (
   (- (2 - 3 - 4) == - -5)                  &
   (2 ** 3 ** 4  == 2.4178516392292583e+24) &
   (2 * 3 * 4 == 24)                        &
-  ((2 + 3 * 4 == 2 + (3 * 4)) & ((2 + 3) * 4 != 2 + 3 * 4)));`;
+  ((2 + 3 * 4 == 2 + (3 * 4))              &
+  ((2 + 3) * 4 != 2 + 3 * 4)));`;
 const argument: number = 5;
 const _code = `
 // **

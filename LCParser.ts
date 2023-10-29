@@ -45,7 +45,7 @@ class Larser {
 
     const iteratorNext: IteratorResult<Lexer.nextToken> = this.lexer.next();
     const iteratorValue: Lexer.nextToken = iteratorNext.value;
-    const isEof: boolean = iteratorValue.type === 'eof';
+    const isEof = iteratorNext.done === true;
 
     // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
     if (!isEof && iteratorValue.type === 'token')
@@ -1036,7 +1036,7 @@ export namespace Parser {
         associativity: 'left-to-right'
       },
       {
-        symbols: ['**', '***'],
+        symbols: '**',
         arity: 'binary',
         associativity: 'right-to-left'
       },
@@ -2170,7 +2170,7 @@ export namespace Parser {
         ['type test { }', 1],
         ['group test { }', 1],
         [
-          'let test = ! ~ + - 1 + 1 - 1 * 1 / 1 ** 1 *** 1 % 1 & 1 | 1 ^ 1 << 1 >> 1 == 1 != 1 <= 1 >= 1 < 1 > 1;',
+          'let test = ! ~ + - 1 + 1 - 1 * 1 / 1 ** 1 ** 1 % 1 & 1 | 1 ^ 1 << 1 >> 1 == 1 != 1 <= 1 >= 1 < 1 > 1;',
           1
         ],
         [
