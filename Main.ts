@@ -42,16 +42,16 @@ const log = (args: any) =>
 
 const filename = 'src';
 const code = `
-// type complex[T] {
-//   none,
-//   some(T)
-// }
+type complex[T] {
+  none,
+  some(T)
+}
 
-// let get = func (x: complex[i32]) =>
-//   match (x) {
-//     none => 0,
-//     some(value) => value
-//   };
+let get = func (x: complex[i32]) =>
+  match (x) {
+    none => 0,
+    some(value) => value
+  };
 
 let main = func (a) => a + (
   (- (2 - 3 - 4) == - -5)                  &

@@ -2062,7 +2062,7 @@ export namespace Parser {
       const mustParse: [string, number][] = [
         ['', 0],
         ['let x = a()()();', 1],
-        [`let x = a.b().c().d;`, -1],
+        [`let x = a.b().c().d;`, 1],
         [`type t { i, /*comment 33*/ }`, 1],
         [`type t { /*comment 33*/ }`, 1],
         ['let x = x.a()/*comment 3*/()/**/().b;', 1],
