@@ -1,12 +1,9 @@
 import { Lexer } from './LCLexer';
-// @ts-ignore
 import { inspect } from 'util';
-// import * as F from './FErrorMsgs';
-
-// TODO identifiers seperate from the lexeme-token, because in next step, change the identifier to include the group/namespace path to it, in that field
-
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
+
+// TODO identifiers seperate from the lexeme-token, because in next step, change the identifier to include the group/namespace path to it, in that field
 
 // #region lexer code for parser
 // can throw internal errors when assertions are not met
@@ -45,12 +42,12 @@ class Larser {
 
     const iteratorNext: IteratorResult<Lexer.nextToken> = this.lexer.next();
     const iteratorValue: Lexer.nextToken = iteratorNext.value;
-    const isEof = iteratorNext.done === true;
+    const iteratorDone = iteratorNext.done === true;
 
     // TODO maybe repeat if "soft error": !value.valid but also !value.codeInvalid
-    if (!isEof && iteratorValue.type === 'token')
+    if (!iteratorDone && iteratorValue.type === 'token')
       this.state = { eof: false, currentToken: iteratorValue.value };
-    else if (isEof) this.state = { eof: true };
+    else if (iteratorDone) this.state = { eof: true };
     else this.errorHandling();
   }
 
@@ -69,14 +66,14 @@ class Larser {
 // #endregion
 
 export namespace Parser {
-  let parseErrors: parseError[] = [];
+  const parseErrors: parseError[] = [];
   let larser: Larser;
 
   // #region types
   type optional<T> = T | undefined;
 
   export type token = Lexer.token;
-  type optToken = optional<Lexer.token>;
+  type optToken = optional<token>;
   type tokenType = Lexer.tokenType;
   const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
 
@@ -87,11 +84,9 @@ export namespace Parser {
   type comment = { comments: token[] };
 
   // TODO
-  export type parseError = {
-    type: 'error';
-    message: string;
+  export type parseError = { type: 'error'; message: string } & {
     value?: any;
-    currentToken?: token;
+    currentToken: optToken;
   };
 
   // #region stmt
@@ -101,9 +96,10 @@ export namespace Parser {
       | { type: 'empty'; semicolonToken: token }
       | {
           type: 'group';
-          identifierToken: token;
+          name: string;
           body: statement[];
           groupToken: token;
+          identifierToken: token;
           openingBracketToken: token;
           closingBracketToken: token;
         }
@@ -115,25 +111,28 @@ export namespace Parser {
         }
       | ({
           type: 'type-alias';
-          identifierToken: token;
+          name: string;
           body: typeExpression;
           typeToken: token;
+          identifierToken: token;
           equalsToken: token;
           semicolonToken: token;
         } & genericAnnotation)
       | ({
           type: 'complex-type';
-          identifierToken: token;
+          name: string;
           body: argumentList<complexTypeLine>;
           typeToken: token;
+          identifierToken: token;
           openingBracketToken: token;
           closingBracketToken: token;
         } & genericAnnotation)
       | ({
           type: 'let';
-          identifierToken: token;
+          name: string;
           body: expression;
           letToken: token;
+          identifierToken: token;
           equalsToken: token;
           semicolonToken: token;
         } & genericAnnotation &
@@ -191,7 +190,7 @@ export namespace Parser {
       | {
           type: 'literal';
           literalType: 'i32' | 'f32';
-          value: number; // "NaN", "Infinity", 0, 1.5, ...
+          value: number; // TODO, already here?? "NaN", "Infinity", 0, 1.5, ...
           literalToken: token;
         }
       | {
@@ -208,7 +207,7 @@ export namespace Parser {
           operatorToken: token;
         }
       | {
-          type: 'match' /*TODO ; put in comments[] for each and every branch!*/;
+          type: 'match';
           scrutinee: expression;
           body: argumentList<matchBodyLine>;
           explicitType: explicitType;
@@ -247,6 +246,7 @@ export namespace Parser {
 
   type matchBodyLine = comment & {
     identifierToken: token;
+    // TODO merge them or not with brackets
     parameters: argumentList<token>;
     brackets:
       | {
@@ -278,8 +278,7 @@ export namespace Parser {
         }
       | {
           type: 'identifier';
-          identifier: string;
-          identifierToken: token; // generic/type identifier
+          identifier: string; // generic/type identifier
           generic:
             | {
                 hasGenericSubstitution: true;
@@ -288,6 +287,7 @@ export namespace Parser {
                 openingBracketToken: token;
               }
             | { hasGenericSubstitution: false };
+          identifierToken: token;
         }
       | {
           type: 'func-type';
@@ -408,10 +408,7 @@ export namespace Parser {
   }
 
   // calls the callback function if and only if present is there
-  function callOnPresent<T, U>(
-    present: NonNullable<U> | undefined,
-    callBack: () => T
-  ): optional<T> {
+  function callOnPresent<T>(present: unknown, callBack: () => T): optional<T> {
     return isPresent(present) ? callBack() : undefined;
   }
 
@@ -434,8 +431,8 @@ export namespace Parser {
     noArgumentError: string,
     eofError: string
   ): argumentList<T> {
-    // given `(/*comment*/)` and parseComments:false, the comment will get to globalComments
-    // error messages for `(5,,)`
+    // given "(/*comment*/)" with parseComments==false, the comment will be given to globalComments
+    // TODO error messages for `(5,,)`
 
     const argumentList: argumentList<T> = [];
     let lastDelimiterToken: optToken = undefined;
@@ -452,6 +449,7 @@ export namespace Parser {
       if (commentInfo.parseComments) consComments(commentInfo.comments);
       checkEofErr(eofError);
 
+      // to check if something was consumed at least
       const debugCurrentTokenIdx: number = peek().idx;
 
       const argument: T = !match(
@@ -459,6 +457,12 @@ export namespace Parser {
       ) /*better error message*/
         ? parseArgument()
         : newParseError(noArgumentError);
+
+      if (debugCurrentTokenIdx === peek().idx) {
+        // nothing has been consumed
+        newParseError(noArgumentError);
+        break;
+      }
 
       if (commentInfo.parseComments) consComments(commentInfo.comments);
       else if (outerComments.length !== 0) {
@@ -480,7 +484,7 @@ export namespace Parser {
           );
 
         outerComments = [];
-        // could be before the delimiter token still
+        // this could be before the delimiter token, so must get all the comments now
         consComments(outerComments);
       }
       checkEofErr(eofError);
@@ -494,17 +498,9 @@ export namespace Parser {
 
       if (commentInfo.parseComments) consComments(commentInfo.comments);
       else consComments(outerComments); // save comments into outerComments, in case that after them comes the endToken
-
-      checkEofErr(eofError);
-
-      // better error message
-      if (debugCurrentTokenIdx === peek().idx) {
-        newParseError(noArgumentError);
-        break;
-      }
     }
 
-    // no consume comments since next token is endToken
+    // no consume comments needed, since next token is endToken
 
     checkEofErr(eofError);
 
@@ -517,7 +513,7 @@ export namespace Parser {
         commentInfo.globalComments.push(...outerComments);
       else {
         // comments belong to the very last argument
-        const lastArgument: T = argumentList[argumentList.length - 1].argument;
+        const lastArgument: T = argumentList.at(-1)!.argument;
 
         if (typeof lastArgument === 'object' && lastArgument !== null) {
           if (
@@ -760,11 +756,12 @@ export namespace Parser {
 
       return {
         type: 'let',
-        identifierToken,
+        name: identifierToken.lex,
         body,
         ...explicitType,
         ...genericAnnotation,
         letToken,
+        identifierToken,
         equalsToken,
         semicolonToken,
         comments
@@ -858,10 +855,11 @@ export namespace Parser {
 
         return {
           type: 'type-alias',
-          identifierToken,
+          name: identifierToken.lex,
           body,
           ...generic,
           typeToken,
+          identifierToken,
           equalsToken,
           semicolonToken,
           comments
@@ -896,10 +894,11 @@ export namespace Parser {
 
         return {
           type: 'complex-type',
-          identifierToken,
+          name: identifierToken.lex,
           body,
           ...generic,
           typeToken,
+          identifierToken,
           openingBracketToken,
           closingBracketToken,
           comments
@@ -952,8 +951,9 @@ export namespace Parser {
 
       return {
         type: 'group',
-        identifierToken,
+        name: identifierToken.lex,
         body,
+        identifierToken,
         groupToken,
         openingBracketToken,
         closingBracketToken,
@@ -2011,7 +2011,7 @@ export namespace Parser {
   ):
     | { valid: true; statements: statement[] }
     | { valid: false; parseErrors: parseError[]; statements: statement[] } {
-    parseErrors = [];
+    parseErrors.splice(0, parseErrors.length); // remove all previous elements
     larser = new Larser(code); // can throw
 
     const statements: statement[] = [];
@@ -2019,7 +2019,7 @@ export namespace Parser {
     while (!isAtEnd()) {
       try {
         const statement: statement | parseError = parseStatement();
-        if (statement.type === 'error') break;
+        if (statement.type === 'error') break; // stop parsing then
         statements.push(statement);
       } catch (error) {
         if (error === 'eof') return { valid: false, parseErrors, statements };
@@ -2403,7 +2403,7 @@ export namespace Parser {
     }
   }
 
-  debugParser(0, true, false, true);
+  debugParser(2, true, false, true);
 }
 
 const test = `
