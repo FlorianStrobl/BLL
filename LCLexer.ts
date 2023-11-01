@@ -332,20 +332,18 @@ export namespace Lexer {
     const errors: numericLiteralError[] = [];
     let endIdx: number = idx;
 
-    // TODO lexe greedily all characters from the alphabet of the given type
+    // lexe greedily all characters from the alphabet of the given type
     function maxDigitsIdx(
       startIdx: number,
       type: 'dec' | 'bin' | 'oct' | 'hex'
     ): number {
       if (!idxValid(startIdx, code))
-        // TODO
         throw new Error(
           'Internal lexer error: did not met assertion for part of lexing numeric literal.'
         );
 
       let lastCharUnderscore: boolean = false;
 
-      // if started with underscore bad too TODO
       if (code[startIdx] === '_')
         errors.push({
           type: 'numeric literal part started with underscore',

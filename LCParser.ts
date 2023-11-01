@@ -3,8 +3,6 @@ import { inspect } from 'util';
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
 
-// TODO identifiers seperate from the lexeme-token, because in next step, change the identifier to include the group/namespace path to it, in that field
-
 // #region lexer code for parser
 // can throw internal errors when assertions are not met
 class Larser {
@@ -180,7 +178,7 @@ export namespace Parser {
           dotToken: token;
         }
       | {
-          type: 'functionCall';
+          type: 'call'; // either a functionCall, or a complex type value instantiation
           arguments: argumentList<expression>;
           function: expression;
           openingBracketToken: token;
@@ -243,22 +241,25 @@ export namespace Parser {
       }
     | { hasDefaultValue: false };
 
-  type matchBodyLine = comment & {
-    identifierToken: token;
-    // TODO merge them or not with brackets
-    parameters: argumentList<token>;
-    brackets:
-      | {
-          hasBrackets: true;
-          openingBracketToken: token;
-          closingBracketToken: token;
-        }
-      | {
-          hasBrackets: false;
-        };
-    body: expression;
-    arrowToken: token;
-  };
+  type matchBodyLine = comment &
+    (
+      | { isDefaultVal: true }
+      | { identifierToken: token; isDefaultVal: false }
+    ) & {
+      // TODO merge them or not with brackets
+      parameters: argumentList<token>;
+      brackets:
+        | {
+            hasBrackets: true;
+            openingBracketToken: token;
+            closingBracketToken: token;
+          }
+        | {
+            hasBrackets: false;
+          };
+      body: expression;
+      arrowToken: token;
+    };
   // #endregion
 
   // #region types
@@ -385,6 +386,11 @@ export namespace Parser {
   // on match: advance
   function optionalMatchAdvance(token: string): optToken {
     return match(token) ? advance() : undefined;
+  }
+
+  // on match type: advance
+  function optionalMatchTypeAdvance(type: tokenType): optToken {
+    return matchType(type) ? advance() : undefined;
   }
 
   // on match: advace else error
@@ -1026,7 +1032,7 @@ export namespace Parser {
         checkEofErr('invalid eof while parsing an expression');
 
         left = {
-          type: 'functionCall',
+          type: 'call',
           function: left,
           arguments: args,
           openingBracketToken,
@@ -1293,7 +1299,8 @@ export namespace Parser {
     };
   }
 
-  function parseMatchBodyLine(): matchBodyLine {
+  // TODO HERE NOW default match body line: "=> expr ,?"
+  function parseMatchBodyLine(hadDefaultLine: { had: boolean }): matchBodyLine {
     const comments: token[] = [];
 
     consComments(comments);
@@ -1302,51 +1309,64 @@ export namespace Parser {
     );
 
     // TODO allow more than identifiers for e.g. ints and or floats? (maybe even boolean expr?)
-    const identifierToken: token = matchTypeAdvanceOrError(
-      tokenType.identifier,
-      'invalid match expression: expected an identifier'
+    // optional, because of default value
+    const identifierToken: optToken = optionalMatchTypeAdvance(
+      tokenType.identifier
     );
+
+    if (hadDefaultLine.had && !isPresent(identifierToken))
+      newParseError('cant have two default value lines in a match body line');
+    else if (hadDefaultLine.had)
+      newParseError(
+        'cant have a default match body line, followed by another match body line'
+      );
+
+    if (!isPresent(identifierToken)) hadDefaultLine.had = true;
 
     consComments(comments);
     checkEofErr('invalid eof while parsing arguments of a match expression');
 
-    const openingBracketToken: optToken = optionalMatchAdvance('(');
+    const openingBracketToken: optToken = callOnPresent(identifierToken, () =>
+      optionalMatchAdvance('(')
+    );
 
     consComments(comments);
     checkEofErr('invalid eof while parsing arguments of a match expression');
 
     const params: optional<argumentList<token>> = callOnPresent(
-      openingBracketToken,
+      identifierToken,
       () =>
-        parseArgumentList<token>(
-          () =>
-            matchTypeAdvanceOrError(
-              tokenType.identifier,
-              'expected identifier in match body line expr'
-            ),
-          ')',
-          {
-            delimiterToken: ',',
-            missingDelimiterError:
-              'missing comma token between two identifier in match body line expr'
-          },
-          { parseComments: true, comments },
-          { noEmptyList: false },
-          'only identifier are allowed in match expr',
-          'unexpected eof while parsing match body line expr args'
+        callOnPresent(openingBracketToken, () =>
+          parseArgumentList<token>(
+            () =>
+              matchTypeAdvanceOrError(
+                tokenType.identifier,
+                'expected identifier in match body line expr'
+              ),
+            ')',
+            {
+              delimiterToken: ',',
+              missingDelimiterError:
+                'missing comma token between two identifier in match body line expr'
+            },
+            { parseComments: true, comments },
+            { noEmptyList: false },
+            'only identifier are allowed in match expr',
+            'unexpected eof while parsing match body line expr args'
+          )
         )
     );
 
     consComments(comments);
     checkEofErr('invalid eof while parsing arguments of a match expression');
 
-    const closingBracketToken: optToken = callOnPresent(
-      openingBracketToken,
-      () =>
+    const closingBracketToken: optToken = callOnPresent(identifierToken, () =>
+      callOnPresent(openingBracketToken, () =>
         matchAdvOrErr(
           ')',
           'closing bracket of local match body line was not closed'
         )
+      )
     );
 
     consComments(comments);
@@ -1364,9 +1384,24 @@ export namespace Parser {
       ? (parseExpression() as expression)
       : newParseError('missing body in match expression line');
 
+    const identifierOrDefault:
+      | {
+          isDefaultVal: false;
+          identifierToken: Lexer.token;
+        }
+      | {
+          isDefaultVal: true;
+        } = isPresent(identifierToken)
+      ? {
+          isDefaultVal: false,
+          identifierToken
+        }
+      : { isDefaultVal: true };
+
     return {
-      identifierToken,
+      ...identifierOrDefault,
       parameters: params ?? [],
+      body,
       brackets:
         isPresent(openingBracketToken) || isPresent(closingBracketToken)
           ? {
@@ -1377,7 +1412,6 @@ export namespace Parser {
           : {
               hasBrackets: false
             },
-      body,
       arrowToken,
       comments
     };
@@ -1441,8 +1475,9 @@ export namespace Parser {
     // no consumeComments for better local comments
     checkEofErr('invalid eof while parsing a match expression');
 
+    const hadDefaultLine: { had: boolean } = { had: false };
     const body: argumentList<matchBodyLine> = parseArgumentList<matchBodyLine>(
-      parseMatchBodyLine,
+      () => parseMatchBodyLine(hadDefaultLine),
       '}',
       {
         delimiterToken: ',',
@@ -1478,8 +1513,8 @@ export namespace Parser {
     return {
       type: 'match',
       scrutinee,
-      explicitType,
       body,
+      explicitType,
       matchToken,
       argOpeningBracketToken,
       argClosingBracketToken,
@@ -1490,7 +1525,7 @@ export namespace Parser {
   }
 
   // #region first expr levels
-  // unroll because of performance
+  // unrolled because of performance
   const parseExprLv0 = () =>
     parseExprLvl(
       precedenceTable[0].symbols,
@@ -2032,6 +2067,132 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
+        [
+          `let f = match (x) {
+      a => 5,
+      b => 3,
+      => c // default value
+    };`,
+          1
+        ],
+        [
+          `let f = match (x) {
+        a => 5,
+        b => 3,
+        => c, // default value
+      };`,
+          1
+        ],
+        [
+          `let x = func (x: i32 = 5) => x;
+      let a = 5(0)(3);`,
+          2
+        ],
+        [`let id[T]: (T -> T) -> (T -> T) = func (x: T -> T): T -> T => x;`, 1],
+        [
+          `  let f = func (a: x[i32]): x[i32] => a;
+      type x[T] = T;
+    type ZeroVariants { }
+
+  type RustEnum {
+    A,
+    B(),
+    C(i32)
+  }
+  type t {
+    identifier1(),
+    identifier2(i32),
+    identifier3,
+  }
+
+  type t2 = t;
+
+  let x = func (a) => a * (t + 1) / 2.0;`,
+          7
+        ],
+        [
+          `type TypeAlias = i32;
+      use std;
+
+      type ZeroVariants { }
+
+      type RustEnum {
+        A,
+        B(),
+        C(i32)
+      }
+      let f = 4;
+      let f = 5; // error
+      let f = 6; // error aswell! but what is the error message?`,
+          8
+        ],
+        ['let id[T]: T -> T -> T = 5;', 1],
+        [
+          `
+      use file;
+
+      let i = nan;
+      let j = inf;
+      let u = i;
+      let x: i32 = 1;
+      let y: f32 = 2.0;
+      let z[A] =
+        (func (x: A): A => x) (3);
+      let f[B,]: B -> i32 =
+        func (y: B,): i32 => 4 + y;
+
+      type alias = f32;
+      type complex {
+        type1,
+        type2(),
+        type3(i32, f32),
+        type4
+      }
+
+      group G0 {
+        group G1 { let a = 5; }
+        let b = 6.0;
+      }
+      `,
+          11
+        ],
+        ['type complexType { test, test2(), test3(i32 -> f32, hey, ) }', 1],
+        ['let f[T,B,Z,]: ((T, B,) -> i32) -> Z = func (g) => g();', 1],
+        [`group test { let a[b] = 5; let b = 3; let c = 2; }`, 1],
+        [`let x = func (x, y, z) => 1;`, 1],
+        [
+          `type Tree[T] {
+        empty(),
+        otherEmpty,
+        full(Tree, T, Tree,),
+      }
+
+      let getNodeCount[T] = func (tree: Tree = Tree.full(Tree.empty, 3, Tree.empty)): i32 =>
+        match (tree): i32 { // is Tree here an identifier or expression!?
+          empty => 0,
+          otherEmpty() => 0,
+          full(t1, _, t2,) => 1 + getNodeCount(t1) + getNodeCount(t2),
+        };`,
+          2
+        ],
+        [
+          `type Tree[T] {
+        empty(),
+        full(Tree, T, Tree)
+      }
+
+      let tree = Tree.empty();
+
+      let value = match (tree): i32 {
+        empty => -1,
+        full(left, val, right) => val
+      };
+
+      let main = func (arg) => value == -1;`,
+          4
+        ],
+        ['/*test*/;', 1],
+        [';/*test*/', 2],
         ['', 0],
         ['let x = a()()();', 1],
         [`let x = a.b().c().d;`, 1],
@@ -2166,22 +2327,25 @@ export namespace Parser {
       // test two`,
           4
         ],
-        // `type weekdays {
-        //   Saturday,
-        //   Sunday,
-        //   Monday,
-        //   Tuesday,
-        //   Wednesday,
-        //   Thursday,
-        //   Friday
-        // }
+        [
+          `type weekdays {
+          Saturday,
+          Sunday,
+          Monday,
+          Tuesday,
+          Wednesday,
+          Thursday,
+          Friday
+        }
 
-        // let f = func (weekday: weekdays): i32 =>
-        //   match (weekday): i32 {
-        //     case Saturday => 1;
-        //     case Sunday => 1;
-        //     0; // default for the other days
-        //   };`,
+        let f = func (weekday: weekdays): i32 =>
+          match (weekday): i32 {
+            Saturday => 1,
+            Sunday => 1,
+            //0 // default for the other days TODO
+          };`,
+          2
+        ],
         ['let x = func (x: i32 -> i32,) => 5;', 1],
         ['let a = func (x: (i32) -> i32) => x(5);', 1],
         ['let a = func (x: () -> i32) => 5;', 1],
@@ -2240,6 +2404,30 @@ export namespace Parser {
         ]
       ];
       const mustNotParseButLexe: string[] = [
+        `let f = match (x) {
+        a => 5,
+        b => 3,
+        => c, // default value
+        => d, // default value
+      };`,
+        `let f = match (x) {
+        a => 5,
+        => c, // default value
+        b => 3,
+      };`,
+        'use test let func ;',
+        '+',
+        'test',
+        'let',
+        'let;',
+        'let x',
+        'let =;',
+        'let =',
+        'let x = ;',
+        'let x 5 ;',
+        'let x = 5',
+        'let = 5;',
+        'let x = 5 /;/test',
         `type Test { id id id, id id };`,
         `type t { , }`,
         'let x = func (,) => 4; // invalid trailling comma',
@@ -2378,100 +2566,9 @@ export namespace Parser {
   debugParser(0, true, false, true);
 }
 
-const test = `
-type Tree[T] {
-  empty(),
-  full(Tree, T, Tree)
-}
-
-let tree = Tree.empty();
-
-let value = match (tree): i32 {
-  empty => -1,
-  full(left, val, right) => val
-};
-
-let main = func (arg) => value == -1;
-`;
-
-// log(
-//   Parser.parse(`
-//   type Tree[T] {
-//     empty(),
-//     otherEmpty,
-//     full(Tree, T, Tree,),
-//   }
-
-//   let getNodeCount[T] = func (tree: Tree = Tree.full(Tree.empty, 3, Tree.empty)): i32 =>
-//     match (tree): i32 { // is Tree here an identifier or expression!?
-//       empty => 0,
-//       otherEmpty() => 0,
-//       full(t1, _, t2,) => 1 + getNodeCount(t1) + getNodeCount(t2),
-//     };`)
-// );
-
-// #region debug
-const code = [
-  'let id[T]: T -> T -> T = 5;',
-  `
-  use file;
-
-  let i = nan;
-  let j = inf;
-  let u = i;
-  let x: i32 = 1;
-  let y: f32 = 2.0;
-  let z[A] =
-    (func (x: A): A => x) (3);
-  let f[B,]: B -> i32 =
-    func (y: B,): i32 => 4 + y;
-
-  type alias = f32;
-  type complex {
-    type1,
-    type2(),
-    type3(i32, f32),
-    type4
-  }
-
-  group G0 {
-    group G1 { let a = 5; }
-    let b = 6.0;
-  }
-  `,
-  'type complexType { test, test2(), test3(i32 -> f32, hey, ) }',
-  'let f[T,B,Z,]: ((T, B,) -> i32) -> Z = func (g) => g()',
-  'use test let func ;',
-  `group test { let a[] = 5; let b = 3; let c = 2; }`,
-  `let x = func (x, y, z) => 1;`
-];
-const codeWithComments: string =
-  '/**/' +
-  Lexer.lexe(code[0])
-    .tokens.map((t) => t.lex)
-    .join(' /*comment*/ ') +
-  '/**/';
-
-//console.log(codeWithComments);
-const parsedCode = Parser.parse(code[0]);
-
-if (false) {
-  console.log('is code valid:', parsedCode.valid);
-  console.log('CODE:');
-  for (const stmt of parsedCode.statements) log(stmt);
-  if (!parsedCode.valid) console.error('ERRORS:');
-  // @ts-ignore
-  if (!parsedCode.valid) for (const err of parsedCode.parseErrors) log(err);
-}
-// #endregion
-
 // #region comments
 // TODO parsing: "match expressions", "generics for types statement" and "substituting value for generic inside a type"
 // then debug parser (tests, comments, eof) and benchmark speed
-
-// let id[T]: (T -> T) -> (T -> T) = func (x: T -> T): T -> T => x;
-
-// must do, must not do
 
 /*
  Check list:
@@ -2490,11 +2587,7 @@ if (false) {
 
 // TODO invalid char in lexer step results in random error in interpreter.ts
 
-// TODO func (x: i32 = 5) => x;
 // TODO match (number): i32 { case 0 => 5; default /*?? maybe just "case", or just the trailing thing?? TODO HERE*/ => 6; }
-// TODO calling integers/floats in order to add `==` support: 5(0)(1)
-// TODO add generic types in funcs and types
-// TODO isAtEnd() and consumeComments(comments)
 // TODO endless loop error
 
 // TODO church numerals: +, -, *, **, ==, <=
@@ -2520,60 +2613,5 @@ if (false) {
 //                          ^ property access, prob like function calling
 // it is a substitution for a generic value in its type
 
-/*
-  TODO
-  type x[T] = T;
-
-  // x[] must be doable in a type expression to substitute the generic types
-  let f = func (a: x[i32]): x[32] => a;
-*/
-
-/*
-  TODO
-  let f = 4;
-  let f = 5; // error
-  let f = 6; // error aswell! but what is the error message?
-*/
-
-// Rust: `type TypeAlias = i32;`
-// Rust: `use std;`
-
-/*
-type ZeroVariants { }
-
-type RustEnum {
-  A,
-  B(),
-  C(i32)
-}
-*/
-
 // https://doc.rust-lang.org/reference/items.html rust Statements
-
-// console.clear();
-// log(
-//   Parser.parse(`
-// type ZeroVariants { }
-
-// type RustEnum {
-//   A,
-//   B(),
-//   C(i32)
-// }
-// `)
-// );
-
-// log(
-//   Parser.parse(`
-// type t {
-//   identifier1(),
-//   identifier2(i32),
-//   identifier3,
-// }
-
-// type t2 = t;
-
-// let x = func (a) => a * (t + 1) / 2.0;
-// `)
-// );
 // #endregion
