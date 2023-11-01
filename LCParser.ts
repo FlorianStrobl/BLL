@@ -241,22 +241,27 @@ export namespace Parser {
       }
     | { hasDefaultValue: false };
 
+  // TODO
+  type defaultMatchBodyLine =
+    | { isDefaultVal: true }
+    | {
+        isDefaultVal: false;
+        identifierToken: token;
+        // TODO merge params with brackets or not?
+        parameters: argumentList<token>;
+        brackets:
+          | {
+              hasBrackets: true;
+              openingBracketToken: token;
+              closingBracketToken: token;
+            }
+          | {
+              hasBrackets: false;
+            };
+      };
+
   type matchBodyLine = comment &
-    (
-      | { isDefaultVal: true }
-      | { identifierToken: token; isDefaultVal: false }
-    ) & {
-      // TODO merge them or not with brackets
-      parameters: argumentList<token>;
-      brackets:
-        | {
-            hasBrackets: true;
-            openingBracketToken: token;
-            closingBracketToken: token;
-          }
-        | {
-            hasBrackets: false;
-          };
+    defaultMatchBodyLine & {
       body: expression;
       arrowToken: token;
     };
@@ -1384,34 +1389,27 @@ export namespace Parser {
       ? (parseExpression() as expression)
       : newParseError('missing body in match expression line');
 
-    const identifierOrDefault:
-      | {
-          isDefaultVal: false;
-          identifierToken: Lexer.token;
-        }
-      | {
-          isDefaultVal: true;
-        } = isPresent(identifierToken)
+    const identifierOrDefault: defaultMatchBodyLine = isPresent(identifierToken)
       ? {
           isDefaultVal: false,
-          identifierToken
+          identifierToken,
+          parameters: params ?? [],
+          brackets:
+            isPresent(openingBracketToken) || isPresent(closingBracketToken)
+              ? {
+                  hasBrackets: true,
+                  openingBracketToken: openingBracketToken!,
+                  closingBracketToken: closingBracketToken!
+                }
+              : {
+                  hasBrackets: false
+                }
         }
       : { isDefaultVal: true };
 
     return {
       ...identifierOrDefault,
-      parameters: params ?? [],
       body,
-      brackets:
-        isPresent(openingBracketToken) || isPresent(closingBracketToken)
-          ? {
-              hasBrackets: true,
-              openingBracketToken: openingBracketToken!,
-              closingBracketToken: closingBracketToken!
-            }
-          : {
-              hasBrackets: false
-            },
       arrowToken,
       comments
     };
@@ -2404,6 +2402,10 @@ export namespace Parser {
         ]
       ];
       const mustNotParseButLexe: string[] = [
+        `let a = match (x) {
+        a => 5
+        => 4
+  };`,
         `let f = match (x) {
         a => 5,
         b => 3,

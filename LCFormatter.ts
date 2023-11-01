@@ -116,7 +116,7 @@ export namespace Formatter {
           addColor('.', Colors.symbol, withColor) +
           addColor(expression.propertyToken.lex, Colors.identifier, withColor)
         );
-      case 'functionCall':
+      case 'call':
         return (
           printExpression(expression.function, withColor, indentation) +
           addColor('(', Colors.symbol, withColor) +
@@ -201,20 +201,26 @@ export namespace Formatter {
           expression.body
             .map(
               (e) =>
-                addColor(
-                  e.argument.identifierToken.lex,
-                  Colors.identifier,
-                  withColor
-                ) +
-                (e.argument.parameters.length !== 0
-                  ? addColor('(', Colors.symbol, withColor) +
-                    e.argument.parameters
-                      .map((a) =>
-                        addColor(a.argument.lex, Colors.identifier, withColor)
-                      )
-                      .join(addColor(', ', Colors.symbol, withColor)) +
-                    addColor(')', Colors.symbol, withColor)
-                  : '') +
+                (e.argument.isDefaultVal
+                  ? ''
+                  : addColor(
+                      e.argument.identifierToken.lex,
+                      Colors.identifier,
+                      withColor
+                    ) +
+                    (e.argument.parameters.length !== 0
+                      ? addColor('(', Colors.symbol, withColor) +
+                        e.argument.parameters
+                          .map((a) =>
+                            addColor(
+                              a.argument.lex,
+                              Colors.identifier,
+                              withColor
+                            )
+                          )
+                          .join(addColor(', ', Colors.symbol, withColor)) +
+                        addColor(')', Colors.symbol, withColor)
+                      : '')) +
                 addColor(' => ', Colors.symbol, withColor) +
                 printExpression(e.argument.body, withColor, indentation)
             )

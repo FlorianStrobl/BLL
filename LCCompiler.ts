@@ -405,7 +405,7 @@ export namespace Compiler {
         return 'NOT DONE YET';
       case 'propertyAccess':
         return 'NOT DONE YET';
-      case 'functionCall':
+      case 'call':
         let _str: string = '';
         const idxBefore: number = varCounter.c;
         // TODO even wrong, because of lazy evaluation... (do not exec all the expr beforhand)

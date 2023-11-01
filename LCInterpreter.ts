@@ -112,7 +112,7 @@ export namespace Interpreter {
     const result =
       mainFunc.type === 'let' &&
       evaluateExpression({
-        type: 'functionCall',
+        type: 'call',
         function: mainFunc.body,
         openingBracketToken: {} as any,
         closingBracketToken: {} as any,
@@ -240,7 +240,7 @@ export namespace Interpreter {
         }
       case 'func':
         return expression;
-      case 'functionCall':
+      case 'call':
         // take function, safe the arg names and position + replace them with the calles arg list and then interpret the code as usual
         // TODO
         const rawValue = evaluateExpression(
