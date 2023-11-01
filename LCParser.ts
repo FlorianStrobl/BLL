@@ -540,82 +540,1052 @@ export namespace Parser {
   // #endregion
 
   // #region parser
+  // #region primary helper
+  // #region for statements
+  function parseComplexeTypeLine(): complexTypeLine {
+    const comments: [] = []; // local comments
+
+    consComments(comments);
+    checkEofErr('Invalid eof while parsing a line in a complex type statement');
+
+    const identifierToken: token = matchTypeAdvanceOrError(
+      tokenType.identifier,
+      'TODO invalid complex type statement: missing identifier'
+    );
+
+    consComments(comments);
+    checkEofErr(
+      'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
+    );
+
+    const openingBracketToken: optToken = optionalMatchAdvance('(');
+
+    consComments(comments);
+    checkEofErr('invalid eof in complex type statement after getting a "("');
+
+    const parameterValues: argumentList<typeExpression> =
+      callOnPresent(openingBracketToken, () =>
+        parseArgumentList<typeExpression>(
+          parseTypeExpression as () => typeExpression,
+          ')',
+          {
+            delimiterToken: ',',
+            missingDelimiterError:
+              'TODO missing comma between two parameters in complex type value'
+          },
+          { parseComments: true, comments },
+          { noEmptyList: false },
+          'TODO invalid value while parsing arguments for a complex type line',
+          'TODO invalid eof while parsing arguments from a complex type line'
+        )
+      ) ?? [];
+
+    consComments(comments);
+    checkEofErr('Invalid eof at the end of a complex type expression');
+
+    const closingBracketToken: optToken = callOnPresent(
+      openingBracketToken,
+      () => matchAdvOrErr(')', 'missing closing bracket in complex type')
+    );
+
+    // no consume comments for next line
+    checkEofErr('Invalid eof at the end of a complex type expression');
+
+    const parameters: complexTypeValParams =
+      isPresent(openingBracketToken) ||
+      isPresent(closingBracketToken) ||
+      parameterValues.length !== 0
+        ? {
+            hasParameterList: true,
+            value: parameterValues,
+            openingBracketToken: openingBracketToken!,
+            closingBracketToken: closingBracketToken!
+          }
+        : { hasParameterList: false };
+
+    return {
+      identifierToken,
+      parameters,
+      comments
+    };
+  }
+  // #endregion
+
+  // #region for type expressions
+  // temporary type
+  type argList = {
+    type: 'arglist';
+    body: argumentList<typeExpression>;
+    openingBracketToken: token;
+    closingBracketToken: token;
+    comments: token[];
+  };
+
+  function parseTypeExpLv0(): typeExpression | parseError {
+    const comments: token[] = [];
+
+    consComments(comments);
+    checkEofErr('unexpected eof while parsing a type expression');
+
+    let val: typeExpression | argList = parsePrimaryTypeExpr();
+
+    consComments(comments);
+    checkEofErr('unexpected eof while parsing a type expression');
+
+    if (match('->')) {
+      // right-to-left precedence
+      const arrowToken: token = advance();
+
+      consComments(comments);
+      checkEofErr('unexpected eof while parsing a type expression');
+
+      const returnType: typeExpression = parseTypeExpLv0() as typeExpression;
+
+      const parameters: argumentList<typeExpression> =
+        val.type === 'arglist'
+          ? val.body
+          : [{ argument: val, delimiterToken: undefined }];
+
+      return {
+        type: 'func-type',
+        parameters,
+        returnType,
+        brackets:
+          val.type === 'arglist'
+            ? {
+                hasBrackets: true,
+                openingBracketToken: val.openingBracketToken,
+                closingBracketToken: val.closingBracketToken
+              }
+            : { hasBrackets: false },
+        arrowToken,
+        comments
+      };
+    }
+
+    if (val.type !== 'arglist') return val;
+    else if (val.body.length === 1 && !isPresent(val.body[0].delimiterToken))
+      return {
+        type: 'grouping',
+        body: val.body[0].argument,
+        openingBracketToken: val.openingBracketToken,
+        closingBracketToken: val.closingBracketToken,
+        comments: val.comments
+      };
+    else {
+      // invalid arglist
+      if (val.body.length === 0)
+        return newParseError(
+          'got empty brackets in type expression, without being a func type'
+        );
+      else if (val.body.length === 1 && isPresent(val.body[0].delimiterToken))
+        return newParseError(
+          'invalid trailing comma in type grouping expression'
+        );
+      // if (val.body.length > 1)
+      else
+        return newParseError(
+          'got more than one type expression in type grouping expression'
+        );
+    }
+  }
+
+  function parsePrimaryTypeExpr(): typeExpression | argList {
+    const comments: token[] = [];
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a type');
+
+    if (match('i32') || match('f32')) {
+      return {
+        type: 'primitive-type',
+        primitiveToken: advance(),
+        comments
+      };
+    } else if (matchType(tokenType.identifier)) {
+      const identifierToken: token = advance();
+
+      consComments(comments);
+      checkEofErr(
+        'unexpected eof in type expression after getting an identifier in a type expression'
+      );
+
+      // TODO what if invalid thing "id subs,]" instead of "id [ subs, ]"
+      if (!match('['))
+        return {
+          type: 'identifier',
+          identifier: identifierToken.lex,
+          generic: { hasGenericSubstitution: false },
+          identifierToken,
+          comments
+        };
+
+      // did match "["
+      const openingBracketToken: token = advance();
+
+      consComments(comments);
+      checkEofErr('unexpected eof after getting a "[" in a type expression');
+
+      const substitutions: argumentList<typeExpression> =
+        parseArgumentList<typeExpression>(
+          parseTypeExpression as () => typeExpression,
+          ']',
+          {
+            delimiterToken: ',',
+            missingDelimiterError: 'missing comma in generic type substitution'
+          },
+          { parseComments: true, comments },
+          {
+            noEmptyList: true,
+            errorMessage: 'a type substition needs at least one argument'
+          },
+          'TODO invalid argument in generic type substitution',
+          'unexpected eof while parsing '
+        );
+
+      consComments(comments);
+      checkEofErr('unexpected eof while parsing a type expression');
+
+      const closingBracketToken: token = matchAdvOrErr(
+        ']',
+        'TODO missing closing bracket token in type expression for generic type substitution'
+      );
+
+      return {
+        type: 'identifier',
+        identifier: identifierToken.lex,
+        generic: {
+          hasGenericSubstitution: true,
+          substitutions,
+          openingBracketToken,
+          closingBracketToken
+        },
+        identifierToken,
+        comments
+      };
+    } else if (match('(')) {
+      const openingBracketToken: token = advance();
+
+      consComments(comments);
+      checkEofErr('unexpected eof after getting a ( in type expression');
+
+      const body: argumentList<typeExpression> =
+        parseArgumentList<typeExpression>(
+          parseTypeExpression as () => typeExpression,
+          ')',
+          {
+            delimiterToken: ',',
+            missingDelimiterError:
+              'missing comma token while parsing an argument list in type expression'
+          },
+          { parseComments: true, comments },
+          { noEmptyList: false },
+          'invalid value for grouping expression or argument list: expected a type but got something else',
+          'unexpected eof while parsing an argument list in type expression'
+        );
+
+      consComments(comments);
+      checkEofErr('unexpected eof while parsing an argument list');
+
+      const closingBracketToken: token = matchAdvOrErr(')', 'TODO');
+
+      // could be just a grouping of an expression
+      // or is an (empty or full) argument list for a function type
+      return {
+        type: 'arglist',
+        body,
+        openingBracketToken,
+        closingBracketToken,
+        comments
+      };
+    }
+
+    return newParseError('TODO could not match any type expression');
+  }
+  // #endregion
+
+  // #region for expression
+  const precedenceTable: {
+    symbols: string | string[];
+    arity: 'binary' | 'unary';
+    associativity: 'left-to-right' | 'right-to-left' | /*none:*/ 'unary';
+  }[] = [
+    { symbols: '|', arity: 'binary', associativity: 'left-to-right' },
+    { symbols: '^', arity: 'binary', associativity: 'left-to-right' },
+    { symbols: '&', arity: 'binary', associativity: 'left-to-right' },
+    {
+      symbols: ['==', '!='],
+      arity: 'binary',
+      associativity: 'left-to-right'
+    },
+    {
+      symbols: ['<', '>', '<=', '>='],
+      arity: 'binary',
+      associativity: 'left-to-right'
+    },
+    {
+      symbols: ['<<', '>>'],
+      arity: 'binary',
+      associativity: 'left-to-right'
+    },
+    {
+      symbols: ['-', '+'],
+      arity: 'binary',
+      associativity: 'left-to-right'
+    },
+    {
+      symbols: ['*', '/', '%'],
+      arity: 'binary',
+      associativity: 'left-to-right'
+    },
+    {
+      symbols: '**',
+      arity: 'binary',
+      associativity: 'right-to-left'
+    },
+    {
+      symbols: ['!', '-', '+', '~'],
+      arity: 'unary',
+      associativity: 'unary'
+    }
+  ];
+
+  // parse an expression level, given the next inner level of precedence
+  function parseExprLvl(
+    symbols: string | string[],
+    arity: 'binary' | 'unary',
+    associativity: 'left-to-right' | 'right-to-left' | 'unary',
+    nextLevel: () => expression
+  ): expression {
+    const comments: token[] = [];
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing an expression');
+
+    if (arity === 'unary') {
+      // skip if not needed
+      if (!match(symbols)) return nextLevel();
+
+      const operatorToken: token = advance();
+
+      consComments(comments);
+      checkEofErr('invalid eof while parsing an expression');
+
+      // parse same level as body
+      const body: expression = parseExprLvl(
+        symbols,
+        arity,
+        associativity,
+        nextLevel
+      );
+
+      consComments(comments);
+      checkEofErr('invalid eof while parsing an expression');
+
+      return {
+        type: 'unary',
+        operator: operatorToken.lex,
+        body,
+        operatorToken,
+        comments
+      };
+    } else if (arity === 'binary') {
+      if (
+        associativity !== 'left-to-right' &&
+        associativity !== 'right-to-left'
+      )
+        throw new Error(
+          'Internal parser error: misuse of typescripts type system'
+        );
+
+      let leftSide: expression = nextLevel();
+
+      consComments(comments);
+      checkEofErr('invalid eof while parsing an expression');
+
+      if (associativity === 'left-to-right') {
+        while (match(symbols)) {
+          const operatorToken: token = advance();
+
+          consComments(comments);
+          checkEofErr('invalid eof while parsing an expression');
+
+          const rightSide: expression = nextLevel();
+
+          consComments(comments);
+          checkEofErr('invalid eof while parsing an expression');
+
+          leftSide = {
+            type: 'binary',
+            operator: operatorToken.lex,
+            leftSide,
+            rightSide,
+            operatorToken,
+            comments
+          };
+        }
+      } else if (associativity === 'right-to-left') {
+        if (match(symbols)) {
+          const operatorToken: token = advance();
+
+          consComments(comments);
+          checkEofErr('invalid eof while parsing an expression');
+
+          // same lexel because of associativity
+          const rightSide: expression = parseExprLvl(
+            symbols,
+            arity,
+            associativity,
+            nextLevel
+          );
+
+          consComments(comments);
+          checkEofErr('invalid eof while parsing an expression');
+
+          return {
+            type: 'binary',
+            operator: operatorToken.lex,
+            leftSide,
+            rightSide,
+            operatorToken,
+            comments
+          };
+        }
+      }
+
+      return leftSide;
+    }
+
+    throw new Error('Internal parser error: misuse of typescripts type system');
+  }
+
+  function parseExprLv10(): expression {
+    const comments: token[] = [];
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing an expression');
+
+    let left: expression = parsePrimaryExprLv() as expression;
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing an expression');
+
+    // TODO check if works
+    while (match(['(', '.'])) {
+      if (peek().lex === '.') {
+        // left-to-right precedence
+        const dotToken: token = advance();
+
+        consComments(comments);
+        checkEofErr('invalid eof while parsing an expression');
+
+        const propertyToken: token = matchTypeAdvanceOrError(
+          tokenType.identifier,
+          'property access needs an identifier as a property'
+        );
+
+        consComments(comments);
+        checkEofErr('invalid eof while parsing an expression');
+
+        left = {
+          type: 'propertyAccess',
+          source: left,
+          propertyToken,
+          dotToken,
+          comments
+        };
+      } else if (peek().lex === '(') {
+        const openingBracketToken: token = advance();
+
+        consComments(comments);
+        checkEofErr('invalid eof while parsing an expression');
+
+        const args: argumentList<expression> = parseArgumentList<expression>(
+          parseExpression as () => expression,
+          ')',
+          {
+            delimiterToken: ',',
+            missingDelimiterError:
+              'missing comma in function call argument list'
+          },
+          { parseComments: true, comments },
+          { noEmptyList: false },
+          'wrong type expression in function call argument list',
+          'unexpected eof while parsing a function call argument list'
+        );
+
+        consComments(comments);
+        checkEofErr('eof in function calling expression');
+
+        const closingBracketToken: token = matchAdvOrErr(
+          ')',
+          'missing closing bracket in function call'
+        );
+
+        consComments(comments);
+        checkEofErr('invalid eof while parsing an expression');
+
+        left = {
+          type: 'functionCall',
+          function: left,
+          arguments: args,
+          openingBracketToken,
+          closingBracketToken,
+          comments
+        };
+      } else
+        throw new Error(
+          `Internal parser error: expected the tokens "(" or "." in this expression.`
+        );
+    }
+
+    return left;
+  }
+
+  // highest precedence level
+  function parsePrimaryExprLv(): expression | parseError {
+    function floatLiteralToFloat(literal: string): number {
+      // NaN gets handled correctly
+      return literal === 'inf' ? Infinity : Number(literal);
+    }
+
+    // TODO error if numeric literal is out of bounce
+    function intLiteralToInt(literal: string): number {
+      return Number(literal);
+    }
+
+    const comments: token[] = [];
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing an expression');
+
+    if (match('(')) {
+      const openingBracketToken: token = advance();
+
+      consComments(comments);
+      checkEofErr('invalid eof while parsing an expression');
+
+      const body: expression = !match(')') // better error message
+        ? (parseExpression() as expression)
+        : newParseError('invalid grouping expression: got no body');
+
+      consComments(comments);
+      checkEofErr('invalid eof while parsing an expression');
+
+      const closingBracketToken: token = matchAdvOrErr(
+        ')',
+        'TODO did not close bracket in grouping expression'
+      );
+
+      consComments(comments);
+      checkEofErr('invalid eof while parsing an expression');
+
+      return {
+        type: 'grouping',
+        body,
+        openingBracketToken,
+        closingBracketToken,
+        comments
+      };
+    } else if (matchType(tokenType.literal)) {
+      const literalToken: token = advance();
+
+      consComments(comments);
+      checkEofErr('invalid eof while parsing an expression');
+
+      const lexeme: string = literalToken.lex;
+      const literalType: 'i32' | 'f32' =
+        lexeme.includes('.') ||
+        (!lexeme.startsWith('0x') && lexeme.includes('e')) ||
+        lexeme === 'inf' ||
+        lexeme === 'nan'
+          ? 'f32'
+          : 'i32';
+      const literalValue: number =
+        literalType === 'i32'
+          ? intLiteralToInt(lexeme)
+          : floatLiteralToFloat(lexeme);
+
+      return {
+        type: 'literal',
+        literalType,
+        value: literalValue,
+        literalToken,
+        comments
+      };
+    } else if (matchType(tokenType.identifier)) {
+      const identifierToken: token = advance();
+
+      consComments(comments);
+      checkEofErr('invalid eof while parsing an expression');
+
+      return {
+        type: 'identifier',
+        identifier: identifierToken.lex,
+        identifierToken,
+        comments
+      };
+    } else if (match('func')) return parseFuncExpression();
+    else if (match('match')) return parseMatchExpression();
+
+    return newParseError(
+      'TODO could not match anything in parsing expressions'
+    );
+  }
+
+  function parseFuncExprParams(
+    lastHadDefaultVal: { had: boolean },
+    comments: token[]
+  ): funcExprParameter {
+    const identifierToken: token = matchTypeAdvanceOrError(
+      tokenType.identifier,
+      'invalid func expression: expected an identifier'
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing arguments of a func expression');
+
+    const colonToken: optToken = optionalMatchAdvance(':');
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing arguments of a func expression');
+
+    const typeExpression: optional<typeExpression> = callOnPresent(
+      colonToken,
+      () =>
+        !match('=') && !match(',') // better error message
+          ? (parseTypeExpression() as typeExpression)
+          : newParseError(
+              `missing type annotation after getting ":" in function arguments`
+            )
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing arguments of a func expression');
+
+    const defaultValEqToken: optToken = optionalMatchAdvance('=');
+
+    if (lastHadDefaultVal.had && !isPresent(defaultValEqToken))
+      newParseError(
+        'having a parameter with a default value followed by a parameter without a default value is not allowed in a func expression'
+      );
+    if (isPresent(defaultValEqToken)) lastHadDefaultVal.had = true;
+
+    callOnPresent(defaultValEqToken, () => {
+      consComments(comments);
+      checkEofErr('invalid eof while parsing arguments of a func expression');
+    });
+
+    const value: optional<expression> = callOnPresent(defaultValEqToken, () =>
+      !match(',') // better error message
+        ? (parseExpression() as expression)
+        : newParseError(
+            `missing expr after getting a default "=" token in function parameter`
+          )
+    );
+
+    const typeAnnotation: explicitType =
+      isPresent(colonToken) || isPresent(typeExpression)
+        ? {
+            explicitType: true,
+            typeExpression: typeExpression!,
+            colonToken: colonToken!
+          }
+        : { explicitType: false };
+
+    const defaultValue: funcExprParamDefaultVal =
+      isPresent(defaultValEqToken) || isPresent(value)
+        ? {
+            hasDefaultValue: true,
+            value: value!,
+            defaultValueEqualsToken: defaultValEqToken!
+          }
+        : { hasDefaultValue: false };
+
+    return {
+      identifierToken,
+      typeAnnotation,
+      defaultValue
+    };
+  }
+
+  // assert: func token at current point
+  function parseFuncExpression(): expression {
+    const comments: token[] = [];
+
+    const funcToken: token = advance();
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a func expression');
+
+    const openingBracketToken: token = matchAdvOrErr(
+      '(',
+      'TODO functions must be opend with ('
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a func expression');
+
+    const lastHadDefaultVal: { had: boolean } = { had: false };
+    const params: argumentList<funcExprParameter> =
+      parseArgumentList<funcExprParameter>(
+        () => parseFuncExprParams(lastHadDefaultVal, comments),
+        ')',
+        {
+          delimiterToken: ',',
+          missingDelimiterError:
+            'invalid func expression: missing comma in argument list'
+        },
+        { parseComments: true, comments },
+        { noEmptyList: false },
+        'missing function argument',
+        'unexpected eof while parsing function arguments'
+      );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a func expression');
+
+    const closingBracketToken: token = matchAdvOrErr(
+      ')',
+      'TODO functions must be closed with )'
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a func expression');
+
+    const colonToken: optToken = optionalMatchAdvance(':');
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a func expression');
+
+    const typeExpression: optional<typeExpression> = callOnPresent(
+      colonToken,
+      () =>
+        !match('=>') // better error message
+          ? (parseTypeExpression() as typeExpression)
+          : newParseError(
+              `missing type expression after getting a ":" for a function return type annotation`
+            )
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a func expression');
+
+    const arrowToken: token = matchAdvOrErr(
+      '=>',
+      'TODO functions must have a =>'
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a func expression');
+
+    const body: expression = parseExpression() as expression;
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a func expression');
+
+    const returnType: explicitType =
+      isPresent(colonToken) || isPresent(typeExpression)
+        ? {
+            explicitType: true,
+            typeExpression: typeExpression!,
+            colonToken: colonToken!
+          }
+        : {
+            explicitType: false
+          };
+
+    return {
+      type: 'func',
+      parameters: params,
+      body,
+      returnType,
+      funcToken,
+      openingBracketToken,
+      closingBracketToken,
+      arrowToken,
+      comments
+    };
+  }
+
+  function parseMatchBodyLine(): matchBodyLine {
+    const comments: token[] = [];
+
+    consComments(comments);
+    checkEofErr(
+      'tried to parse a line in the body of a match expression but got eof'
+    );
+
+    // TODO allow more than identifiers for e.g. ints and or floats? (maybe even boolean expr?)
+    const identifierToken: token = matchTypeAdvanceOrError(
+      tokenType.identifier,
+      'invalid match expression: expected an identifier'
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing arguments of a match expression');
+
+    const openingBracketToken: optToken = optionalMatchAdvance('(');
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing arguments of a match expression');
+
+    const params: optional<argumentList<token>> = callOnPresent(
+      openingBracketToken,
+      () =>
+        parseArgumentList<token>(
+          () =>
+            matchTypeAdvanceOrError(
+              tokenType.identifier,
+              'expected identifier in match body line expr'
+            ),
+          ')',
+          {
+            delimiterToken: ',',
+            missingDelimiterError:
+              'missing comma token between two identifier in match body line expr'
+          },
+          { parseComments: true, comments },
+          { noEmptyList: false },
+          'only identifier are allowed in match expr',
+          'unexpected eof while parsing match body line expr args'
+        )
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing arguments of a match expression');
+
+    const closingBracketToken: optToken = callOnPresent(
+      openingBracketToken,
+      () =>
+        matchAdvOrErr(
+          ')',
+          'closing bracket of local match body line was not closed'
+        )
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing arguments of a match expression');
+
+    const arrowToken: token = matchAdvOrErr(
+      '=>',
+      'missing arrow token in match expr'
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing arguments of a match expression');
+
+    const body: expression = !match(',') // better error message
+      ? (parseExpression() as expression)
+      : newParseError('missing body in match expression line');
+
+    return {
+      identifierToken,
+      parameters: params ?? [],
+      brackets:
+        isPresent(openingBracketToken) || isPresent(closingBracketToken)
+          ? {
+              hasBrackets: true,
+              openingBracketToken: openingBracketToken!,
+              closingBracketToken: closingBracketToken!
+            }
+          : {
+              hasBrackets: false
+            },
+      body,
+      arrowToken,
+      comments
+    };
+  }
+
+  // assert: match token at current point
+  function parseMatchExpression(): expression {
+    // TODO, check for bugs and do per branch/line comments
+
+    const comments: token[] = [];
+
+    const matchToken: token = advance();
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a match expression');
+
+    const argOpeningBracketToken: token = matchAdvOrErr(
+      '(',
+      'missing bracket in match expression'
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a match expression');
+
+    const scrutinee: expression = !match(')') // better error message
+      ? (parseExpression() as expression)
+      : newParseError('missing body of argument to match expression');
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a match expression');
+
+    const argClosingBracketToken: token = matchAdvOrErr(
+      ')',
+      'missing closing bracket in match argument body expression'
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a match expression');
+
+    const colonToken: optToken = optionalMatchAdvance(':');
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a match expression');
+
+    const typeAnnotation: optional<typeExpression> = callOnPresent(
+      colonToken,
+      () =>
+        !match('{') // better error message
+          ? (parseTypeExpression() as typeExpression)
+          : newParseError('missing type expression in typed match expr')
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a match expression');
+
+    const bodyOpeningBracketToken: token = matchAdvOrErr(
+      '{',
+      'missing opening bracket in match body expression'
+    );
+
+    // no consumeComments for better local comments
+    checkEofErr('invalid eof while parsing a match expression');
+
+    const body: argumentList<matchBodyLine> = parseArgumentList<matchBodyLine>(
+      parseMatchBodyLine,
+      '}',
+      {
+        delimiterToken: ',',
+        missingDelimiterError:
+          'missing comma between two lines in a match expression'
+      },
+      { parseComments: false, globalComments: comments },
+      {
+        noEmptyList: true,
+        errorMessage: 'got a match expression without something in the body'
+      },
+      'a line in a match expression must have the structure "id(args) => expr"',
+      'invalid eof in arg'
+    );
+
+    consComments(comments);
+    checkEofErr('invalid eof while parsing a match expression');
+
+    const bodyClosingBracketToken: token = matchAdvOrErr(
+      '}',
+      'missing closing bracket in match body expression'
+    );
+
+    const explicitType: explicitType =
+      isPresent(colonToken) || isPresent(typeAnnotation)
+        ? {
+            explicitType: true,
+            typeExpression: typeAnnotation!,
+            colonToken: colonToken!
+          }
+        : { explicitType: false };
+
+    return {
+      type: 'match',
+      scrutinee,
+      explicitType,
+      body,
+      matchToken,
+      argOpeningBracketToken,
+      argClosingBracketToken,
+      bodyOpeningBracketToken,
+      bodyClosingBracketToken,
+      comments
+    };
+  }
+
+  // #region first expr levels
+  // unroll because of performance
+  const parseExprLv0 = () =>
+    parseExprLvl(
+      precedenceTable[0].symbols,
+      precedenceTable[0].arity,
+      precedenceTable[0].associativity,
+      parseExprLv1
+    );
+  const parseExprLv1 = () =>
+    parseExprLvl(
+      precedenceTable[1].symbols,
+      precedenceTable[1].arity,
+      precedenceTable[1].associativity,
+      parseExprLv2
+    );
+  const parseExprLv2 = () =>
+    parseExprLvl(
+      precedenceTable[2].symbols,
+      precedenceTable[2].arity,
+      precedenceTable[2].associativity,
+      parseExprLv3
+    );
+  const parseExprLv3 = () =>
+    parseExprLvl(
+      precedenceTable[3].symbols,
+      precedenceTable[3].arity,
+      precedenceTable[3].associativity,
+      parseExprLv4
+    );
+  const parseExprLv4 = () =>
+    parseExprLvl(
+      precedenceTable[4].symbols,
+      precedenceTable[4].arity,
+      precedenceTable[4].associativity,
+      parseExprLv5
+    );
+  const parseExprLv5 = () =>
+    parseExprLvl(
+      precedenceTable[5].symbols,
+      precedenceTable[5].arity,
+      precedenceTable[5].associativity,
+      parseExprLv6
+    );
+  const parseExprLv6 = () =>
+    parseExprLvl(
+      precedenceTable[6].symbols,
+      precedenceTable[6].arity,
+      precedenceTable[6].associativity,
+      parseExprLv7
+    );
+  const parseExprLv7 = () =>
+    parseExprLvl(
+      precedenceTable[7].symbols,
+      precedenceTable[7].arity,
+      precedenceTable[7].associativity,
+      parseExprLv8
+    );
+  const parseExprLv8 = () =>
+    parseExprLvl(
+      precedenceTable[8].symbols,
+      precedenceTable[8].arity,
+      precedenceTable[8].associativity,
+      parseExprLv9
+    );
+  const parseExprLv9 = () =>
+    parseExprLvl(
+      precedenceTable[9].symbols,
+      precedenceTable[9].arity,
+      precedenceTable[9].associativity,
+      parseExprLv10
+    );
+  // #endregion
+  // #endregion
+  // #endregion
+
   // assert: not eof
   function parseStatement(): statement | parseError {
     if (isAtEnd())
       throw new Error(
         'Internal parser error: assertion not met, code is eof but tried to parse a statement.'
       );
-
-    function parseComplexeTypeLine(): complexTypeLine {
-      const comments: [] = []; // local comments
-
-      consComments(comments);
-      checkEofErr(
-        'Invalid eof while parsing a line in a complex type statement'
-      );
-
-      const identifierToken: token = matchTypeAdvanceOrError(
-        tokenType.identifier,
-        'TODO invalid complex type statement: missing identifier'
-      );
-
-      consComments(comments);
-      checkEofErr(
-        'Invalid eof while parsing a line in a complex type statement, after getting an identifier'
-      );
-
-      const openingBracketToken: optToken = optionalMatchAdvance('(');
-
-      consComments(comments);
-      checkEofErr('invalid eof in complex type statement after getting a "("');
-
-      const parameterValues: argumentList<typeExpression> =
-        callOnPresent(openingBracketToken, () =>
-          parseArgumentList<typeExpression>(
-            parseTypeExpression,
-            ')',
-            {
-              delimiterToken: ',',
-              missingDelimiterError:
-                'TODO missing comma between two parameters in complex type value'
-            },
-            { parseComments: true, comments },
-            { noEmptyList: false },
-            'TODO invalid value while parsing arguments for a complex type line',
-            'TODO invalid eof while parsing arguments from a complex type line'
-          )
-        ) ?? [];
-
-      consComments(comments);
-      checkEofErr('Invalid eof at the end of a complex type expression');
-
-      const closingBracketToken: optToken = callOnPresent(
-        openingBracketToken,
-        () => matchAdvOrErr(')', 'missing closing bracket in complex type')
-      );
-
-      // no consume comments for next line
-      checkEofErr('Invalid eof at the end of a complex type expression');
-
-      const parameters: complexTypeValParams =
-        isPresent(openingBracketToken) ||
-        isPresent(closingBracketToken) ||
-        parameterValues.length !== 0
-          ? {
-              hasParameterList: true,
-              value: parameterValues,
-              openingBracketToken: openingBracketToken!,
-              closingBracketToken: closingBracketToken!
-            }
-          : { hasParameterList: false };
-
-      return {
-        identifierToken,
-        parameters,
-        comments
-      };
-    }
 
     const comments: token[] = [];
     consComments(comments);
@@ -702,7 +1672,7 @@ export namespace Parser {
         colonToken,
         () =>
           !match('=') // better error message
-            ? parseTypeExpression()
+            ? (parseTypeExpression() as typeExpression)
             : newParseError(
                 'missing type annotation in let statement after getting a ":"'
               )
@@ -720,7 +1690,7 @@ export namespace Parser {
       checkEofErr('unexpected eof in let statement after "="');
 
       const body: expression = !match(';') // better error message
-        ? parseExpression()
+        ? (parseExpression() as expression)
         : newParseError('missing body in let expression');
 
       consComments(comments);
@@ -842,7 +1812,7 @@ export namespace Parser {
         checkEofErr('got nothing after "=" in type statement');
 
         const body: typeExpression = !match(';') // better error message
-          ? parseTypeExpression()
+          ? (parseTypeExpression() as typeExpression)
           : newParseError('got no type expression in type alias');
 
         consComments(comments);
@@ -1001,799 +1971,8 @@ export namespace Parser {
   }
 
   // TODO isEof checks
-  function parseExpression(): expression {
-    const precedenceTable: {
-      symbols: string | string[];
-      arity: 'binary' | 'unary';
-      associativity: 'left-to-right' | 'right-to-left' | /*none:*/ 'unary';
-    }[] = [
-      { symbols: '|', arity: 'binary', associativity: 'left-to-right' },
-      { symbols: '^', arity: 'binary', associativity: 'left-to-right' },
-      { symbols: '&', arity: 'binary', associativity: 'left-to-right' },
-      {
-        symbols: ['==', '!='],
-        arity: 'binary',
-        associativity: 'left-to-right'
-      },
-      {
-        symbols: ['<', '>', '<=', '>='],
-        arity: 'binary',
-        associativity: 'left-to-right'
-      },
-      {
-        symbols: ['<<', '>>'],
-        arity: 'binary',
-        associativity: 'left-to-right'
-      },
-      {
-        symbols: ['-', '+'],
-        arity: 'binary',
-        associativity: 'left-to-right'
-      },
-      {
-        symbols: ['*', '/', '%'],
-        arity: 'binary',
-        associativity: 'left-to-right'
-      },
-      {
-        symbols: '**',
-        arity: 'binary',
-        associativity: 'right-to-left'
-      },
-      {
-        symbols: ['!', '-', '+', '~'],
-        arity: 'unary',
-        associativity: 'unary'
-      }
-    ];
-
-    // parse an expression level, given the next inner level of precedence
-    function parseExprLvl(
-      symbols: string | string[],
-      arity: 'binary' | 'unary',
-      associativity: 'left-to-right' | 'right-to-left' | 'unary',
-      nextLevel: () => expression
-    ): expression {
-      const comments: token[] = [];
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing an expression');
-
-      if (arity === 'unary') {
-        // skip if not needed
-        if (!match(symbols)) return nextLevel();
-
-        const operatorToken: token = advance();
-
-        consComments(comments);
-        checkEofErr('invalid eof while parsing an expression');
-
-        // parse same level as body
-        const body: expression = parseExprLvl(
-          symbols,
-          arity,
-          associativity,
-          nextLevel
-        );
-
-        consComments(comments);
-        checkEofErr('invalid eof while parsing an expression');
-
-        return {
-          type: 'unary',
-          operator: operatorToken.lex,
-          body,
-          operatorToken,
-          comments
-        };
-      } else if (arity === 'binary') {
-        if (
-          associativity !== 'left-to-right' &&
-          associativity !== 'right-to-left'
-        )
-          throw new Error(
-            'Internal parser error: misuse of typescripts type system'
-          );
-
-        let leftSide: expression = nextLevel();
-
-        consComments(comments);
-        checkEofErr('invalid eof while parsing an expression');
-
-        if (associativity === 'left-to-right') {
-          while (match(symbols)) {
-            const operatorToken: token = advance();
-
-            consComments(comments);
-            checkEofErr('invalid eof while parsing an expression');
-
-            const rightSide: expression = nextLevel();
-
-            consComments(comments);
-            checkEofErr('invalid eof while parsing an expression');
-
-            leftSide = {
-              type: 'binary',
-              operator: operatorToken.lex,
-              leftSide,
-              rightSide,
-              operatorToken,
-              comments
-            };
-          }
-        } else if (associativity === 'right-to-left') {
-          if (match(symbols)) {
-            const operatorToken: token = advance();
-
-            consComments(comments);
-            checkEofErr('invalid eof while parsing an expression');
-
-            // same lexel because of associativity
-            const rightSide: expression = parseExprLvl(
-              symbols,
-              arity,
-              associativity,
-              nextLevel
-            );
-
-            consComments(comments);
-            checkEofErr('invalid eof while parsing an expression');
-
-            return {
-              type: 'binary',
-              operator: operatorToken.lex,
-              leftSide,
-              rightSide,
-              operatorToken,
-              comments
-            };
-          }
-        }
-
-        return leftSide;
-      }
-
-      throw new Error(
-        'Internal parser error: misuse of typescripts type system'
-      );
-    }
-
-    // #region first expr levels
-    // unroll because of performance
-    const parseExpr0 = () =>
-      parseExprLvl(
-        precedenceTable[0].symbols,
-        precedenceTable[0].arity,
-        precedenceTable[0].associativity,
-        parseExpr1
-      );
-    const parseExpr1 = () =>
-      parseExprLvl(
-        precedenceTable[1].symbols,
-        precedenceTable[1].arity,
-        precedenceTable[1].associativity,
-        parseExpr2
-      );
-    const parseExpr2 = () =>
-      parseExprLvl(
-        precedenceTable[2].symbols,
-        precedenceTable[2].arity,
-        precedenceTable[2].associativity,
-        parseExpr3
-      );
-    const parseExpr3 = () =>
-      parseExprLvl(
-        precedenceTable[3].symbols,
-        precedenceTable[3].arity,
-        precedenceTable[3].associativity,
-        parseExpr4
-      );
-    const parseExpr4 = () =>
-      parseExprLvl(
-        precedenceTable[4].symbols,
-        precedenceTable[4].arity,
-        precedenceTable[4].associativity,
-        parseExpr5
-      );
-    const parseExpr5 = () =>
-      parseExprLvl(
-        precedenceTable[5].symbols,
-        precedenceTable[5].arity,
-        precedenceTable[5].associativity,
-        parseExpr6
-      );
-    const parseExpr6 = () =>
-      parseExprLvl(
-        precedenceTable[6].symbols,
-        precedenceTable[6].arity,
-        precedenceTable[6].associativity,
-        parseExpr7
-      );
-    const parseExpr7 = () =>
-      parseExprLvl(
-        precedenceTable[7].symbols,
-        precedenceTable[7].arity,
-        precedenceTable[7].associativity,
-        parseExpr8
-      );
-    const parseExpr8 = () =>
-      parseExprLvl(
-        precedenceTable[8].symbols,
-        precedenceTable[8].arity,
-        precedenceTable[8].associativity,
-        parseExpr9
-      );
-    const parseExpr9 = () =>
-      parseExprLvl(
-        precedenceTable[9].symbols,
-        precedenceTable[9].arity,
-        precedenceTable[9].associativity,
-        parseExpr10
-      );
-    // #endregion
-
-    function parseExpr10(): expression {
-      const comments: token[] = [];
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing an expression');
-
-      let left: expression = primary();
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing an expression');
-
-      // TODO check if works
-      while (match(['(', '.'])) {
-        if (peek().lex === '.') {
-          // left-to-right precedence
-          const dotToken: token = advance();
-
-          consComments(comments);
-          checkEofErr('invalid eof while parsing an expression');
-
-          const propertyToken: token = matchTypeAdvanceOrError(
-            tokenType.identifier,
-            'property access needs an identifier as a property'
-          );
-
-          consComments(comments);
-          checkEofErr('invalid eof while parsing an expression');
-
-          left = {
-            type: 'propertyAccess',
-            source: left,
-            propertyToken,
-            dotToken,
-            comments
-          };
-        } else if (peek().lex === '(') {
-          const openingBracketToken: token = advance();
-
-          consComments(comments);
-          checkEofErr('invalid eof while parsing an expression');
-
-          const args: argumentList<expression> = parseArgumentList<expression>(
-            parseExpression,
-            ')',
-            {
-              delimiterToken: ',',
-              missingDelimiterError:
-                'missing comma in function call argument list'
-            },
-            { parseComments: true, comments },
-            { noEmptyList: false },
-            'wrong type expression in function call argument list',
-            'unexpected eof while parsing a function call argument list'
-          );
-
-          consComments(comments);
-          checkEofErr('eof in function calling expression');
-
-          const closingBracketToken: token = matchAdvOrErr(
-            ')',
-            'missing closing bracket in function call'
-          );
-
-          consComments(comments);
-          checkEofErr('invalid eof while parsing an expression');
-
-          left = {
-            type: 'functionCall',
-            function: left,
-            arguments: args,
-            openingBracketToken,
-            closingBracketToken,
-            comments
-          };
-        } else
-          throw new Error(
-            `Internal parser error: expected the tokens "(" or "." in this expression.`
-          );
-      }
-
-      return left;
-    }
-
-    // highest precedence level
-    function primary(): expression {
-      function floatLiteralToFloat(literal: string): number {
-        // NaN gets handled correctly
-        return literal === 'inf' ? Infinity : Number(literal);
-      }
-
-      // TODO error if numeric literal is out of bounce
-      function intLiteralToInt(literal: string): number {
-        return Number(literal);
-      }
-
-      const comments: token[] = [];
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing an expression');
-
-      if (match('(')) {
-        const openingBracketToken: token = advance();
-
-        consComments(comments);
-        checkEofErr('invalid eof while parsing an expression');
-
-        const body: expression = !match(')') // better error message
-          ? parseExpression()
-          : newParseError('invalid grouping expression: got no body');
-
-        consComments(comments);
-        checkEofErr('invalid eof while parsing an expression');
-
-        const closingBracketToken: token = matchAdvOrErr(
-          ')',
-          'TODO did not close bracket in grouping expression'
-        );
-
-        consComments(comments);
-        checkEofErr('invalid eof while parsing an expression');
-
-        return {
-          type: 'grouping',
-          body,
-          openingBracketToken,
-          closingBracketToken,
-          comments
-        };
-      } else if (matchType(tokenType.literal)) {
-        const literalToken: token = advance();
-
-        consComments(comments);
-        checkEofErr('invalid eof while parsing an expression');
-
-        const lexeme: string = literalToken.lex;
-        const literalType: 'i32' | 'f32' =
-          lexeme.includes('.') ||
-          (!lexeme.startsWith('0x') && lexeme.includes('e')) ||
-          lexeme === 'inf' ||
-          lexeme === 'nan'
-            ? 'f32'
-            : 'i32';
-        const literalValue: number =
-          literalType === 'i32'
-            ? intLiteralToInt(lexeme)
-            : floatLiteralToFloat(lexeme);
-
-        return {
-          type: 'literal',
-          literalType,
-          value: literalValue,
-          literalToken,
-          comments
-        };
-      } else if (matchType(tokenType.identifier)) {
-        const identifierToken: token = advance();
-
-        consComments(comments);
-        checkEofErr('invalid eof while parsing an expression');
-
-        return {
-          type: 'identifier',
-          identifier: identifierToken.lex,
-          identifierToken,
-          comments
-        };
-      } else if (match('func')) return parseFuncExpression();
-      else if (match('match')) return parseMatchExpression();
-
-      return newParseError(
-        'TODO could not match anything in parsing expressions'
-      );
-    }
-
-    // assert: func token at current point
-    function parseFuncExpression(): expression {
-      const comments: token[] = [];
-
-      const funcToken: token = advance();
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a func expression');
-
-      const openingBracketToken: token = matchAdvOrErr(
-        '(',
-        'TODO functions must be opend with ('
-      );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a func expression');
-
-      let lastHadDefaultVal: boolean = false;
-      const params: argumentList<funcExprParameter> =
-        parseArgumentList<funcExprParameter>(
-          () => {
-            const identifierToken: token = matchTypeAdvanceOrError(
-              tokenType.identifier,
-              'invalid func expression: expected an identifier'
-            );
-
-            consComments(comments);
-            checkEofErr(
-              'invalid eof while parsing arguments of a func expression'
-            );
-
-            const colonToken: optToken = optionalMatchAdvance(':');
-
-            consComments(comments);
-            checkEofErr(
-              'invalid eof while parsing arguments of a func expression'
-            );
-
-            const typeExpression: optional<typeExpression> = callOnPresent(
-              colonToken,
-              () =>
-                !match('=') && !match(',') // better error message
-                  ? parseTypeExpression()
-                  : newParseError(
-                      `missing type annotation after getting ":" in function arguments`
-                    )
-            );
-
-            consComments(comments);
-            checkEofErr(
-              'invalid eof while parsing arguments of a func expression'
-            );
-
-            const defaultValEqToken: optToken = optionalMatchAdvance('=');
-
-            if (lastHadDefaultVal && !isPresent(defaultValEqToken))
-              newParseError(
-                'having a parameter with a default value followed by a parameter without a default value is not allowed in a func expression'
-              );
-            if (isPresent(defaultValEqToken)) lastHadDefaultVal = true;
-
-            callOnPresent(defaultValEqToken, () => {
-              consComments(comments);
-              checkEofErr(
-                'invalid eof while parsing arguments of a func expression'
-              );
-            });
-
-            const value: optional<expression> = callOnPresent(
-              defaultValEqToken,
-              () =>
-                !match(',') // better error message
-                  ? parseExpression()
-                  : newParseError(
-                      `missing expr after getting a default "=" token in function parameter`
-                    )
-            );
-
-            const typeAnnotation: explicitType =
-              isPresent(colonToken) || isPresent(typeExpression)
-                ? {
-                    explicitType: true,
-                    typeExpression: typeExpression!,
-                    colonToken: colonToken!
-                  }
-                : { explicitType: false };
-
-            const defaultValue: funcExprParamDefaultVal =
-              isPresent(defaultValEqToken) || isPresent(value)
-                ? {
-                    hasDefaultValue: true,
-                    value: value!,
-                    defaultValueEqualsToken: defaultValEqToken!
-                  }
-                : { hasDefaultValue: false };
-
-            return {
-              identifierToken,
-              typeAnnotation,
-              defaultValue
-            };
-          },
-          ')',
-          {
-            delimiterToken: ',',
-            missingDelimiterError:
-              'invalid func expression: missing comma in argument list'
-          },
-          { parseComments: true, comments },
-          { noEmptyList: false },
-          'missing function argument',
-          'unexpected eof while parsing function arguments'
-        );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a func expression');
-
-      const closingBracketToken: token = matchAdvOrErr(
-        ')',
-        'TODO functions must be closed with )'
-      );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a func expression');
-
-      const colonToken: optToken = optionalMatchAdvance(':');
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a func expression');
-
-      const typeExpression: optional<typeExpression> = callOnPresent(
-        colonToken,
-        () =>
-          !match('=>') // better error message
-            ? parseTypeExpression()
-            : newParseError(
-                `missing type expression after getting a ":" for a function return type annotation`
-              )
-      );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a func expression');
-
-      const arrowToken: token = matchAdvOrErr(
-        '=>',
-        'TODO functions must have a =>'
-      );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a func expression');
-
-      const body: expression = parseExpression();
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a func expression');
-
-      const returnType: explicitType =
-        isPresent(colonToken) || isPresent(typeExpression)
-          ? {
-              explicitType: true,
-              typeExpression: typeExpression!,
-              colonToken: colonToken!
-            }
-          : {
-              explicitType: false
-            };
-
-      return {
-        type: 'func',
-        parameters: params,
-        body,
-        returnType,
-        funcToken,
-        openingBracketToken,
-        closingBracketToken,
-        arrowToken,
-        comments
-      };
-    }
-
-    // assert: match token at current point
-    function parseMatchExpression(): expression {
-      // TODO, check for bugs and do per branch/line comments
-
-      function parseMatchBodyLine(): matchBodyLine {
-        const comments: token[] = [];
-
-        consComments(comments);
-        checkEofErr(
-          'tried to parse a line in the body of a match expression but got eof'
-        );
-
-        // TODO allow more than identifiers for e.g. ints and or floats? (maybe even boolean expr?)
-        const identifierToken: token = matchTypeAdvanceOrError(
-          tokenType.identifier,
-          'invalid match expression: expected an identifier'
-        );
-
-        consComments(comments);
-        checkEofErr(
-          'invalid eof while parsing arguments of a match expression'
-        );
-
-        const openingBracketToken: optToken = optionalMatchAdvance('(');
-
-        consComments(comments);
-        checkEofErr(
-          'invalid eof while parsing arguments of a match expression'
-        );
-
-        const params: optional<argumentList<token>> = callOnPresent(
-          openingBracketToken,
-          () =>
-            parseArgumentList<token>(
-              () =>
-                matchTypeAdvanceOrError(
-                  tokenType.identifier,
-                  'expected identifier in match body line expr'
-                ),
-              ')',
-              {
-                delimiterToken: ',',
-                missingDelimiterError:
-                  'missing comma token between two identifier in match body line expr'
-              },
-              { parseComments: true, comments },
-              { noEmptyList: false },
-              'only identifier are allowed in match expr',
-              'unexpected eof while parsing match body line expr args'
-            )
-        );
-
-        consComments(comments);
-        checkEofErr(
-          'invalid eof while parsing arguments of a match expression'
-        );
-
-        const closingBracketToken: optToken = callOnPresent(
-          openingBracketToken,
-          () =>
-            matchAdvOrErr(
-              ')',
-              'closing bracket of local match body line was not closed'
-            )
-        );
-
-        consComments(comments);
-        checkEofErr(
-          'invalid eof while parsing arguments of a match expression'
-        );
-
-        const arrowToken: token = matchAdvOrErr(
-          '=>',
-          'missing arrow token in match expr'
-        );
-
-        consComments(comments);
-        checkEofErr(
-          'invalid eof while parsing arguments of a match expression'
-        );
-
-        const body = !match(',') // better error message
-          ? parseExpression()
-          : newParseError('missing body in match expression line');
-
-        return {
-          identifierToken,
-          parameters: params ?? [],
-          brackets:
-            isPresent(openingBracketToken) || isPresent(closingBracketToken)
-              ? {
-                  hasBrackets: true,
-                  openingBracketToken: openingBracketToken!,
-                  closingBracketToken: closingBracketToken!
-                }
-              : {
-                  hasBrackets: false
-                },
-          body,
-          arrowToken,
-          comments
-        };
-      }
-
-      const comments: token[] = [];
-
-      const matchToken: token = advance();
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a match expression');
-
-      const argOpeningBracketToken: token = matchAdvOrErr(
-        '(',
-        'missing bracket in match expression'
-      );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a match expression');
-
-      const scrutinee: expression = !match(')') // better error message
-        ? parseExpression()
-        : newParseError('missing body of argument to match expression');
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a match expression');
-
-      const argClosingBracketToken: token = matchAdvOrErr(
-        ')',
-        'missing closing bracket in match argument body expression'
-      );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a match expression');
-
-      const colonToken: optToken = optionalMatchAdvance(':');
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a match expression');
-
-      const typeAnnotation: optional<typeExpression> = callOnPresent(
-        colonToken,
-        () =>
-          !match('{') // better error message
-            ? parseTypeExpression()
-            : newParseError('missing type expression in typed match expr')
-      );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a match expression');
-
-      const bodyOpeningBracketToken: token = matchAdvOrErr(
-        '{',
-        'missing opening bracket in match body expression'
-      );
-
-      // no consumeComments for better local comments
-      checkEofErr('invalid eof while parsing a match expression');
-
-      const body: argumentList<matchBodyLine> =
-        parseArgumentList<matchBodyLine>(
-          parseMatchBodyLine,
-          '}',
-          {
-            delimiterToken: ',',
-            missingDelimiterError:
-              'missing comma between two lines in a match expression'
-          },
-          { parseComments: false, globalComments: comments },
-          {
-            noEmptyList: true,
-            errorMessage: 'got a match expression without something in the body'
-          },
-          'a line in a match expression must have the structure "id(args) => expr"',
-          'invalid eof in arg'
-        );
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a match expression');
-
-      const bodyClosingBracketToken: token = matchAdvOrErr(
-        '}',
-        'missing closing bracket in match body expression'
-      );
-
-      const explicitType: explicitType =
-        isPresent(colonToken) || isPresent(typeAnnotation)
-          ? {
-              explicitType: true,
-              typeExpression: typeAnnotation!,
-              colonToken: colonToken!
-            }
-          : { explicitType: false };
-
-      return {
-        type: 'match',
-        scrutinee,
-        explicitType,
-        body,
-        matchToken,
-        argOpeningBracketToken,
-        argClosingBracketToken,
-        bodyOpeningBracketToken,
-        bodyClosingBracketToken,
-        comments
-      };
-    }
-
-    return parseExpr0();
+  function parseExpression(): expression | parseError {
+    return parseExprLv0();
   }
 
   /*
@@ -1809,200 +1988,8 @@ export namespace Parser {
     ( ) -> TYPE // func, empty grouping: must be arg list
     ( TYPE { , TYPE }*  { , }? ) -> TYPE // func
 */
-  function parseTypeExpression(): typeExpression {
-    // temporary type
-    type argList = {
-      type: 'arglist';
-      body: argumentList<typeExpression>;
-      openingBracketToken: token;
-      closingBracketToken: token;
-      comments: token[];
-    };
-
-    function parseTypeExpression0(): typeExpression {
-      const comments: token[] = [];
-
-      consComments(comments);
-      checkEofErr('unexpected eof while parsing a type expression');
-
-      let val: typeExpression | argList = primary();
-
-      consComments(comments);
-      checkEofErr('unexpected eof while parsing a type expression');
-
-      if (match('->')) {
-        // right-to-left precedence
-        const arrowToken: token = advance();
-
-        consComments(comments);
-        checkEofErr('unexpected eof while parsing a type expression');
-
-        const returnType: typeExpression = parseTypeExpression0();
-
-        const parameters: argumentList<typeExpression> =
-          val.type === 'arglist'
-            ? val.body
-            : [{ argument: val, delimiterToken: undefined }];
-
-        return {
-          type: 'func-type',
-          parameters,
-          returnType,
-          brackets:
-            val.type === 'arglist'
-              ? {
-                  hasBrackets: true,
-                  openingBracketToken: val.openingBracketToken,
-                  closingBracketToken: val.closingBracketToken
-                }
-              : { hasBrackets: false },
-          arrowToken,
-          comments
-        };
-      }
-
-      if (val.type !== 'arglist') return val;
-      else if (val.body.length === 1 && !isPresent(val.body[0].delimiterToken))
-        return {
-          type: 'grouping',
-          body: val.body[0].argument,
-          openingBracketToken: val.openingBracketToken,
-          closingBracketToken: val.closingBracketToken,
-          comments: val.comments
-        };
-      else {
-        // invalid arglist
-        if (val.body.length === 0)
-          return newParseError(
-            'got empty brackets in type expression, without being a func type'
-          );
-        else if (val.body.length === 1 && isPresent(val.body[0].delimiterToken))
-          return newParseError(
-            'invalid trailing comma in type grouping expression'
-          );
-        // if (val.body.length > 1)
-        else
-          return newParseError(
-            'got more than one type expression in type grouping expression'
-          );
-      }
-    }
-
-    function primary(): typeExpression | argList {
-      const comments: token[] = [];
-
-      consComments(comments);
-      checkEofErr('invalid eof while parsing a type');
-
-      if (match('i32') || match('f32')) {
-        return {
-          type: 'primitive-type',
-          primitiveToken: advance(),
-          comments
-        };
-      } else if (matchType(tokenType.identifier)) {
-        const identifierToken: token = advance();
-
-        consComments(comments);
-        checkEofErr(
-          'unexpected eof in type expression after getting an identifier in a type expression'
-        );
-
-        // TODO what if invalid thing "id subs,]" instead of "id [ subs, ]"
-        if (!match('['))
-          return {
-            type: 'identifier',
-            identifier: identifierToken.lex,
-            generic: { hasGenericSubstitution: false },
-            identifierToken,
-            comments
-          };
-
-        // did match "["
-        const openingBracketToken: token = advance();
-
-        consComments(comments);
-        checkEofErr('unexpected eof after getting a "[" in a type expression');
-
-        const substitutions: argumentList<typeExpression> =
-          parseArgumentList<typeExpression>(
-            parseTypeExpression,
-            ']',
-            {
-              delimiterToken: ',',
-              missingDelimiterError:
-                'missing comma in generic type substitution'
-            },
-            { parseComments: true, comments },
-            {
-              noEmptyList: true,
-              errorMessage: 'a type substition needs at least one argument'
-            },
-            'TODO invalid argument in generic type substitution',
-            'unexpected eof while parsing '
-          );
-
-        consComments(comments);
-        checkEofErr('unexpected eof while parsing a type expression');
-
-        const closingBracketToken: token = matchAdvOrErr(
-          ']',
-          'TODO missing closing bracket token in type expression for generic type substitution'
-        );
-
-        return {
-          type: 'identifier',
-          identifier: identifierToken.lex,
-          generic: {
-            hasGenericSubstitution: true,
-            substitutions,
-            openingBracketToken,
-            closingBracketToken
-          },
-          identifierToken,
-          comments
-        };
-      } else if (match('(')) {
-        const openingBracketToken: token = advance();
-
-        consComments(comments);
-        checkEofErr('unexpected eof after getting a ( in type expression');
-
-        const body: argumentList<typeExpression> =
-          parseArgumentList<typeExpression>(
-            parseTypeExpression,
-            ')',
-            {
-              delimiterToken: ',',
-              missingDelimiterError:
-                'missing comma token while parsing an argument list in type expression'
-            },
-            { parseComments: true, comments },
-            { noEmptyList: false },
-            'invalid value for grouping expression or argument list: expected a type but got something else',
-            'unexpected eof while parsing an argument list in type expression'
-          );
-
-        consComments(comments);
-        checkEofErr('unexpected eof while parsing an argument list');
-
-        const closingBracketToken: token = matchAdvOrErr(')', 'TODO');
-
-        // could be just a grouping of an expression
-        // or is an (empty or full) argument list for a function type
-        return {
-          type: 'arglist',
-          body,
-          openingBracketToken,
-          closingBracketToken,
-          comments
-        };
-      }
-
-      return newParseError('TODO could not match any type expression');
-    }
-
-    return parseTypeExpression0();
+  function parseTypeExpression(): typeExpression | parseError {
+    return parseTypeExpLv0();
   }
   // #endregion
 
