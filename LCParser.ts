@@ -673,6 +673,7 @@ export namespace Parser {
       };
     }
 
+    val.comments.push(...comments);
     if (val.type !== 'arglist') return val;
     else if (val.body.length === 1 && !isPresent(val.body[0].delimiterToken))
       return {
@@ -2065,6 +2066,61 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
+        [
+          `  group t {
+        let t = match (t) {
+          f => match (x) { a() => f, g => c }
+        };
+      }
+          // hey!
+        // more than one
+        use test;
+        let id[T]: T -> T = func (x: T -> T): T -> T => x /*lol*/ + 3;
+        group lol {
+          let a = 5;
+          // yep
+          group test {
+            let x: i32 = 6;
+            // test
+            let y[T] = 4;
+            group third {  }
+            group thirdToo { let test2 = 4; }
+            type what = i32;
+          }
+          type complex[T, U,] {
+            a,
+            // huh
+            b(f32, i32, T),
+            c,
+          }
+          let simple[T, B] = test.what;
+        }
+        let a: f32 = 4.5e3;
+        // a
+        type cmpx[hey] {
+          // b
+          A(i32 /*c*/, f32),
+          // this test
+          // F
+          B,
+          // d
+          C(hey, i32, /*ok works*/),
+          D
+          // e
+        }
+        type two {
+          // test
+        }
+        // other
+        // test two
+        type simpleType = f32 -> (f32, f32) -> i32;`,
+          8
+        ],
+        [
+          `let x[A]: A = func (x: A = 4
+               +3): A => x;`,
+          1
+        ],
         [
           `let f = match (x) {
       a => 5,
