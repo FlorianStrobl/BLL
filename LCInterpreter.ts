@@ -121,8 +121,11 @@ export namespace Interpreter {
             argument: {
               type: 'literal',
               literalType: 'i32',
-              value: argument,
-              literalToken: {} as any,
+              literalToken: {
+                lex: argument.toString(),
+                ty: Lexer.tokenType.literal,
+                idx: -1
+              },
               comments: []
             },
             delimiterToken: undefined
@@ -140,9 +143,21 @@ export namespace Interpreter {
     expression: Parser.expression,
     localIdentifiers: [string, Parser.expression][] = []
   ): number | Parser.funcExpression {
+    function floatLiteralToFloat(literal: string): number {
+      // NaN gets handled correctly
+      return literal === 'inf' ? Infinity : Number(literal);
+    }
+
+    // TODO error if numeric literal is out of bounce
+    function intLiteralToInt(literal: string): number {
+      return Number(literal);
+    }
+
     switch (expression.type) {
       case 'literal':
-        return expression.value;
+        return expression.literalType === 'i32'
+          ? intLiteralToInt(expression.literalToken.lex)
+          : floatLiteralToFloat(expression.literalToken.lex);
       case 'grouping':
         return evaluateExpression(expression.body, localIdentifiers);
       case 'identifier':

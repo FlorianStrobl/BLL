@@ -190,7 +190,6 @@ export namespace Parser {
       | {
           type: 'literal';
           literalType: 'i32' | 'f32';
-          value: number; // TODO, already here?? "NaN", "Infinity", 0, 1.5, ...
           literalToken: token;
         }
       | {
@@ -627,7 +626,7 @@ export namespace Parser {
     consComments(comments);
     checkEofErr('unexpected eof while parsing a type expression');
 
-    let val: typeExpression | argList = parsePrimaryTypeExpr();
+    const val: typeExpression | argList = parsePrimaryTypeExpr();
 
     consComments(comments);
     checkEofErr('unexpected eof while parsing a type expression');
@@ -673,7 +672,8 @@ export namespace Parser {
         comments: val.comments
       };
     else {
-      // invalid arglist
+      // invalid arglist used
+
       if (val.body.length === 0)
         return newParseError(
           'got empty brackets in type expression, without being a func type'
@@ -682,7 +682,7 @@ export namespace Parser {
         return newParseError(
           'invalid trailing comma in type grouping expression'
         );
-      // if (val.body.length > 1)
+      // (val.body.length > 1)
       else
         return newParseError(
           'got more than one type expression in type grouping expression'
@@ -1044,16 +1044,6 @@ export namespace Parser {
 
   // highest precedence level
   function parsePrimaryExprLv(): expression | parseError {
-    function floatLiteralToFloat(literal: string): number {
-      // NaN gets handled correctly
-      return literal === 'inf' ? Infinity : Number(literal);
-    }
-
-    // TODO error if numeric literal is out of bounce
-    function intLiteralToInt(literal: string): number {
-      return Number(literal);
-    }
-
     const comments: token[] = [];
 
     consComments(comments);
@@ -1101,15 +1091,10 @@ export namespace Parser {
         lexeme === 'nan'
           ? 'f32'
           : 'i32';
-      const literalValue: number =
-        literalType === 'i32'
-          ? intLiteralToInt(lexeme)
-          : floatLiteralToFloat(lexeme);
 
       return {
         type: 'literal',
         literalType,
-        value: literalValue,
         literalToken,
         comments
       };
@@ -1728,8 +1713,8 @@ export namespace Parser {
         type: 'let',
         name: identifierToken.lex,
         body,
-        ...explicitType,
         ...genericAnnotation,
+        ...explicitType,
         letToken,
         identifierToken,
         equalsToken,
@@ -1923,8 +1908,8 @@ export namespace Parser {
         type: 'group',
         name: identifierToken.lex,
         body,
-        identifierToken,
         groupToken,
+        identifierToken,
         openingBracketToken,
         closingBracketToken,
         comments
@@ -2390,7 +2375,7 @@ export namespace Parser {
     }
   }
 
-  debugParser(2, true, false, true);
+  debugParser(0, true, false, true);
 }
 
 const test = `

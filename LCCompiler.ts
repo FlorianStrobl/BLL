@@ -386,7 +386,19 @@ export namespace Compiler {
       case 'grouping':
         return todoCompileSimpleExpression(exp.body, varCounter);
       case 'literal':
-        return exp.value.toString();
+        function floatLiteralToFloat(literal: string): number {
+          // NaN gets handled correctly
+          return literal === 'inf' ? Infinity : Number(literal);
+        }
+
+        // TODO error if numeric literal is out of bounce
+        function intLiteralToInt(literal: string): number {
+          return Number(literal);
+        }
+
+        return exp.literalType === 'i32'
+          ? intLiteralToInt(exp.literalToken.lex).toString()
+          : floatLiteralToFloat(exp.literalToken.lex).toString();
       case 'identifier':
         return '%' + exp.identifierToken.lex;
       case 'match':
