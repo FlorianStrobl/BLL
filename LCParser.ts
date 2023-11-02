@@ -260,7 +260,7 @@ export namespace Parser {
             };
       };
 
-  type matchBodyLine = comment &
+  export type matchBodyLine = comment &
     defaultMatchBodyLine & {
       body: expression;
       arrowToken: token;
@@ -1485,6 +1485,7 @@ export namespace Parser {
       },
       { parseComments: false, globalComments: comments },
       {
+        // TODO empty match body allowed for empty complex types?
         noEmptyList: true,
         errorMessage: 'got a match expression without something in the body'
       },
@@ -2067,6 +2068,41 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
         [
+          `// hey!
+      /*mhm*/
+      use std;
+
+      group test {
+        type whut = /*above comment*/ i32;
+        type lal {
+          way1,
+          // per branch comment
+          way2(),
+          way3(i32, f32)
+        }
+        let test[hey]: i32 -> hey = func /*first*/ (x: i32 = 5): i32 => /*above comment*/ /*and second*/ -x /*and third*/ + 1 / inf != nan;
+
+        //let x = match (x) { /*test comment*/ };
+        //let x = match (x): i32 { };
+        let x = match (x) { => 4, };
+        let x = match (x) { a => 4, };
+        let x = match (x) { a(h,l,m) => 4, };
+        let x = match (x) { a(h,l,m) => 4, /*per branch comment*/ b => 5 };
+        let x = match (x) { a(h,l,m) => 4, => 5 };
+      }`,
+          2
+        ],
+        [
+          `//let x = match (x) { };
+        //let x = match (x): i32 { };
+        let x = match (x) { => 4, };
+        let x = match (x) { a => 4, };
+        let x = match (x) { a(h,l,m) => 4, };
+        let x = match (x) { a(h,l,m) => 4, b => 5 };
+        let x = match (x) { a(h,l,m) => 4, => 5 };`,
+          5
+        ],
+        [
           `  group t {
         let t = match (t) {
           f => match (x) { a() => f, g => c }
@@ -2458,6 +2494,7 @@ export namespace Parser {
         ]
       ];
       const mustNotParseButLexe: string[] = [
+        'let x = match (x) { };',
         `let a = match (x) {
         a => 5
         => 4
