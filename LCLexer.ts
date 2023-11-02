@@ -128,11 +128,11 @@ export namespace Lexer {
   }
 
   export enum tokenType {
-    comment = 'c', // "//...", "/*...*/"
-    literal = 'l', // "5.3e-4", "0xFF00FF", "nan", "inf"
     keyword = 'k', // "let", "func"
     identifier = 'i', // "_a_z_A_Z_0_9"
-    symbol = 's' // "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", ",", "(", ")", "{", "}", "=", "->", "."
+    symbol = 's', // "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", ",", "(", ")", "{", "}", "=", "->", "."
+    literal = 'l', // "5.3e-4", "0xFF00FF", "nan", "inf"
+    comment = 'c' // "//...", "/*...*/"
   }
 
   export type nextToken =

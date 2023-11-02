@@ -5,10 +5,13 @@ import { inspect } from 'util';
 
 /**
  * remove all groups by doing groupName/identifierName
+ * remove all comments from the tree by replacing them with "[]"
+ * remove all empty or comment statements
+ * group all filenames from imports
+ * (expr) -> expr since it makes no difference
  * check if vars are accessible in current context and not double
  *
  * check types later
- *
  */
 
 const log = (args: any) => console.log(inspect(args, { depth: 999 }));
@@ -31,6 +34,39 @@ type astAsStatements = {
 
   groups: parserValue[];
 };
+
+// add the original ast reference to potentially go back into it later
+type withRef<T> = [T, Parser.statement];
+export interface processedAST {
+  imports: withRef<string>[];
+  // can be undef because e.g. std does not have a main func
+  mainFunc: undefined | withRef<Parser.statement>;
+  dict: { [path: string]: withRef<Parser.statement> };
+}
+
+function processCode(
+  code: string,
+  currentPath: string = '/' /*should include the filename at the beginning!*/
+): { valid: true; value: processedAST } | { valid: false } {
+  const parsed = Parser.parse(code, true);
+  if (!parsed.valid) return { valid: false };
+  const ast: Parser.statement[] = parsed.statements;
+
+  const processedAST: processedAST = {
+    imports: [],
+    mainFunc: undefined,
+    dict: {}
+  };
+
+  for (const statement of ast) {
+    statement.comments = []; // remove all comments for perf
+    switch (statement.type) {
+
+    }
+  }
+
+  return { valid: true, value: processedAST };
+}
 
 // check if type alias, complex type, groups and lets are not double defined in statements
 // then check if no identifier was used, which is not defined somewhere
@@ -137,6 +173,10 @@ type cty {
 
 group G {
   let f2 = 6;
+}
+
+group H {
+  let f2 = 4;
 }
 `;
 debug(testCode);

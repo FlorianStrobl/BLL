@@ -8,17 +8,23 @@ const log = (args: any) =>
 class Larser {
   private code: string;
   private lexer: Generator<Lexer.nextToken>;
+  private skipComments: boolean;
 
   private state: { eof: false; currentToken: Lexer.token } | { eof: true };
 
-  constructor(code: string) {
+  constructor(code: string, skipComments: boolean = false) {
     this.code = code;
     this.lexer = Lexer.lexeNextTokenIter(code);
+    this.skipComments = skipComments;
 
     this.state = { eof: false, currentToken: undefined as never };
     this.advanceToken();
     if (!this.state.eof && this.state.currentToken === undefined)
       throw 'lexe first token';
+  }
+
+  public noComments(): boolean {
+    return this.skipComments;
   }
 
   public isEof(): boolean {
@@ -47,6 +53,13 @@ class Larser {
       this.state = { eof: false, currentToken: iteratorValue.value };
     else if (iteratorDone) this.state = { eof: true };
     else this.errorHandling();
+
+    if (
+      this.skipComments &&
+      !this.state.eof &&
+      this.getCurrentToken().ty === Lexer.tokenType.comment
+    )
+      this.advanceToken();
   }
 
   private errorHandling(): never {
@@ -2014,12 +2027,13 @@ export namespace Parser {
   // #endregion
 
   export function parse(
-    code: string
+    code: string,
+    noComments: boolean = false
   ):
     | { valid: true; statements: statement[] }
     | { valid: false; parseErrors: parseError[]; statements: statement[] } {
     parseErrors.splice(0, parseErrors.length); // remove all previous elements
-    larser = new Larser(code); // can throw
+    larser = new Larser(code, noComments); // can throw
 
     const statements: statement[] = [];
 
@@ -2043,22 +2057,28 @@ export namespace Parser {
   }
 
   function debugParser(
-    times: number = 2,
-    timerAndIO: boolean = true,
-    example: boolean = false,
-    addComments: boolean = false,
+    count: number = 2,
+    modifier: {
+      timerAndIO: boolean;
+      example: boolean;
+      addComments: boolean;
+      parserSkipComments: boolean;
+    },
     timerName: string = 'Parser tests'
   ): void {
-    if (times !== 0 && timerAndIO)
+    if (count !== 0 && modifier.timerAndIO)
       console.log('lexer works: ', Lexer.debugLexer(1, false, false));
 
-    const x = Parser.parse('let xyz: i32 = 52 == 0x5a; // test');
-    if (times !== 0 && timerAndIO && example)
+    const x = Parser.parse(
+      'let xyz: i32 = 52 == 0x5a; // test',
+      modifier.parserSkipComments
+    );
+    if (count !== 0 && modifier.timerAndIO && modifier.example)
       console.log(`[Debug Parser] Example parser: '${JSON.stringify(x)}'`);
 
     // TODO test all operator precedences
 
-    for (let i = 0; i < times; ++i) {
+    for (let i = 0; i < count; ++i) {
       // #region tests
       // let _ = 1 + (2 - 3) * 4 / 5 ** 6 % 7;
       // invalid to do: `a.(b).c` but (a.b).c is ok
@@ -2580,7 +2600,7 @@ export namespace Parser {
       // TODO add for each mustParse a comment in between each value
       // TODO for each mustParse, remove one by one the last token,
       // and check if the code does not crash
-      const mustParseWithComments: [string, number][] = addComments
+      const mustParseWithComments: [string, number][] = modifier.addComments
         ? mustParse.map((val, i) => [
             '/*first comment*/\n' +
               Lexer.lexe(val[0])
@@ -2591,17 +2611,23 @@ export namespace Parser {
           ])
         : [];
 
-      if (timerAndIO) console.time(timerName);
+      if (modifier.timerAndIO) console.time(timerName);
 
       let successfullTests: number = 0;
-      for (const code of addComments ? mustParseWithComments : mustParse) {
+      for (const code of modifier.addComments
+        ? mustParseWithComments
+        : mustParse) {
         try {
-          let ans = parse(code[0]);
+          let ans = parse(code[0], modifier.parserSkipComments);
 
           if (!ans?.valid) {
             console.error('Should parse:', code[0]);
             log(ans);
-          } else if (!addComments && ans.statements.length !== code[1]) {
+          } else if (
+            !modifier.addComments &&
+            !larser.noComments() &&
+            ans.statements.length !== code[1]
+          ) {
             // with added comments, it is not known how many statements should be parsed
             console.error(
               'Got wrong number of parsed statements:',
@@ -2621,7 +2647,7 @@ export namespace Parser {
           throw new Error('this code should be lexable: ' + code);
 
         try {
-          let ans = parse(code);
+          let ans = parse(code, modifier.parserSkipComments);
           if (ans.valid) {
             console.log('Should not parse: ', code);
             log(ans);
@@ -2631,15 +2657,15 @@ export namespace Parser {
         }
       }
 
-      if (timerAndIO) console.timeEnd(timerName);
+      if (modifier.timerAndIO) console.timeEnd(timerName);
 
       if (
-        timerAndIO &&
+        modifier.timerAndIO &&
         successfullTests === mustParse.length + mustNotParseButLexe.length
       ) {
         console.debug(
           `Parsed successfully ${successfullTests} tests and ${
-            (!addComments ? mustParse : mustParseWithComments)
+            (!modifier.addComments ? mustParse : mustParseWithComments)
               .map((e) => e[0])
               .reduce((a, b) => a + b).length +
             mustNotParseButLexe.reduce((a, b) => a + b).length
@@ -2658,7 +2684,12 @@ export namespace Parser {
     }
   }
 
-  debugParser(0, true, false, true);
+  debugParser(0, {
+    timerAndIO: true,
+    addComments: false,
+    parserSkipComments: false,
+    example: false
+  });
 }
 
 // #region comments
