@@ -1,3 +1,4 @@
+import { delimiter } from 'path';
 import { Lexer } from './LCLexer';
 import { Parser } from './LCParser';
 // @ts-ignore
@@ -14,7 +15,8 @@ import { inspect } from 'util';
  * check types later
  */
 
-const log = (args: any) => console.log(inspect(args, { depth: 999 }));
+const log = (args: any) =>
+  console.log(inspect(args, { depth: 999, colors: true }));
 
 // TODO
 type parserValue = { statement: Parser.statement; path: Lexer.token[] };
@@ -35,38 +37,226 @@ type astAsStatements = {
   groups: parserValue[];
 };
 
-// add the original ast reference to potentially go back into it later
-type withRef<T> = [T, Parser.statement];
 export interface processedAST {
-  imports: withRef<string>[];
+  imports: [string, Parser.statement][]; // hold a reference to the original AST
   // can be undef because e.g. std does not have a main func
-  mainFunc: undefined | withRef<Parser.statement>;
-  dict: { [path: string]: withRef<Parser.statement> };
+  mainFunc: undefined | Parser.statement;
+  // e.g. "l/main": { main } or "t/group1/my_type": { my_type }
+  dict: { [path: string]: Parser.statement };
 }
 
-function processCode(
-  code: string,
-  currentPath: string = '/' /*should include the filename at the beginning!*/
-): { valid: true; value: processedAST } | { valid: false } {
-  const parsed = Parser.parse(code, true);
-  if (!parsed.valid) return { valid: false };
-  const ast: Parser.statement[] = parsed.statements;
+// #region processors
+function processTypeExpr(expr: Parser.typeExpression): Parser.typeExpression {
+  switch (expr.type) {
+    case 'grouping':
+      return processTypeExpr(expr.body);
+    case 'func-type':
+      expr.returnType = processTypeExpr(expr.returnType);
+      expr.parameters = expr.parameters.map((e) => {
+        e.argument = processTypeExpr(e.argument);
+        return e;
+      });
+      return expr;
+    case 'identifier':
+    case 'primitive-type':
+      return expr;
+  }
+}
 
+function processExpr(expr: Parser.expression): Parser.expression {
+  switch (expr.type) {
+    case 'grouping':
+      return processExpr(expr.body);
+    case 'binary':
+      // TODO do i not loose information this way?
+      expr.leftSide = processExpr(expr.leftSide);
+      expr.rightSide = processExpr(expr.rightSide);
+      return expr;
+    case 'unary':
+      expr.body = processExpr(expr.body);
+      return expr;
+    case 'call':
+      expr.function = processExpr(expr.function);
+      expr.arguments = expr.arguments.map((e) => {
+        e.argument = processExpr(e.argument);
+        return e;
+      });
+      return expr;
+    case 'func':
+      // TODO process the types
+      expr.parameters = expr.parameters.map((e) => {
+        if (e.argument.defaultValue.hasDefaultValue)
+          e.argument.defaultValue.value = processExpr(
+            e.argument.defaultValue.value
+          );
+        if (e.argument.typeAnnotation.explicitType)
+          e.argument.typeAnnotation.typeExpression = processTypeExpr(
+            e.argument.typeAnnotation.typeExpression
+          );
+        return e;
+      });
+      expr.body = processExpr(expr.body);
+      return expr;
+    case 'propertyAccess':
+      expr.source = processExpr(expr.source);
+      return expr;
+    case 'match':
+      expr.scrutinee = processExpr(expr.scrutinee);
+      expr.body = expr.body.map((e) => {
+        e.argument.body = processExpr(e.argument.body);
+        return e;
+      });
+      return expr;
+    case 'identifier':
+    case 'literal':
+      return expr;
+  }
+}
+
+function processStmt(stmt: Parser.statement): Parser.statement {
+  switch (stmt.type) {
+    case 'import':
+    case 'empty':
+    case 'comment':
+      return stmt;
+    case 'let':
+      if (stmt.explicitType)
+        stmt.typeExpression = processTypeExpr(stmt.typeExpression);
+      stmt.body = processExpr(stmt.body);
+      return stmt;
+    case 'type-alias':
+      stmt.body = processTypeExpr(stmt.body);
+      return stmt;
+    case 'complex-type':
+      stmt.body = stmt.body.map((e) => {
+        if (!e.argument.parameters.hasParameterList) return e;
+        e.argument.parameters.value = e.argument.parameters.value.map((ee) => ({
+          argument: processTypeExpr(ee.argument),
+          delimiterToken: ee.delimiterToken
+        }));
+        return e;
+      });
+      return stmt;
+    case 'group':
+      for (let i = 0; i < stmt.body.length; ++i)
+        stmt.body[i] = processStmt(stmt.body[i]);
+      return stmt;
+  }
+}
+
+function processAST(
+  ast: Parser.statement[],
+  currentPath: string
+): processedAST {
   const processedAST: processedAST = {
     imports: [],
     mainFunc: undefined,
     dict: {}
   };
 
-  for (const statement of ast) {
-    statement.comments = []; // remove all comments for perf
+  for (let statement of ast) {
+    statement = processStmt(statement);
     switch (statement.type) {
+      case 'comment':
+      case 'empty':
+        // skip
+        break;
+      case 'import':
+        processedAST.imports.push([statement.filename.lex, statement]);
+        break;
+      case 'group':
+        const data = processAST(
+          statement.body,
+          currentPath + statement.name + '/'
+        );
+        // just ignore possible data.mainFunc's
+        if (data.imports.length !== 0)
+          throw new Error(
+            'Internal processing error: imports in namespaces are not allowed and should be prohibited by the parser.'
+          );
 
+        for (const [key, value] of Object.entries(data.dict))
+          if (key in processedAST.dict)
+            throw new Error('TODO what the fuck how.');
+          else processedAST.dict[key] = value;
+
+        break;
+      case 'let':
+      case 'type-alias':
+      case 'complex-type':
+        const idx: string =
+          (statement.type === 'let' ? 'l' : 't') + currentPath + statement.name;
+        // TODO what do if it is "mainFunc"? probably still for recursion and other function calls
+        if (idx in processedAST.dict)
+          throw new Error('Identifier already exists');
+        processedAST.dict[idx] = statement;
+
+        // do not need to check, if already a mainFunc exists, since it would have errored above already
+        if (statement.type === 'let' && statement.name === 'main')
+          processedAST.mainFunc = statement;
     }
   }
 
-  return { valid: true, value: processedAST };
+  return processedAST;
 }
+
+function get_outer_groups(dict_key: string): string[] {
+  return dict_key.split('/').slice(1, -1);
+}
+// #endregion
+
+export function processCode(
+  code: string,
+  currentPath: string = '/' /*should include the filename at the beginning!*/
+): { valid: true; value: processedAST } | { valid: false } {
+  const parsed = Parser.parse(code, { noComments: true });
+  if (!parsed.valid) return { valid: false };
+
+  const ast: Parser.statement[] = parsed.statements;
+  const value = processAST(ast, currentPath);
+
+  return { valid: true, value };
+}
+
+const str = `
+// hey!
+/*mhm*/
+use std;
+use hey;
+
+let main = 5;
+
+group test {
+  group inner {
+    let main = other;
+  }
+
+  let main = 4;
+  //use hey;
+  type whut = /*above comment*/ (((i32))) -> ((f23));
+  type lal {
+    way1,
+    // per branch comment
+    way2(),
+    way3((i32), f32)
+  }
+  let test[hey]: i32 -> hey = func /*first*/ (x: i32 = 5): i32 => /*above comment*/ /*and second*/ -x /*and third*/ + 1 / inf != nan;
+
+  //let x = match (x) { /*test comment*/ };
+  //let x = match (x): i32 { };
+  let x = match (x) { => 4, };
+  //let x = match (x) { a => 4, };
+  //let x = match (x) { a(h,l,m) => 4, };
+  //let x = match (x) { a(h,l,m) => 4, /*per branch comment*/ b => 5 };
+  //let x = match (x) { a(h,l,m) => 4, => 5 };
+}`;
+const a = processCode(str);
+
+console.log(
+  !a.valid
+    ? a
+    : Object.keys(a.value.dict).map((key) => [key, get_outer_groups(key)])
+);
 
 // check if type alias, complex type, groups and lets are not double defined in statements
 // then check if no identifier was used, which is not defined somewhere
@@ -179,4 +369,4 @@ group H {
   let f2 = 4;
 }
 `;
-debug(testCode);
+//debug(testCode);

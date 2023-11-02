@@ -1940,6 +1940,8 @@ export namespace Parser {
       while (!isAtEnd() && !match('}')) {
         const statement: statement | parseError = parseStatement();
         if (statement.type === 'error') break; // handled somewhere else
+        if (statement.type === 'import')
+          newParseError('imports must be outside of namespaces!');
         body.push(statement);
       }
 
@@ -2028,12 +2030,12 @@ export namespace Parser {
 
   export function parse(
     code: string,
-    noComments: boolean = false
+    comments: { noComments: boolean } = { noComments: false }
   ):
     | { valid: true; statements: statement[] }
     | { valid: false; parseErrors: parseError[]; statements: statement[] } {
     parseErrors.splice(0, parseErrors.length); // remove all previous elements
-    larser = new Larser(code, noComments); // can throw
+    larser = new Larser(code, comments.noComments); // can throw
 
     const statements: statement[] = [];
 
@@ -2069,10 +2071,9 @@ export namespace Parser {
     if (count !== 0 && modifier.timerAndIO)
       console.log('lexer works: ', Lexer.debugLexer(1, false, false));
 
-    const x = Parser.parse(
-      'let xyz: i32 = 52 == 0x5a; // test',
-      modifier.parserSkipComments
-    );
+    const x = Parser.parse('let xyz: i32 = 52 == 0x5a; // test', {
+      noComments: modifier.parserSkipComments
+    });
     if (count !== 0 && modifier.timerAndIO && modifier.example)
       console.log(`[Debug Parser] Example parser: '${JSON.stringify(x)}'`);
 
@@ -2087,6 +2088,37 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
+        [
+          `
+// hey!
+/*mhm*/
+use std;
+use hey;
+
+let main = 5;
+
+group test {
+  let main = 4;
+  //use hey;
+  type whut = /*above comment*/ (((i32))) -> ((f23));
+  type lal {
+    way1,
+    // per branch comment
+    way2(),
+    way3((i32), f32)
+  }
+  let test[hey]: i32 -> hey = func /*first*/ (x: i32 = 5): i32 => /*above comment*/ /*and second*/ -x /*and third*/ + 1 / inf != nan;
+
+  //let x = match (x) { /*test comment*/ };
+  //let x = match (x): i32 { };
+  let x = match (x) { => 4, };
+  //let x = match (x) { a => 4, };
+  //let x = match (x) { a(h,l,m) => 4, };
+  //let x = match (x) { a(h,l,m) => 4, /*per branch comment*/ b => 5 };
+  //let x = match (x) { a(h,l,m) => 4, => 5 };
+}`,
+          4
+        ],
         [
           `// hey!
       /*mhm*/
@@ -2514,6 +2546,7 @@ export namespace Parser {
         ]
       ];
       const mustNotParseButLexe: string[] = [
+        'group t { use std; }',
         'let x = match (x) { };',
         `let a = match (x) {
         a => 5
@@ -2618,7 +2651,7 @@ export namespace Parser {
         ? mustParseWithComments
         : mustParse) {
         try {
-          let ans = parse(code[0], modifier.parserSkipComments);
+          let ans = parse(code[0], { noComments: modifier.parserSkipComments });
 
           if (!ans?.valid) {
             console.error('Should parse:', code[0]);
@@ -2647,7 +2680,7 @@ export namespace Parser {
           throw new Error('this code should be lexable: ' + code);
 
         try {
-          let ans = parse(code, modifier.parserSkipComments);
+          let ans = parse(code, { noComments: modifier.parserSkipComments });
           if (ans.valid) {
             console.log('Should not parse: ', code);
             log(ans);
@@ -2686,7 +2719,7 @@ export namespace Parser {
 
   debugParser(0, {
     timerAndIO: true,
-    addComments: false,
+    addComments: true,
     parserSkipComments: false,
     example: false
   });

@@ -431,35 +431,3 @@ export namespace Formatter {
     return code;
   }
 }
-
-// console.log(
-//   Formatter.beautify(
-//     //     Parser.parse(`
-//     // /*a*/ let /*b*/ x /*c*/ [ /*d*/ T /*e*/ ] /*f*/ : /*g*/ i32 /*h*/ -> /*i*/ f32 /*j*/ = /*k*/ 5 /*l*/ + /*m*/ 1 /*n*/ ; /*o*/`)
-//     //       .statements
-//     Parser.parse(`
-// // hey!
-// /*mhm*/
-// use std;
-
-// group test {
-//   type whut = /*above comment*/ i32;
-//   type lal {
-//     way1,
-//     // per branch comment
-//     way2(),
-//     way3(i32, f32)
-//   }
-//   let test[hey]: i32 -> hey = func /*first*/ (x: i32 = 5): i32 => /*above comment*/ /*and second*/ -x /*and third*/ + 1 / inf != nan;
-
-//   let x = match (x) { /*test comment*/ };
-//   let x = match (x): i32 { };
-//   let x = match (x) { => 4, };
-//   let x = match (x) { a => 4, };
-//   let x = match (x) { a(h,l,m) => 4, };
-//   let x = match (x) { a(h,l,m) => 4, /*per branch comment*/ b => 5 };
-//   let x = match (x) { a(h,l,m) => 4, => 5 };
-// }
-// `).statements
-//   )
-// );
