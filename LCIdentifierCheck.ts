@@ -42,7 +42,8 @@ export interface processedAST {
   // can be undef because e.g. std does not have a main func
   mainFunc: undefined | Parser.statement;
   // e.g. "l/main": { main } or "t/group1/my_type": { my_type }
-  dict: { [path: string]: Parser.statement };
+  letDict: { [path: string]: Parser.statementLet }; // Map<string, Parser.statement>
+  typeDict: { [path: string]: Parser.statementTypes }; // Map<string, Parser.statement>
 }
 
 // #region processors
@@ -144,6 +145,14 @@ function processStmt(stmt: Parser.statement): Parser.statement {
   }
 }
 
+// processExprLevel2 and processTypeExprLevel2:
+// go inside the exprs and replace the identifiers by their respective path
+// what about:
+// let x = std.hey;
+// type t[T] = T;
+
+// third level: type resolution for lets and type checking for types(?)
+
 function processAST(
   ast: Parser.statement[],
   currentPath: string
@@ -151,7 +160,8 @@ function processAST(
   const processedAST: processedAST = {
     imports: [],
     mainFunc: undefined,
-    dict: {}
+    letDict: {},
+    typeDict: {}
   };
 
   for (let statement of ast) {
@@ -175,25 +185,34 @@ function processAST(
             'Internal processing error: imports in namespaces are not allowed and should be prohibited by the parser.'
           );
 
-        for (const [key, value] of Object.entries(data.dict))
-          if (key in processedAST.dict)
+        for (const [key, value] of Object.entries(data.letDict))
+          if (key in processedAST.letDict)
             throw new Error('TODO what the fuck how.');
-          else processedAST.dict[key] = value;
+          else processedAST.letDict[key] = value;
+
+        for (const [key, value] of Object.entries(data.typeDict))
+          if (key in processedAST.typeDict)
+            throw new Error('TODO what the fuck how.');
+          else processedAST.typeDict[key] = value;
 
         break;
       case 'let':
-      case 'type-alias':
-      case 'complex-type':
-        const idx: string =
-          (statement.type === 'let' ? 'l' : 't') + currentPath + statement.name;
-        // TODO what do if it is "mainFunc"? probably still for recursion and other function calls
-        if (idx in processedAST.dict)
+        if (currentPath + statement.name in processedAST.letDict)
           throw new Error('Identifier already exists');
-        processedAST.dict[idx] = statement;
 
-        // do not need to check, if already a mainFunc exists, since it would have errored above already
+        processedAST.letDict[currentPath + statement.name] = statement;
+
+        // do not need to check, if already a mainFunc exists in processedAST, since it would have errored above already
         if (statement.type === 'let' && statement.name === 'main')
           processedAST.mainFunc = statement;
+        break;
+      case 'type-alias':
+      case 'complex-type':
+        if (currentPath + statement.name in processedAST.letDict)
+          throw new Error('Identifier already exists');
+
+        processedAST.typeDict[currentPath + statement.name] = statement;
+        break;
     }
   }
 
@@ -252,11 +271,7 @@ group test {
 }`;
 const a = processCode(str);
 
-console.log(
-  !a.valid
-    ? a
-    : Object.keys(a.value.dict).map((key) => [key, get_outer_groups(key)])
-);
+log(a);
 
 // check if type alias, complex type, groups and lets are not double defined in statements
 // then check if no identifier was used, which is not defined somewhere

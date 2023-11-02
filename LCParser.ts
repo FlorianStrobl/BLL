@@ -101,6 +101,39 @@ export namespace Parser {
   };
 
   // #region stmt
+  export type statementTypes =
+    | (comment &
+        ({
+          type: 'type-alias';
+          name: string;
+          body: typeExpression;
+          typeToken: token;
+          identifierToken: token;
+          equalsToken: token;
+          semicolonToken: token;
+        } & genericAnnotation))
+    | ({
+        type: 'complex-type';
+        name: string;
+        body: argumentList<complexTypeLine>;
+        typeToken: token;
+        identifierToken: token;
+        openingBracketToken: token;
+        closingBracketToken: token;
+      } & genericAnnotation);
+
+  export type statementLet = comment &
+    ({
+      type: 'let';
+      name: string;
+      body: expression;
+      letToken: token;
+      identifierToken: token;
+      equalsToken: token;
+      semicolonToken: token;
+    } & genericAnnotation &
+      explicitType);
+
   export type statement = comment &
     (
       | { type: 'comment' }
@@ -120,34 +153,8 @@ export namespace Parser {
           useToken: token;
           semicolonToken: token;
         }
-      | ({
-          type: 'type-alias';
-          name: string;
-          body: typeExpression;
-          typeToken: token;
-          identifierToken: token;
-          equalsToken: token;
-          semicolonToken: token;
-        } & genericAnnotation)
-      | ({
-          type: 'complex-type';
-          name: string;
-          body: argumentList<complexTypeLine>;
-          typeToken: token;
-          identifierToken: token;
-          openingBracketToken: token;
-          closingBracketToken: token;
-        } & genericAnnotation)
-      | ({
-          type: 'let';
-          name: string;
-          body: expression;
-          letToken: token;
-          identifierToken: token;
-          equalsToken: token;
-          semicolonToken: token;
-        } & genericAnnotation &
-          explicitType)
+      | statementTypes
+      | statementLet
     );
 
   type complexTypeLine = comment & {
