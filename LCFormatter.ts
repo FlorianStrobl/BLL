@@ -15,7 +15,7 @@ export namespace Formatter {
 
   const Colors = {
     symbol: `${0xab};${0xb2};${0xbf}`, // white
-    comments: `${0x98};${0xc3};${0x79}`, // green
+    comments: `${0x80};${0x80};${0x80}`, // gray
     numberLiteral: `${0xe5};${0xc0};${0x7b}`, // yellow
     keywordGroup: `${0x05};${0x16};${0x50}`, // darker blue
     keywordUse: `${0x00};${0x04};${0x35}`, // dark blue - purple
@@ -54,18 +54,9 @@ export namespace Formatter {
           addColor(expression.primitiveToken.lex, Colors.primitiveType)
         );
       case 'identifier':
-        const genericPart: string = expression.generic.hasGenericSubstitution
-          ? addColor('[', Colors.symbol) +
-            expression.generic.substitutions
-              .map((e) => printTypeExpression(e.argument))
-              .join(addColor(', ', Colors.symbol)) +
-            addColor(']', Colors.symbol)
-          : '';
-
         return (
           printComments(expression.comments, '') +
-          (addColor(expression.identifierToken.lex, Colors.identifier) +
-            genericPart)
+          addColor(expression.identifierToken.lex, Colors.identifier)
         );
       case 'func-type':
         return (
@@ -77,6 +68,23 @@ export namespace Formatter {
             addColor(')', Colors.symbol) +
             addColor(' -> ', Colors.symbol) +
             printTypeExpression(expression.returnType))
+        );
+      case 'propertyAccess':
+        return (
+          printComments(expression.comments, '') +
+          (printTypeExpression(expression.source) +
+            addColor('.', Colors.symbol) +
+            addColor(expression.propertyToken.lex, Colors.identifier))
+        );
+      case 'genericSubstitution':
+        return (
+          printComments(expression.comments, '') +
+          printTypeExpression(expression.expr) +
+          addColor('[', Colors.symbol) +
+          expression.substitutions
+            .map((e) => printTypeExpression(e.argument))
+            .join(addColor(', ', Colors.symbol)) +
+          addColor(']', Colors.symbol)
         );
     }
   }
@@ -110,6 +118,13 @@ export namespace Formatter {
             addColor('.', Colors.symbol) +
             addColor(expression.propertyToken.lex, Colors.identifier))
         );
+      case 'typeInstatiation':
+        return (
+          printComments(expression.comments, indentation) +
+          (printExpression(expression.source, indentation) +
+            addColor('->', Colors.symbol) +
+            addColor(expression.propertyToken.lex, Colors.identifier))
+        );
       case 'call':
         return (
           printComments(expression.comments, indentation) +
@@ -138,9 +153,9 @@ export namespace Formatter {
             printExpression(expression.rightSide, indentation))
         );
       case 'func':
-        const explicitType: string = expression.returnType.explicitType
+        const explicitType: string = expression.hasExplicitType
           ? addColor(': ', Colors.symbol) +
-            printTypeExpression(expression.returnType.typeExpression)
+            printTypeExpression(expression.typeExpression)
           : '';
         return (
           printComments(expression.comments, indentation) +
@@ -153,16 +168,14 @@ export namespace Formatter {
                     parameter.argument.identifierToken.lex,
                     Colors.identifier
                   ) +
-                  (parameter.argument.typeAnnotation.explicitType
+                  (parameter.argument.hasExplicitType
                     ? addColor(': ', Colors.symbol) +
-                      printTypeExpression(
-                        parameter.argument.typeAnnotation.typeExpression
-                      )
+                      printTypeExpression(parameter.argument.typeExpression)
                     : '') +
-                  (parameter.argument.defaultValue.hasDefaultValue
+                  (parameter.argument.hasDefaultValue
                     ? addColor(' = ', Colors.symbol) +
                       printExpression(
-                        parameter.argument.defaultValue.value,
+                        parameter.argument.defaultValue,
                         indentation
                       )
                     : '')
@@ -174,9 +187,9 @@ export namespace Formatter {
             printExpression(expression.body, indentation))
         );
       case 'match':
-        const explicitType_: string = expression.explicitType.explicitType
+        const explicitType_: string = expression.hasExplicitType
           ? addColor(': ', Colors.symbol) +
-            printTypeExpression(expression.explicitType.typeExpression)
+            printTypeExpression(expression.typeExpression)
           : '';
 
         if (expression.body.length <= 1)
@@ -314,7 +327,7 @@ export namespace Formatter {
               .join(addColor(', ', Colors.symbol)) +
             addColor(']', Colors.symbol)
           : '';
-        const typePart: string = statement.explicitType
+        const typePart: string = statement.hasExplicitType
           ? addColor(': ', Colors.symbol) +
             printTypeExpression(statement.typeExpression)
           : '';
@@ -389,9 +402,9 @@ export namespace Formatter {
                       complexTypeLine.argument.identifierToken.lex,
                       Colors.identifier
                     ) +
-                    (complexTypeLine.argument.parameters.hasParameterList
+                    (complexTypeLine.argument.hasBrackets
                       ? addColor('(', Colors.symbol) +
-                        complexTypeLine.argument.parameters.value
+                        complexTypeLine.argument.arguments
                           .map((a) => printTypeExpression(a.argument))
                           .join(addColor(', ', Colors.symbol)) +
                         addColor(')', Colors.symbol)

@@ -85,8 +85,8 @@ export namespace Parser {
 
   export type token = Lexer.token;
   type optToken = optional<token>;
-  type tokenType = Lexer.tokenType;
-  const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
+  export type tokenType = Lexer.tokenType;
+  export const tokenType: typeof Lexer.tokenType = Lexer.tokenType;
 
   type argumentList<T> = {
     argument: T;
@@ -101,41 +101,10 @@ export namespace Parser {
   };
 
   // #region stmt
-  export type statementTypes =
-    | (comment &
-        ({
-          type: 'type-alias';
-          name: string;
-          body: typeExpression;
-          typeToken: token;
-          identifierToken: token;
-          equalsToken: token;
-          semicolonToken: token;
-        } & genericAnnotation))
-    | ({
-        type: 'complex-type';
-        name: string;
-        body: argumentList<complexTypeLine>;
-        typeToken: token;
-        identifierToken: token;
-        openingBracketToken: token;
-        closingBracketToken: token;
-      } & genericAnnotation);
-
-  export type statementLet = comment &
-    ({
-      type: 'let';
-      name: string;
-      body: expression;
-      letToken: token;
-      identifierToken: token;
-      equalsToken: token;
-      semicolonToken: token;
-    } & genericAnnotation &
-      explicitType);
-
   export type statement = comment &
     (
+      | statementLet
+      | statementTypes
       | { type: 'comment' }
       | { type: 'empty'; semicolonToken: token }
       | {
@@ -153,23 +122,54 @@ export namespace Parser {
           useToken: token;
           semicolonToken: token;
         }
-      | statementTypes
-      | statementLet
+    );
+
+  export type statementLet = comment &
+    ({
+      type: 'let';
+      name: string;
+      body: expression;
+      letToken: token;
+      identifierToken: token;
+      equalsToken: token;
+      semicolonToken: token;
+    } & genericAnnotation &
+      explicitType);
+
+  export type statementTypes = comment &
+    (
+      | ({
+          type: 'type-alias';
+          name: string;
+          body: typeExpression;
+          typeToken: token;
+          identifierToken: token;
+          equalsToken: token;
+          semicolonToken: token;
+        } & genericAnnotation)
+      | ({
+          type: 'complex-type';
+          name: string;
+          body: argumentList<complexTypeLine>;
+          typeToken: token;
+          identifierToken: token;
+          openingBracketToken: token;
+          closingBracketToken: token;
+        } & genericAnnotation)
     );
 
   type complexTypeLine = comment & {
     identifierToken: token;
-    parameters: complexTypeValParams;
-  };
+    arguments: argumentList<typeExpression>;
+  } & complexTypeValParams;
 
   type complexTypeValParams =
     | {
-        hasParameterList: true;
-        value: argumentList<typeExpression>;
+        hasBrackets: true;
         openingBracketToken: token;
         closingBracketToken: token;
       }
-    | { hasParameterList: false };
+    | { hasBrackets: false };
 
   type genericAnnotation =
     | {
@@ -198,6 +198,12 @@ export namespace Parser {
           dotToken: token;
         }
       | {
+          type: 'typeInstatiation';
+          propertyToken: token;
+          source: expression;
+          arrowToken: token;
+        }
+      | {
           type: 'call'; // either a functionCall, or a complex type value instantiation
           arguments: argumentList<expression>;
           function: expression;
@@ -223,74 +229,81 @@ export namespace Parser {
           rightSide: expression;
           operatorToken: token;
         }
-      | {
+      | ({
           type: 'match';
           scrutinee: expression;
           body: argumentList<matchBodyLine>;
-          explicitType: explicitType;
           matchToken: token;
           argOpeningBracketToken: token;
           argClosingBracketToken: token;
           bodyOpeningBracketToken: token;
           bodyClosingBracketToken: token;
-        }
+        } & explicitType)
     );
 
   export type funcExpression = {
     type: 'func';
     parameters: argumentList<funcExprParameter>;
     body: expression;
-    returnType: explicitType;
     funcToken: token;
     openingBracketToken: token;
     closingBracketToken: token;
     arrowToken: token;
-  };
+  } & explicitType;
 
   type funcExprParameter = {
     identifierToken: token;
-    typeAnnotation: explicitType;
-    defaultValue: funcExprParamDefaultVal;
-  };
+  } & explicitType &
+    funcExprParamDefaultVal;
 
   type funcExprParamDefaultVal =
     | {
         hasDefaultValue: true;
-        value: expression;
+        defaultValue: expression;
         defaultValueEqualsToken: token;
       }
     | { hasDefaultValue: false };
 
-  // TODO
-  type defaultMatchBodyLine =
+  type matchBodyLinePattern =
     | { isDefaultVal: true }
-    | {
+    | ({
         isDefaultVal: false;
         identifierToken: token;
-        // TODO merge params with brackets or not?
         parameters: argumentList<token>;
-        brackets:
-          | {
-              hasBrackets: true;
-              openingBracketToken: token;
-              closingBracketToken: token;
-            }
-          | {
-              hasBrackets: false;
-            };
-      };
+      } & (
+        | {
+            hasBrackets: true;
+            openingBracketToken: token;
+            closingBracketToken: token;
+          }
+        | {
+            hasBrackets: false;
+          }
+      ));
 
-  export type matchBodyLine = comment &
-    defaultMatchBodyLine & {
-      body: expression;
-      arrowToken: token;
-    };
+  export type matchBodyLine = comment & {
+    body: expression;
+    arrowToken: token;
+  } & matchBodyLinePattern;
   // #endregion
 
   // #region types
-  // TODO wab propertAccess of complex types?
+  // TODO wab propertyAccess of complex types?
   export type typeExpression = comment &
     (
+      | {
+          type: 'genericSubstitution';
+          expr: typeExpression;
+          substitutions: argumentList<typeExpression>;
+          openingBracketToken: token;
+          closingBracketToken: token;
+        }
+      | {
+          type: 'propertyAccess'; // source.property
+          propertyToken: token;
+          source: typeExpression;
+          dotToken: token;
+        }
       | {
           type: 'grouping';
           body: typeExpression;
@@ -304,39 +317,31 @@ export namespace Parser {
       | {
           type: 'identifier';
           identifier: string; // generic/type identifier
-          generic:
-            | {
-                hasGenericSubstitution: true;
-                substitutions: argumentList<typeExpression>;
-                closingBracketToken: token;
-                openingBracketToken: token;
-              }
-            | { hasGenericSubstitution: false };
           identifierToken: token;
         }
-      | {
+      | ({
           type: 'func-type';
           parameters: argumentList<typeExpression>;
           returnType: typeExpression;
-          brackets:
-            | {
-                hasBrackets: true;
-                openingBracketToken: token;
-                closingBracketToken: token;
-              }
-            | { hasBrackets: false };
           arrowToken: token;
-        }
+        } & (
+          | {
+              hasBrackets: true;
+              openingBracketToken: token;
+              closingBracketToken: token;
+            }
+          | { hasBrackets: false }
+        ))
     );
 
   type explicitType =
     | {
-        explicitType: true;
+        hasExplicitType: true;
         typeExpression: typeExpression;
         colonToken: token;
       }
     | {
-        explicitType: false;
+        hasExplicitType: false;
       };
   // #endregion
   // #endregion
@@ -626,16 +631,16 @@ export namespace Parser {
       isPresent(closingBracketToken) ||
       parameterValues.length !== 0
         ? {
-            hasParameterList: true,
-            value: parameterValues,
+            hasBrackets: true,
             openingBracketToken: openingBracketToken!,
             closingBracketToken: closingBracketToken!
           }
-        : { hasParameterList: false };
+        : { hasBrackets: false };
 
     return {
       identifierToken,
-      parameters,
+      arguments: parameterValues,
+      ...parameters,
       comments
     };
   }
@@ -657,7 +662,7 @@ export namespace Parser {
     consComments(comments);
     checkEofErr('unexpected eof while parsing a type expression');
 
-    const val: typeExpression | argList = parsePrimaryTypeExpr();
+    const left: typeExpression | argList = parseTypeExprLv1();
 
     consComments(comments);
     checkEofErr('unexpected eof while parsing a type expression');
@@ -672,45 +677,53 @@ export namespace Parser {
       const returnType: typeExpression = parseTypeExpLv0() as typeExpression;
 
       const parameters: argumentList<typeExpression> =
-        val.type === 'arglist'
-          ? val.body
-          : [{ argument: val, delimiterToken: undefined }];
+        left.type === 'arglist'
+          ? left.body
+          : [{ argument: left, delimiterToken: undefined }];
+
+      const brackets:
+        | {
+            hasBrackets: true;
+            openingBracketToken: token;
+            closingBracketToken: token;
+          }
+        | { hasBrackets: false } =
+        left.type === 'arglist'
+          ? {
+              hasBrackets: true,
+              openingBracketToken: left.openingBracketToken,
+              closingBracketToken: left.closingBracketToken
+            }
+          : { hasBrackets: false };
 
       return {
         type: 'func-type',
         parameters,
         returnType,
-        brackets:
-          val.type === 'arglist'
-            ? {
-                hasBrackets: true,
-                openingBracketToken: val.openingBracketToken,
-                closingBracketToken: val.closingBracketToken
-              }
-            : { hasBrackets: false },
+        ...brackets,
         arrowToken,
         comments
       };
     }
 
-    val.comments.push(...comments);
-    if (val.type !== 'arglist') return val;
-    else if (val.body.length === 1 && !isPresent(val.body[0].delimiterToken))
+    left.comments.push(...comments);
+    if (left.type !== 'arglist') return left;
+    else if (left.body.length === 1 && !isPresent(left.body[0].delimiterToken))
       return {
         type: 'grouping',
-        body: val.body[0].argument,
-        openingBracketToken: val.openingBracketToken,
-        closingBracketToken: val.closingBracketToken,
-        comments: val.comments
+        body: left.body[0].argument,
+        openingBracketToken: left.openingBracketToken,
+        closingBracketToken: left.closingBracketToken,
+        comments: left.comments
       };
     else {
       // invalid arglist used
 
-      if (val.body.length === 0)
+      if (left.body.length === 0)
         return newParseError(
           'got empty brackets in type expression, without being a func type'
         );
-      else if (val.body.length === 1 && isPresent(val.body[0].delimiterToken))
+      else if (left.body.length === 1 && isPresent(left.body[0].delimiterToken))
         return newParseError(
           'invalid trailing comma in type grouping expression'
         );
@@ -720,6 +733,97 @@ export namespace Parser {
           'got more than one type expression in type grouping expression'
         );
     }
+  }
+
+  function parseTypeExprLv1(): typeExpression | argList {
+    const comments: token[] = [];
+
+    consComments(comments);
+    checkEofErr('unexpected eof while parsing a type expression');
+
+    let left: typeExpression | argList = parsePrimaryTypeExpr();
+
+    consComments(comments);
+    checkEofErr('unexpected eof while parsing a type expression');
+
+    while (match(['.', '['])) {
+      if (left.type === 'arglist') {
+        if (left.body.length === 1 && !isPresent(left.body[0].delimiterToken))
+          left = {
+            type: 'grouping',
+            body: left.body[0].argument,
+            openingBracketToken: left.openingBracketToken,
+            closingBracketToken: left.closingBracketToken,
+            comments: left.comments
+          };
+        else newParseError('invalid arg list in current scope');
+      }
+
+      if (match('.')) {
+        const dotToken: token = advance();
+
+        consComments(comments);
+        checkEofErr('unexpected eof while parsing a type expression');
+
+        const propertyToken: token = matchTypeAdvanceOrError(
+          tokenType.identifier,
+          'must have an identifier as property token in a type expression'
+        );
+
+        consComments(comments);
+        checkEofErr('unexpected eof while parsing a type expression');
+
+        left = {
+          type: 'propertyAccess',
+          source: left,
+          propertyToken,
+          dotToken,
+          comments
+        };
+      } else {
+        // must be '['
+        const openingBracketToken: token = advance();
+
+        consComments(comments);
+        checkEofErr('unexpected eof while parsing a type expression');
+
+        const substitutions: argumentList<typeExpression> =
+          parseArgumentList<typeExpression>(
+            parseTypeExpression as () => typeExpression,
+            ']',
+            {
+              delimiterToken: ',',
+              missingDelimiterError:
+                'missing comma in generic type substitution'
+            },
+            { parseComments: true, comments },
+            {
+              noEmptyList: true,
+              errorMessage: 'a type substition needs at least one argument'
+            },
+            'TODO invalid argument in generic type substitution',
+            'unexpected eof while parsing '
+          );
+
+        const closingBracketToken: token = matchAdvOrErr(']', 'TODO');
+
+        consComments(comments);
+        checkEofErr('unexpected eof while parsing a type expression');
+
+        left = {
+          type: 'genericSubstitution',
+          expr: left,
+          substitutions,
+          openingBracketToken,
+          closingBracketToken,
+          comments
+        };
+      }
+    }
+
+    // TODO are comments being missed here?
+
+    return left;
   }
 
   function parsePrimaryTypeExpr(): typeExpression | argList {
@@ -742,56 +846,9 @@ export namespace Parser {
         'unexpected eof in type expression after getting an identifier in a type expression'
       );
 
-      // TODO what if invalid thing "id subs,]" instead of "id [ subs, ]"
-      if (!match('['))
-        return {
-          type: 'identifier',
-          identifier: identifierToken.lex,
-          generic: { hasGenericSubstitution: false },
-          identifierToken,
-          comments
-        };
-
-      // did match "["
-      const openingBracketToken: token = advance();
-
-      consComments(comments);
-      checkEofErr('unexpected eof after getting a "[" in a type expression');
-
-      const substitutions: argumentList<typeExpression> =
-        parseArgumentList<typeExpression>(
-          parseTypeExpression as () => typeExpression,
-          ']',
-          {
-            delimiterToken: ',',
-            missingDelimiterError: 'missing comma in generic type substitution'
-          },
-          { parseComments: true, comments },
-          {
-            noEmptyList: true,
-            errorMessage: 'a type substition needs at least one argument'
-          },
-          'TODO invalid argument in generic type substitution',
-          'unexpected eof while parsing '
-        );
-
-      consComments(comments);
-      checkEofErr('unexpected eof while parsing a type expression');
-
-      const closingBracketToken: token = matchAdvOrErr(
-        ']',
-        'TODO missing closing bracket token in type expression for generic type substitution'
-      );
-
       return {
         type: 'identifier',
         identifier: identifierToken.lex,
-        generic: {
-          hasGenericSubstitution: true,
-          substitutions,
-          openingBracketToken,
-          closingBracketToken
-        },
         identifierToken,
         comments
       };
@@ -1003,10 +1060,10 @@ export namespace Parser {
     checkEofErr('invalid eof while parsing an expression');
 
     // TODO check if works
-    while (match(['(', '.'])) {
-      if (peek().lex === '.') {
+    while (match(['(', '.', '->'])) {
+      if (peek().lex === '.' || peek().lex === '->') {
         // left-to-right precedence
-        const dotToken: token = advance();
+        const token: token = advance();
 
         consComments(comments);
         checkEofErr('invalid eof while parsing an expression');
@@ -1019,13 +1076,23 @@ export namespace Parser {
         consComments(comments);
         checkEofErr('invalid eof while parsing an expression');
 
-        left = {
-          type: 'propertyAccess',
-          source: left,
-          propertyToken,
-          dotToken,
-          comments
-        };
+        if (token.lex === '.')
+          left = {
+            type: 'propertyAccess',
+            source: left,
+            propertyToken,
+            dotToken: token,
+            comments
+          };
+        else {
+          left = {
+            type: 'typeInstatiation',
+            source: left,
+            propertyToken,
+            arrowToken: token,
+            comments
+          };
+        }
       } else if (peek().lex === '(') {
         const openingBracketToken: token = advance();
 
@@ -1204,25 +1271,25 @@ export namespace Parser {
     const typeAnnotation: explicitType =
       isPresent(colonToken) || isPresent(typeExpression)
         ? {
-            explicitType: true,
+            hasExplicitType: true,
             typeExpression: typeExpression!,
             colonToken: colonToken!
           }
-        : { explicitType: false };
+        : { hasExplicitType: false };
 
     const defaultValue: funcExprParamDefaultVal =
       isPresent(defaultValEqToken) || isPresent(value)
         ? {
             hasDefaultValue: true,
-            value: value!,
+            defaultValue: value!,
             defaultValueEqualsToken: defaultValEqToken!
           }
         : { hasDefaultValue: false };
 
     return {
       identifierToken,
-      typeAnnotation,
-      defaultValue
+      ...typeAnnotation,
+      ...defaultValue
     };
   }
 
@@ -1304,19 +1371,19 @@ export namespace Parser {
     const returnType: explicitType =
       isPresent(colonToken) || isPresent(typeExpression)
         ? {
-            explicitType: true,
+            hasExplicitType: true,
             typeExpression: typeExpression!,
             colonToken: colonToken!
           }
         : {
-            explicitType: false
+            hasExplicitType: false
           };
 
     return {
       type: 'func',
       parameters: params,
       body,
-      returnType,
+      ...returnType,
       funcToken,
       openingBracketToken,
       closingBracketToken,
@@ -1410,21 +1477,31 @@ export namespace Parser {
       ? (parseExpression() as expression)
       : newParseError('missing body in match expression line');
 
-    const identifierOrDefault: defaultMatchBodyLine = isPresent(identifierToken)
+    const brackets:
+      | {
+          hasBrackets: true;
+          openingBracketToken: token;
+          closingBracketToken: token;
+        }
+      | {
+          hasBrackets: false;
+        } =
+      isPresent(openingBracketToken) || isPresent(closingBracketToken)
+        ? {
+            hasBrackets: true,
+            openingBracketToken: openingBracketToken!,
+            closingBracketToken: closingBracketToken!
+          }
+        : {
+            hasBrackets: false
+          };
+
+    const identifierOrDefault: matchBodyLinePattern = isPresent(identifierToken)
       ? {
           isDefaultVal: false,
           identifierToken,
           parameters: params ?? [],
-          brackets:
-            isPresent(openingBracketToken) || isPresent(closingBracketToken)
-              ? {
-                  hasBrackets: true,
-                  openingBracketToken: openingBracketToken!,
-                  closingBracketToken: closingBracketToken!
-                }
-              : {
-                  hasBrackets: false
-                }
+          ...brackets
         }
       : { isDefaultVal: true };
 
@@ -1524,17 +1601,17 @@ export namespace Parser {
     const explicitType: explicitType =
       isPresent(colonToken) || isPresent(typeAnnotation)
         ? {
-            explicitType: true,
+            hasExplicitType: true,
             typeExpression: typeAnnotation!,
             colonToken: colonToken!
           }
-        : { explicitType: false };
+        : { hasExplicitType: false };
 
     return {
       type: 'match',
       scrutinee,
       body,
-      explicitType,
+      ...explicitType,
       matchToken,
       argOpeningBracketToken,
       argClosingBracketToken,
@@ -1744,12 +1821,12 @@ export namespace Parser {
       const explicitType: explicitType =
         isPresent(colonToken) || isPresent(typeAnnotation)
           ? {
-              explicitType: true,
+              hasExplicitType: true,
               typeExpression: typeAnnotation!,
               colonToken: colonToken!
             }
           : {
-              explicitType: false
+              hasExplicitType: false
             };
 
       const genericAnnotation: genericAnnotation =
@@ -2095,6 +2172,124 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> (tist)) -> (test) = func (a, b, c) -> 4;
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
+        [
+          `//let main = func () => 5;
+
+      //let x = 5 + hey; // should error because no hey is in scope
+      //let f = func (x) => func (x) => x+0; // x is of type i32
+      //let g = f(4)(5) == 5;
+
+      use std;
+
+      type l = std.h;
+
+      type a = i32;
+      type b = ((filename).a);
+      type c[a] = a -> b;
+
+      //type y = ((((i32)) -> ((f32)))).test.hey;
+
+      type lol[k] {
+        a(i32),
+        b(b, k, lol)
+      }
+
+      group hey {
+        type x = ((((filename))).hey).inner.hasAccess;
+        type x2 = hey.inner.hasAccess;
+        type x3 = inner.hasAccess;
+        // type x4 = hasAccess; // error
+        type b = x[((i32)) -> i32];
+        // type c = f; // cant find it
+
+        group inner {
+          type hasAccess = b[b, i32, x]; // should be /filename/hey/b
+        }
+      }
+
+      group other {
+        group inner {
+          group inner {}
+        }
+        group val {}
+      }
+
+      group h {
+        type f {
+          g(i32, i32, i32, i32)
+        }
+      }
+
+      let a = h.f->g(34,62,5,73);`,
+          10
+        ],
+        [
+          `group h {
+        type f {
+          g(i32, i32, i32, i32)
+        }
+      }
+
+      let a = h.f->g(34,62,5,73);`,
+          2
+        ],
+        [`let a = h.f->g(34,62,5,73);`, 1],
+        [`type x = b[i32 -> i32];`, 1],
+        [`type x = ((((i32)) -> ((f32)))).test.hey;`, 1],
+        [`type x = (i32 -> f32).test;`, 1],
+        [
+          `// hey!
+      /*mhm*/
+      use std;
+      use hey;
+
+      let main = func () => 5;
+
+      let f = func (x) => func (x) => x;
+      let g = f(4)(5) == 5;
+
+      // group test {
+      //   type whut = i32;
+      // }
+
+      group test {
+        group inner {
+          let main: complex[(i32)] = other;
+        }
+
+        let main = 4;
+        //use hey;
+        type whut = /*above comment*/ (((i32))) -> ((f23));
+        type lal {
+          way1,
+          // per branch comment
+          way2(),
+          way3((i32), f32)
+        }
+
+        let test[hey]: i32 -> hey = func /*first*/ (x: i32 = 5): i32 => /*above comment*/ /*and second*/ -x /*and third*/ + 1 / inf != nan;
+
+        type test = i32;
+
+        //let x = match (x) { /*test comment*/ };
+        //let x = match (x): i32 { };
+        let x = match (x) { => 4, };
+        //let x = match (x) { a => 4, };
+        //let x = match (x) { a(h,l,m) => 4, };
+        //let x = match (x) { a(h,l,m) => 4, /*per branch comment*/ b => 5 };
+        //let x = match (x) { a(h,l,m) => 4, => 5 };
+      }`,
+          6
+        ],
+        [
+          `let f = func (x) => func (x) => x;
+      let g = f(4)(5) == 5;`,
+          2
+        ],
+        [
+          `/*test*/type T[a] = a;\nlet x: () -> i32 = func (): T[(i32)] => 5-1;`,
+          2
+        ],
         [
           `
 // hey!
@@ -2642,11 +2837,19 @@ group test {
       // and check if the code does not crash
       const mustParseWithComments: [string, number][] = modifier.addComments
         ? mustParse.map((val, i) => [
-            '/*first comment*/\n' +
+            '/*first comment*/' +
               Lexer.lexe(val[0])
-                .tokens.map((t) => t.lex)
-                .join(`\n/*comment ${i}*/\n`) +
-              '\n/*last comment*/',
+                .tokens.map(
+                  (t) =>
+                    // t.ty === tokenType.comment
+                    //   ? t.lex.startsWith('//')
+                    //     ? `/*${t.lex.replaceAll('*/', '')}*/`
+                    //     : t.lex
+                    //   :
+                    t.lex
+                )
+                .join(`\n/*comment ${i}*/`) +
+              '/*last comment*/',
             -1
           ])
         : [];

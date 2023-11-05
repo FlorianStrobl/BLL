@@ -257,8 +257,8 @@ export namespace Interpreter {
                   ty: Lexer.tokenType.identifier,
                   idx: -1
                 },
-                typeAnnotation: { explicitType: false },
-                defaultValue: { hasDefaultValue: false }
+                hasExplicitType: false,
+                hasDefaultValue: false
               },
               delimiterToken: undefined
             },
@@ -269,8 +269,8 @@ export namespace Interpreter {
                   ty: Lexer.tokenType.identifier,
                   idx: -1
                 },
-                typeAnnotation: { explicitType: false },
-                defaultValue: { hasDefaultValue: false }
+                hasExplicitType: false,
+                hasDefaultValue: false
               },
               delimiterToken: undefined
             }
@@ -301,7 +301,7 @@ export namespace Interpreter {
           openingBracketToken: {} as any,
           closingBracketToken: {} as any,
           arrowToken: {} as any,
-          returnType: { explicitType: false }
+          hasExplicitType: false
         };
         const func: Parser.funcExpression =
           typeof rawValue === 'number' ? numberFunction : rawValue;
@@ -310,9 +310,7 @@ export namespace Interpreter {
 
         const givenArgumentCount: number = callingArguments.length;
         const defaultParameterAmountCount: number = funcParameters
-          .map((e) =>
-            e.argument.defaultValue.hasDefaultValue ? (1 as number) : 0
-          )
+          .map((e) => (e.argument.hasDefaultValue ? (1 as number) : 0))
           .reduce((a, b) => a + b);
 
         if (givenArgumentCount > funcParameters.length)
@@ -338,8 +336,8 @@ export namespace Interpreter {
             curParam.identifierToken.lex,
             i < callingArguments.length
               ? callingArguments[i].argument
-              : curParam.defaultValue.hasDefaultValue
-              ? curParam.defaultValue.value
+              : curParam.hasDefaultValue
+              ? curParam.defaultValue
               : (new Error('internal error') as never)
           ]);
         }

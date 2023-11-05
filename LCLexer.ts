@@ -50,7 +50,7 @@ export namespace Lexer {
 
     // misc
     '=', // assigments of values to identifiers in let and type statements
-    '->', // used for func signatures
+    '->', // used for func signatures and for instantiating complex type values
     '=>', // used in func definitions and match expressions
     ':', // type annotation for let, func and match
     ';', // end of use, let or type-alias statement/empty statement
