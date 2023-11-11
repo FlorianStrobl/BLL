@@ -560,7 +560,7 @@ export namespace ProcessAST {
     return { valid: true, value };
   }
 }
-
+/*
 const str = `
 //let main = func () => 5;
 
@@ -582,6 +582,8 @@ type lol[k] {
   a(i32),
   b(b, k, lol)
 }
+
+let xo[T] = T->hey(5);
 
 group hey {
   type x = ((((filename))).hey).inner.hasAccess;
@@ -610,7 +612,63 @@ group h {
 }
 
 let a = h.f->g(34,62,5,73);
-`;
+`;*/
+const str = `// 0
+type Never { }
+// 1
+type Unit { u }
+// 2
+type Bool { true, false }
+
+// *
+type Tuple[A, B] { tup(A, B) }
+// +
+type Or[A, B] { either(A), or(B) }
+
+type add[A, B] = Or[A, B];
+type mult[A, B] = Tuple[A, B];
+
+// commutativity of mult
+let multSwap[A, B] = func (x: mult[A, B]): mult[B, A] =>
+  match (x) {
+    tup(a, b) => Tuple.tup(b, a)
+  };
+// associativity of mult 1
+let multReorder1[A, B, C] = func (x: mult[A, mult[B, C]]): mult[mult[A, B], C] =>
+  match (x) {
+    tup(a, y) => match (y) {
+      tup(b, c) => Tuple.tup(Tuple.tup(a, b), c)
+    }
+  };
+// associativity of mult 2
+let multReorder2[A, B, C] = func (x: mult[mult[A, B], C]): mult[A, mult[B, C]] =>
+  match (x) {
+    tup(y, c) => match (y) {
+      tup(a, b) => Tuple.tup(a, Tuple.tup(b, c))
+    }
+  };
+// identity of mult
+let multIdentity[A] = func (x: mult[A, Unit]): A =>
+  match (x) {
+    tup(a, unit) => a
+  };
+// absorbtion of mult
+let multAbsorb[A] = func (x: mult[A, Never]): Never => match (x) { => x /*TODO, empty match is ok for "Never" types*/ };
+
+// identity of add
+let addIdentity[A] = func (x: add[A, Never]): A =>
+  match (x) {
+    either(a) => a,
+    or(b) => b // TODO is a "Never" type, so it is assignable to A
+  };
+
+let distributivity1[A, B, C] = func (x: mult[A, add[B, C]]): add[mult[A, B], mult[A, C]] =>
+  match (x) {
+    tup(a, y) => match (y) {
+      either(b) => Or.either(Tuple.tup(a, b)),
+      or(c) => Or.or(Tuple.tup(a, c))
+    }
+  };`;
 const a = ProcessAST.processCode(str, 'filename');
 
 log(a);

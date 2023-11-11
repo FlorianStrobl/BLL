@@ -438,8 +438,12 @@ export namespace Formatter {
     colorActive = withColor;
     let code = '';
 
-    for (const statement of ast)
+    let lastStatementType: string = ast.at(0)?.type ?? '';
+    for (const statement of ast) {
+      if (lastStatementType !== statement.type) code += '\n';
+      lastStatementType = statement.type;
       code += printStatement(statement, indent) + '\n';
+    }
 
     return code;
   }
