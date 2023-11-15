@@ -118,7 +118,7 @@ export namespace Formatter {
             addColor('.', Colors.symbol) +
             addColor(expression.propertyToken.lex, Colors.identifier))
         );
-      case 'typeInstatiation':
+      case 'typeInstantiation':
         return (
           printComments(expression.comments, indentation) +
           (printExpression(expression.source, indentation) +

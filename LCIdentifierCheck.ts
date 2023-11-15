@@ -6,7 +6,7 @@ const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
 
 export namespace ProcessAST {
-  // #region types
+  // #region constants and types
   const processingErrors: processingError[] = [];
 
   export type processingError = unknown;
@@ -17,32 +17,37 @@ export namespace ProcessAST {
     // e.g. "/main": { main } or "/group1/my_type": { my_type }
     letDict: { [path: string]: Parser.statementLet }; // Map<string, Parser.statement>
     typeDict: { [path: string]: Parser.statementTypes }; // Map<string, Parser.statement>
-    namespaceScopes: string[];
+    namespaceScopes: [string, Parser.statement][];
   }
+
+  type typeExprProcessingInfo = {
+    scope: string;
+    localIdentifiers: string[];
+    importFilenames: string[];
+    filename: string;
+    typeDict: { [path: string]: Parser.statementTypes };
+  };
   // #endregion
 
   // #region processors
-  function newProcessingError(processingError: string | unknown): never {
+  function newProcessingError(
+    processingError: processingError
+  ): processingError | never {
     processingErrors.push(processingError);
-    return processingError as never;
+    return processingError;
   }
-
-  // #region step 1
-  // remove all the groupings TODO, couldnt that just be in step 2?
 
   // processExprLevel2 and processTypeExprLevel2:
   // go inside the exprs and replace the identifiers by their respective path
-  // what about:
-  // let x = std.hey;
-  // type t[T] = T;
+
+  // use std; let x = std.hey; type t[T] = T;
 
   // third level: type resolution for lets and type checking for types(?)
 
   // remove all the groupings and save the important statements into the datastructure
-  function processASTGrps(
+  function buildHashMap(
     ast: Parser.statement[],
-    currentScope: string,
-    filename: string
+    currentScope: string
   ): processedAST {
     const processedAST: processedAST = {
       imports: [],
@@ -54,8 +59,6 @@ export namespace ProcessAST {
     // a list of all the namespaces in this scope
     // having twice the same namespace name will yield an error msg
     for (let statement of ast) {
-      statement = processStmtGrp(statement);
-
       switch (statement.type) {
         case 'comment':
         case 'empty':
@@ -64,79 +67,88 @@ export namespace ProcessAST {
         case 'import':
           processedAST.imports.push([statement.filename.lex, statement]);
           break;
-        case 'group':
-          // TODO group name cannot be the filename
-          if (statement.name === filename)
-            // TODO what about imports
-            newProcessingError(
-              `a namespace cannot be named just like its filename: ${statement.name}`
-            );
-          else if (
-            processedAST.namespaceScopes.includes(
-              currentScope + statement.name
-            ) ||
-            `${currentScope + statement.name}` in processedAST.letDict ||
-            `${currentScope + statement.name}` in processedAST.typeDict
+        case 'let':
+          const letName: string = currentScope + statement.name;
+
+          if (
+            letName in processedAST.letDict ||
+            processedAST.namespaceScopes.some(
+              ([name, stmt]) => name === letName
+            )
           )
             newProcessingError(
-              `the namespace ${
-                currentScope + statement.name
-              } already exists in this scope in form of another group, let or type statement`
+              `let identifier ${letName} is already in the in the file`
             );
-          else processedAST.namespaceScopes.push(currentScope + statement.name);
 
-          const data: processedAST = processASTGrps(
+          processedAST.letDict[letName] = statement;
+          break;
+        case 'type-alias':
+        case 'complex-type':
+          const typeName: string = currentScope + statement.name;
+
+          if (
+            typeName in processedAST.typeDict ||
+            processedAST.namespaceScopes.some(
+              ([name, stmt]) => name === typeName
+            )
+          )
+            newProcessingError(`type identifier ${typeName} alreay exists`);
+
+          processedAST.typeDict[typeName] = statement;
+          break;
+        case 'group':
+          const groupName: string = currentScope + statement.name;
+          // group name cannot be the filename or name of imported file,
+          // this gets handled at a later stage
+
+          if (
+            processedAST.namespaceScopes.some(
+              ([name, stmt]) => name === groupName
+            ) ||
+            groupName in processedAST.letDict ||
+            groupName in processedAST.typeDict
+          )
+            newProcessingError(
+              `the namespace ${groupName} already exists in this scope in form of another group, let or type statement`
+            );
+          else processedAST.namespaceScopes.push([groupName, statement]);
+
+          const data: processedAST = buildHashMap(
             statement.body,
-            `${currentScope}${statement.name}/`,
-            filename
+            groupName + `/`
           );
-
-          processedAST.namespaceScopes.push(...data.namespaceScopes);
 
           if (data.imports.length !== 0)
             throw new Error(
               'Internal processing error: imports in namespaces are not allowed and should be prohibited by the parser.'
             );
 
-          for (const [key, value] of Object.entries(data.letDict))
-            if (key in processedAST.letDict)
-              // not check if key is in the current scope of namespaces, because key is from a different scope
+          processedAST.namespaceScopes.push(...data.namespaceScopes);
+
+          for (const [letName, value] of Object.entries(data.letDict))
+            if (
+              letName in processedAST.letDict ||
+              processedAST.namespaceScopes.some(
+                ([name, stmt]) => name === letName
+              )
+            )
               newProcessingError(
-                `the let statement "${key}" already existed in form of another let or group statement`
+                `the let statement "${letName}" already existed in form of another let or group statement`
               );
-            else processedAST.letDict[key] = value;
+            else processedAST.letDict[letName] = value;
 
-          for (const [key, value] of Object.entries(data.typeDict))
-            if (key in processedAST.typeDict)
-              // not check if key is in the current scope of namespaces, because key is from a different scope
-              newProcessingError(`already had ${key} as a value`);
-            else processedAST.typeDict[key] = value;
+          for (const [typeName, value] of Object.entries(data.typeDict))
+            if (
+              typeName in processedAST.typeDict ||
+              processedAST.namespaceScopes.some(
+                ([name, stmt]) => name === typeName
+              )
+            )
+              newProcessingError(
+                `the type statement ${typeName} already exists in another type or group statement`
+              );
+            else processedAST.typeDict[typeName] = value;
 
-          break;
-        case 'let':
-          if (
-            currentScope + statement.name in processedAST.letDict ||
-            processedAST.namespaceScopes.includes(currentScope + statement.name)
-          )
-            newProcessingError(
-              `let identifier ${
-                currentScope + statement.name
-              } is already in the in the file`
-            );
-
-          processedAST.letDict[currentScope + statement.name] = statement;
-          break;
-        case 'type-alias':
-        case 'complex-type':
-          if (
-            currentScope + statement.name in processedAST.typeDict ||
-            processedAST.namespaceScopes.includes(currentScope + statement.name)
-          )
-            newProcessingError(
-              `type identifier ${currentScope + statement.name} alreay exists`
-            );
-
-          processedAST.typeDict[currentScope + statement.name] = statement;
           break;
       }
     }
@@ -144,178 +156,32 @@ export namespace ProcessAST {
     return processedAST;
   }
 
-  function processStmtGrp(stmt: Parser.statement): Parser.statement {
-    switch (stmt.type) {
-      case 'import':
-      case 'empty':
-      case 'comment':
-        return stmt;
-      case 'let':
-        // no need to process the generic identifiers
-
-        if (stmt.hasExplicitType)
-          stmt.typeExpression = processTypeExprGrp(stmt.typeExpression);
-
-        stmt.body = processExprGrp(stmt.body);
-        return stmt;
-      case 'type-alias':
-        // no need to process the generic identifiers
-        stmt.body = processTypeExprGrp(stmt.body);
-        return stmt;
-      case 'complex-type':
-        // no need to process the generic identifiers
-        stmt.body = stmt.body.map((line) => {
-          line.argument.arguments = line.argument.arguments.map((arg) => {
-            arg.argument = processTypeExprGrp(arg.argument);
-            return arg;
-          });
-          return line;
-        });
-        return stmt;
-      case 'group':
-        stmt.body = stmt.body.map((st) => processStmtGrp(st));
-        return stmt;
-    }
-  }
-
-  function processExprGrp(expr: Parser.expression): Parser.expression {
-    switch (expr.type) {
-      case 'grouping':
-        return expr; // TODO, then it is aboslutely dumb to do this entire thing
-      //return processExprGrp(expr.body);
-      case 'binary':
-        // TODO do i not loose information this way?
-        expr.leftSide = processExprGrp(expr.leftSide);
-        expr.rightSide = processExprGrp(expr.rightSide);
-        return expr;
-      case 'unary':
-        expr.body = processExprGrp(expr.body);
-        return expr;
-      case 'call':
-        expr.function = processExprGrp(expr.function);
-        expr.arguments = expr.arguments.map((e) => {
-          e.argument = processExprGrp(e.argument);
-          return e;
-        });
-        return expr;
-      case 'func':
-        expr.parameters = expr.parameters.map((e) => {
-          if (e.argument.hasDefaultValue)
-            e.argument.defaultValue = processExprGrp(e.argument.defaultValue);
-          if (e.argument.hasExplicitType)
-            e.argument.typeExpression = processTypeExprGrp(
-              e.argument.typeExpression
-            );
-          return e;
-        });
-
-        if (expr.hasExplicitType)
-          expr.typeExpression = processTypeExprGrp(expr.typeExpression);
-
-        expr.body = processExprGrp(expr.body);
-        return expr;
-      case 'propertyAccess':
-        expr.source = processExprGrp(expr.source);
-        return expr;
-      case 'typeInstatiation':
-        expr.source = processExprGrp(expr.source);
-        return expr;
-      case 'match':
-        expr.scrutinee = processExprGrp(expr.scrutinee);
-
-        if (expr.hasExplicitType)
-          expr.typeExpression = processTypeExprGrp(expr.typeExpression);
-
-        expr.body = expr.body.map((e) => {
-          // dont need to process the pattern itself
-
-          e.argument.body = processExprGrp(e.argument.body);
-          return e;
-        });
-        return expr;
-      case 'identifier':
-      case 'literal':
-        return expr;
-    }
-  }
-
-  // remove groupings
-  function processTypeExprGrp(
-    expr: Parser.typeExpression
-  ): Parser.typeExpression {
-    switch (expr.type) {
-      case 'grouping':
-        return expr; // TODO
-      //return processTypeExprGrp(expr.body);
-      case 'func-type':
-        expr.returnType = processTypeExprGrp(expr.returnType);
-        expr.parameters = expr.parameters.map((e) => {
-          e.argument = processTypeExprGrp(e.argument);
-          return e;
-        });
-        return expr;
-      case 'identifier':
-        return expr;
-      case 'primitive-type':
-        return expr;
-      case 'propertyAccess':
-        expr.source = processTypeExprGrp(expr.source);
-        if (expr.source.type === 'primitive-type')
-          newProcessingError('Cant get the property of a primitive type.');
-        else if (expr.source.type === 'func-type')
-          newProcessingError('Cant get the property of a function type.');
-        // if (expr.source.type === 'grouping')
-
-        return expr;
-      case 'genericSubstitution':
-        expr.expr = processTypeExprGrp(expr.expr);
-
-        expr.substitutions = expr.substitutions.map((e) => {
-          e.argument = processTypeExprGrp(e.argument);
-          return e;
-        });
-
-        return expr;
-    }
-  }
-  // #endregion
-
-  // #region step 2
+  // TODO remove groupings?
   // replace all the identifiers by the global path or remaining local to generics
   function processASTIdent(data: processedAST, filename: string): void {
-    const importFilenames: string[] = data.imports.map((imp) => imp[0]);
+    const importFilenames: string[] = data.imports.map(([name, stmt]) => name);
 
     // TODO: "std.test => /std/test" because we assume it is there
     // "localFilename.test => /localFilename/test" with the test if it actually is there
 
     // resolve global identifier of types
     for (const [key, value] of Object.entries(data.typeDict)) {
-      if (value.type === 'type-alias') {
-        // TODO is own name not also importent?
-        data.typeDict[key].body = processTypeExprIdent(
-          value.body,
-          `/${get_outer_groups(key, 1).join('/')}/`, // scope
-          value.isGeneric
-            ? value.genericIdentifiers.map((gIdent) => gIdent.argument.lex)
-            : [],
-          importFilenames,
-          filename,
-          data.typeDict
-        );
-      } else if (value.type === 'complex-type') {
-        // TODO
+      const infos: typeExprProcessingInfo = {
+        scope: `/${get_outer_groups(key, 1).join('/')}/`, // scope
+        // not the own name for this one:
+        localIdentifiers: value.isGeneric
+          ? value.genericIdentifiers.map((gIdent) => gIdent.argument.lex)
+          : [],
+        importFilenames,
+        filename,
+        typeDict: data.typeDict
+      };
+      if (value.type === 'type-alias')
+        data.typeDict[key].body = processTypeExprIdent(value.body, infos);
+      else if (value.type === 'complex-type') {
         data.typeDict[key].body = value.body.map((e) => {
           e.argument.arguments = e.argument.arguments.map((a) => {
-            a.argument = processTypeExprIdent(
-              a.argument,
-              `/${get_outer_groups(key, 1).join('/')}/`, // scope
-              value.isGeneric
-                ? value.genericIdentifiers.map((gIdent) => gIdent.argument.lex)
-                : [],
-              importFilenames,
-              filename,
-              data.typeDict
-            );
+            a.argument = processTypeExprIdent(a.argument, infos);
             return a;
           });
           return e;
@@ -325,94 +191,98 @@ export namespace ProcessAST {
 
     // resolve global identifiers of lets
     for (const [key, value] of Object.entries(data.letDict)) {
+      data.letDict[key] = processStmtIdent(
+        value,
+        `/${get_outer_groups(key, 1).join('/')}/`,
+        importFilenames,
+        filename,
+        data.typeDict,
+        data.letDict
+      );
     }
   }
 
-  function processStmtIdent(): void {}
+  function processStmtIdent(
+    stmt: Parser.statementLet,
+    scope: string,
+    importFilenames: string[],
+    filename: string,
+    typeDict: {
+      [path: string]: Parser.statementTypes;
+    },
+    letDict: {
+      [path: string]: Parser.statementLet;
+    }
+  ): Parser.statementLet {
+    // TODO test this code
+
+    if (stmt.hasExplicitType)
+      stmt.typeExpression = processTypeExprIdent(stmt.typeExpression, {
+        scope,
+        localIdentifiers: stmt.isGeneric
+          ? stmt.genericIdentifiers.map((gIdent) => gIdent.argument.lex)
+          : [],
+        importFilenames,
+        filename,
+        typeDict
+      });
+
+    stmt.body = processExprIdent(stmt.body, {
+      scope,
+      localTypeIdentifiers: stmt.isGeneric
+        ? stmt.genericIdentifiers.map((gIdent) => gIdent.argument.lex)
+        : [],
+      importFilenames,
+      localExprIdentifiers: [],
+      filename,
+      typeDict,
+      letDict
+    });
+
+    return stmt;
+  }
 
   // resolve identifiers
   function processTypeExprIdent(
     typeExpr: Parser.typeExpression,
-    scope: string,
-    localIdentifiers: string[],
-    importFilenames: string[],
-    filename: string,
-    typeDict: { [path: string]: Parser.statementTypes }
+    info: typeExprProcessingInfo
   ): Parser.typeExpression {
     switch (typeExpr.type) {
-      case 'grouping':
-        typeExpr.body = processTypeExprIdent(
-          typeExpr.body,
-          scope,
-          localIdentifiers,
-          importFilenames,
-          filename,
-          typeDict
-        );
+      case 'primitive-type':
         return typeExpr;
-        throw new Error(
-          'Internal processor error: should have removed all groupings already'
-        );
+      case 'grouping':
+        typeExpr.body = processTypeExprIdent(typeExpr.body, info);
+        return typeExpr;
       case 'func-type':
-        typeExpr.returnType = processTypeExprIdent(
-          typeExpr.returnType,
-          scope,
-          localIdentifiers,
-          importFilenames,
-          filename,
-          typeDict
-        );
+        typeExpr.returnType = processTypeExprIdent(typeExpr.returnType, info);
 
         typeExpr.parameters = typeExpr.parameters.map((param) => {
-          param.argument = processTypeExprIdent(
-            param.argument,
-            scope,
-            localIdentifiers,
-            importFilenames,
-            filename,
-            typeDict
-          );
+          param.argument = processTypeExprIdent(param.argument, info);
           return param;
         });
 
         return typeExpr;
-      case 'primitive-type':
-        return typeExpr;
       case 'genericSubstitution':
-        typeExpr.expr = processTypeExprIdent(
-          typeExpr.expr,
-          scope,
-          localIdentifiers,
-          importFilenames,
-          filename,
-          typeDict
-        );
+        typeExpr.expr = processTypeExprIdent(typeExpr.expr, info);
 
         typeExpr.substitutions = typeExpr.substitutions.map((subst) => {
-          subst.argument = processTypeExprIdent(
-            subst.argument,
-            scope,
-            localIdentifiers,
-            importFilenames,
-            filename,
-            typeDict
-          );
+          subst.argument = processTypeExprIdent(subst.argument, info);
           return subst;
         });
 
         return typeExpr;
-
       case 'identifier':
         // recursively do the same thing for the substitutions
-        if (localIdentifiers.includes(typeExpr.identifier)) return typeExpr;
+        if (info.localIdentifiers.includes(typeExpr.identifier))
+          return typeExpr;
 
         // must be of other scope
-        for (let i = 0; i < get_outer_groups_len(scope); ++i) {
+        for (let i = 0; i < get_outer_groups_len(info.scope); ++i) {
           // start by not removing the outer groups
-          const possiblePath: string =
-            `/${get_outer_groups(scope, i).join('/')}/` + typeExpr.identifier;
-
-          if (possiblePath in typeDict) {
+          const possiblePath: string = `/${get_outer_groups(info.scope, i).join(
+            '/'
+          )}/${typeExpr.identifier}`;
+          if (possiblePath in info.typeDict) {
             typeExpr.identifier = possiblePath;
             return typeExpr;
           }
@@ -421,8 +291,9 @@ export namespace ProcessAST {
         // out of scope or just erroneous
 
         newProcessingError(
-          `cant find the source of the identifier: ${typeExpr.identifier} in scope ${scope}`
+          `cant find the source of the identifier: ${typeExpr.identifier} in scope ${info.scope}`
         );
+
         return typeExpr;
       case 'propertyAccess':
         let propertyAccessPath: string = typeExpr.propertyToken.lex;
@@ -442,11 +313,13 @@ export namespace ProcessAST {
             tmp = tmp.source;
           }
         }
+
         if (tmp.type === 'identifier') {
-          // TODO, what if it is from an import something
           propertyAccessPath = '/' + tmp.identifier + '/' + propertyAccessPath;
 
-          if (importFilenames.includes(tmp.identifier))
+          // it could be, that this property access, accesses a different file
+          // then the deepest identifier must be the other file name, which must be imported at the beginning
+          if (info.importFilenames.includes(tmp.identifier))
             // TODO
             return {
               type: 'identifier',
@@ -462,15 +335,18 @@ export namespace ProcessAST {
         // got now the given path by the user in propertyAccessPath
 
         // TODO really works in the right order?
-        for (let i = get_outer_groups_len(scope); i >= 0; --i) {
+        for (let i = get_outer_groups_len(info.scope); i >= 0; --i) {
           // remove the i times the outer scope, to start at the beginning from 0
-          const possibleScope: string = get_outer_groups(scope, i).join('/');
+          const possibleOuterScope: string = get_outer_groups(
+            info.scope,
+            i
+          ).join('/');
           const possiblePath: string =
-            possibleScope.length === 0
+            possibleOuterScope.length === 0
               ? propertyAccessPath
-              : `/${possibleScope}${propertyAccessPath}`;
+              : `/${possibleOuterScope}${propertyAccessPath}`;
 
-          if (possiblePath in typeDict) {
+          if (possiblePath in info.typeDict) {
             // or to `Object.assign(typeExpr, typeExpr.propertyToken)` and change a couple things
             return {
               type: 'identifier',
@@ -484,17 +360,233 @@ export namespace ProcessAST {
         newProcessingError(
           `Could not find the following identifier in type propertyAccess: ${propertyAccessPath}`
         );
-        return {
-          type: 'identifier',
-          identifier: 'ERROR#',
-          identifierToken: (typeExpr as any).propertyToken,
-          comments: []
-        };
+
+        return typeExpr;
     }
   }
 
-  function processExprIdent(): void {}
-  // #endregion
+  // resolve identifiers
+  function processExprIdent(
+    expr: Parser.expression,
+    info: {
+      scope: string;
+      filename: string;
+      localTypeIdentifiers: string[];
+      localExprIdentifiers: string[];
+      importFilenames: string[];
+      typeDict: {
+        [path: string]: Parser.statementTypes;
+      };
+      letDict: {
+        [path: string]: Parser.statementLet;
+      };
+    }
+  ): Parser.expression {
+    switch (expr.type) {
+      case 'literal':
+        return expr;
+      case 'grouping':
+        expr.body = processExprIdent(expr.body, info);
+        return expr;
+      case 'unary':
+        expr.body = processExprIdent(expr.body, info);
+        return expr;
+      case 'binary':
+        expr.leftSide = processExprIdent(expr.leftSide, info);
+        expr.rightSide = processExprIdent(expr.rightSide, info);
+        return expr;
+      case 'call':
+        expr.function = processExprIdent(expr.function, info);
+
+        expr.arguments = expr.arguments.map((arg) => {
+          arg.argument = processExprIdent(arg.argument, info);
+          return arg;
+        });
+
+        return expr;
+      case 'func':
+        if (expr.hasExplicitType)
+          expr.typeExpression = processTypeExprIdent(expr.typeExpression, {
+            scope: info.scope,
+            localIdentifiers: info.localTypeIdentifiers,
+            importFilenames: info.importFilenames,
+            filename: info.filename,
+            typeDict: info.typeDict
+          });
+
+        expr.parameters = expr.parameters.map((param) => {
+          if (param.argument.hasDefaultValue)
+            param.argument.defaultValue = processExprIdent(
+              param.argument.defaultValue,
+              info
+            );
+
+          if (param.argument.hasExplicitType)
+            param.argument.typeExpression = processTypeExprIdent(
+              param.argument.typeExpression,
+              {
+                scope: info.scope,
+                localIdentifiers: info.localTypeIdentifiers,
+                importFilenames: info.importFilenames,
+                filename: info.filename,
+                typeDict: info.typeDict
+              }
+            );
+          return param;
+        });
+
+        const newLocalIdentifiers: string[] = expr.parameters.map(
+          (param) => param.argument.identifierToken.lex
+        );
+
+        // TODO test this out
+        // merge the local identifiers for this case
+        if (newLocalIdentifiers.length !== 0)
+          info.localExprIdentifiers = [
+            ...newLocalIdentifiers,
+            ...info.localExprIdentifiers
+          ];
+
+        expr.body = processExprIdent(expr.body, info);
+
+        return expr;
+      case 'match':
+        expr.scrutinee = processExprIdent(expr.scrutinee, info);
+
+        if (expr.hasExplicitType)
+          expr.typeExpression = processTypeExprIdent(expr.typeExpression, {
+            scope: info.scope,
+            localIdentifiers: info.localTypeIdentifiers,
+            importFilenames: info.importFilenames,
+            filename: info.filename,
+            typeDict: info.typeDict
+          });
+
+        expr.body = expr.body.map((matchLine) => {
+          const newLocalIdentifiers: string[] = !matchLine.argument.isDefaultVal
+            ? matchLine.argument.parameters.map((param) => param.argument.lex)
+            : [];
+
+          // merge local identifiers
+          if (newLocalIdentifiers.length !== 0)
+            info.localExprIdentifiers = [
+              ...newLocalIdentifiers,
+              ...info.localExprIdentifiers
+            ];
+
+          matchLine.argument.body = processExprIdent(
+            matchLine.argument.body,
+            info
+          );
+
+          return matchLine;
+        });
+
+        return expr;
+      case 'typeInstantiation':
+        expr.source = processExprIdent(expr.source, info);
+
+        if (
+          expr.source.type !== 'identifier' ||
+          !(expr.source.identifier in info.typeDict) ||
+          info.typeDict[expr.source.identifier].type !== 'complex-type'
+        )
+          newProcessingError(
+            'type instantiation must be done with a property of type complex-type'
+          );
+
+        return expr;
+      case 'identifier':
+        if (info.localExprIdentifiers.includes(expr.identifier)) return expr;
+
+        // not a local identifier
+
+        // TODO info.scope really the actual thing!??
+        for (let i = 0; i < get_outer_groups_len(info.scope); ++i) {
+          const possiblePath: string = `/${get_outer_groups(info.scope, i).join(
+            '/'
+          )}/${expr.identifier}`;
+
+          // could be for a type instatiation, and thus be typeDict
+          if (possiblePath in info.letDict || possiblePath in info.typeDict) {
+            expr.identifier = possiblePath;
+            return expr;
+          }
+        }
+
+        newProcessingError(
+          `could not find the current identifier ${expr.identifier} in the scope of this expression`
+        );
+
+        return expr;
+      case 'propertyAccess':
+        let propertyAccessPath: string = expr.propertyToken.lex;
+
+        // get the given propertyAccessPath
+        let tmp: Parser.expression = expr.source;
+        let depthCounter: number = 1;
+        for (
+          ;
+          tmp.type === 'propertyAccess' || tmp.type === 'grouping';
+          ++depthCounter
+        ) {
+          if (tmp.type === 'grouping') tmp = tmp.body;
+          else if (tmp.type === 'propertyAccess') {
+            propertyAccessPath =
+              tmp.propertyToken.lex + '/' + propertyAccessPath;
+            tmp = tmp.source;
+          }
+        }
+
+        if (tmp.type === 'identifier') {
+          propertyAccessPath = '/' + tmp.identifier + '/' + propertyAccessPath;
+
+          // it could be, that this property access, accesses a different file
+          // then the deepest identifier must be the other file name, which must be imported at the beginning
+          if (info.importFilenames.includes(tmp.identifier))
+            // TODO
+            return {
+              type: 'identifier',
+              identifier: propertyAccessPath,
+              identifierToken: expr.propertyToken,
+              comments: []
+            };
+        } else
+          throw new Error(
+            'Internal processing error: an expr property access should only be possible by having the property being a propertyAccess itself or an identifier.'
+          );
+
+        // got now the given path by the user in propertyAccessPath
+
+        // TODO really works in the right order?
+        for (let i = get_outer_groups_len(info.scope); i >= 0; --i) {
+          // remove the i times the outer scope, to start at the beginning from 0
+          const possibleOuterScope: string = get_outer_groups(
+            info.scope,
+            i
+          ).join('/');
+          const possiblePath: string =
+            possibleOuterScope.length === 0
+              ? propertyAccessPath
+              : `/${possibleOuterScope}${propertyAccessPath}`;
+
+          // could be for a type instatiation, and thus be typeDict
+          if (possiblePath in info.letDict || possiblePath in info.typeDict)
+            return {
+              type: 'identifier',
+              identifier: possiblePath,
+              identifierToken: expr.propertyToken,
+              comments: []
+            };
+        }
+
+        newProcessingError(
+          `Could not find the following identifier in expr propertyAccess: ${propertyAccessPath}`
+        );
+
+        return expr;
+    }
+  }
 
   // #region helper funcs
   function get_outer_groups_len(dict_key: string): number {
@@ -522,7 +614,7 @@ export namespace ProcessAST {
         processingErrors: processingError[];
         value?: processedAST;
       } {
-    if (!filename.match(/^[a-zA-Z]+$/g))
+    if (!filename.match(/^[a-zA-Z0-9_]+$/g))
       throw new Error(
         'Internal processing error: tried to process the code with an invalid filename.'
       );
@@ -538,13 +630,22 @@ export namespace ProcessAST {
     if (!parsed.valid)
       return {
         valid: false,
-        processingErrors: [{ type: 'could not parse code' }]
+        processingErrors: [
+          { type: 'could not parse code', parserErrors: parsed.parseErrors }
+        ]
       };
 
     const ast: Parser.statement[] = parsed.statements;
 
-    // step 1, build the hashmap of important statements and remove all the groupings in these
-    const value: processedAST = processASTGrps(ast, path, filename);
+    // step 1, build the hashmap of important statements
+    const value: processedAST = buildHashMap(ast, path);
+
+    // check if some namespace has the same name as the filename or the imports
+    for (const [name, stmt] of value.namespaceScopes)
+      if (name === filename || value.imports.some(([n, s]) => n === name))
+        newProcessingError(
+          `a group cannot be named as the filename or one of its imports: ${name}`
+        );
 
     // cant proceed to step 2 when already had errors
     if (processingErrors.length !== 0)
@@ -552,6 +653,7 @@ export namespace ProcessAST {
 
     // step 2, resolve all outer scope identifiers to their respective outer scope
     processASTIdent(value, filename);
+
     // TODO HERE NOW
 
     if (processingErrors.length !== 0)
@@ -613,7 +715,21 @@ group h {
 
 let a = h.f->g(34,62,5,73);
 `;*/
-const str = `// 0
+const str = `
+group ns {
+  type BinTree[T] {
+    empty,
+    full(BinTree[T], T, BinTree[T])
+  }
+
+  let const = 3;
+}
+
+group inners {
+let test: ns.BinTree[i32] = func (x: ns.BinTree = ns.BinTree->empty) => x | multSwap + ns.const + y;
+}
+
+// 0
 type Never { }
 // 1
 type Unit { u }
@@ -631,20 +747,20 @@ type mult[A, B] = Tuple[A, B];
 // commutativity of mult
 let multSwap[A, B] = func (x: mult[A, B]): mult[B, A] =>
   match (x) {
-    tup(a, b) => Tuple.tup(b, a)
+    tup(a, b) => Tuple->tup(b, a)
   };
 // associativity of mult 1
 let multReorder1[A, B, C] = func (x: mult[A, mult[B, C]]): mult[mult[A, B], C] =>
   match (x) {
     tup(a, y) => match (y) {
-      tup(b, c) => Tuple.tup(Tuple.tup(a, b), c)
+      tup(b, c) => Tuple->tup(Tuple->tup(a, b), c)
     }
   };
 // associativity of mult 2
 let multReorder2[A, B, C] = func (x: mult[mult[A, B], C]): mult[A, mult[B, C]] =>
   match (x) {
     tup(y, c) => match (y) {
-      tup(a, b) => Tuple.tup(a, Tuple.tup(b, c))
+      tup(a, b) => Tuple->tup(a, Tuple->tup(b, c))
     }
   };
 // identity of mult
@@ -665,8 +781,8 @@ let addIdentity[A] = func (x: add[A, Never]): A =>
 let distributivity1[A, B, C] = func (x: mult[A, add[B, C]]): add[mult[A, B], mult[A, C]] =>
   match (x) {
     tup(a, y) => match (y) {
-      either(b) => Or.either(Tuple.tup(a, b)),
-      or(c) => Or.or(Tuple.tup(a, c))
+      either(b) => Or->either(Tuple->tup(a, b)),
+      or(c) => Or->or(Tuple->tup(a, c))
     }
   };`;
 const a = ProcessAST.processCode(str, 'filename');
@@ -783,7 +899,7 @@ namespace Interpreter {
         case 'match':
         case 'propertyAccess':
           return 0 as never;
-        case 'typeInstatiation':
+        case 'typeInstantiation':
           return 0 as never;
         case 'grouping':
           throw new Error(
