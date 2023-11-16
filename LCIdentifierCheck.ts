@@ -785,11 +785,24 @@ let distributivity1[A, B, C] = func (x: mult[A, add[B, C]]): add[mult[A, B], mul
       or(c) => Or->or(Tuple->tup(a, c))
     }
   };`;
-const a = ProcessAST.processCode(str, 'filename');
-
-log(a);
+//const a = ProcessAST.processCode(str, 'filename');
 
 namespace Interpreter {
+  type internalVal =
+    | { type: 'int'; value: number }
+    | { type: 'float'; value: number }
+    | {
+        type: 'expr';
+        expr: Parser.expression;
+        // TODO, needs some kind of closure, because when calling this value, it could already have WAY different closure values, because of very late lazy evaluation
+      }
+    | {
+        type: 'complexType';
+        tyName: string;
+        discriminator: string;
+        values: internalVal[];
+      };
+
   // TODO:
   // interpreting preprocessing aka. remove all the type annotations, since they are useless for actual execution
   // have a data type wrapper for `i32`, `f32` and complex types and save the structure of complex types
@@ -797,146 +810,526 @@ namespace Interpreter {
   // replace all the identifiers by their value if possible (check for recursive things even between two different idents)
   // replace all the const exprs by their value
   export function interpret(
-    code: string,
-    input: number,
-    filename: string
+    files: { [filename: string]: string },
+    mainFilename: string,
+    input: number
   ): any {
-    const processedAST = ProcessAST.processCode(code, filename);
-    if (!processedAST.valid) throw new Error('Invalid code');
-    // now process all the imports, and import their imports if needed
-    if (!('/' + filename + '/main' in processedAST.value.letDict))
-      throw new Error('Must have a main() in the main file.');
+    if (!(mainFilename in files))
+      throw new Error(
+        `The main file ${mainFilename} does not exist in the current files: $${JSON.stringify(
+          Object.keys(files)
+        )}`
+      );
 
-    // TODO
-    return evalAst(
+    const processedAST = ProcessAST.processCode(
+      files[mainFilename],
+      mainFilename
+    );
+
+    if (!processedAST.valid)
+      throw new Error(`Invalid code in main file: ${mainFilename}`);
+
+    // #region recursively import files
+    const importedFiles: string[] = [mainFilename];
+
+    const toImportFiles: string[] = processedAST.value.imports.map(
+      ([filename, _]) => filename
+    );
+    while (toImportFiles.length !== 0) {
+      const toImportFile: string = toImportFiles.pop()!;
+
+      if (!(toImportFile in files))
+        throw new Error(
+          `The imported file ${toImportFile} is missing from the files ${JSON.stringify(
+            Object.keys(files)
+          )}`
+        );
+
+      // do not import files twice so skip it
+      if (importedFiles.includes(toImportFile)) continue;
+      importedFiles.push(toImportFile);
+
+      const processedFile = ProcessAST.processCode(
+        files[toImportFile],
+        toImportFile
+      );
+
+      // TODO better error, since it could be "recursively" imported from an imported file
+      if (!processedFile.valid)
+        throw new Error(`Couldnt compile the imported file ${toImportFile}`);
+
+      // imported files, must be imported at the outer scope aswell
+      for (const [newFileImport, _] of processedFile.value.imports)
+        toImportFiles.push(newFileImport);
+
+      // save the new values in the main `processedAST` var
+      processedAST.value.imports.push(...processedFile.value.imports);
+      processedAST.value.namespaceScopes.push(
+        ...processedFile.value.namespaceScopes
+      );
+      Object.assign(processedAST.value.letDict, processedFile.value.letDict);
+      Object.assign(processedAST.value.typeDict, processedFile.value.typeDict);
+    }
+    // #endregion
+
+    // now process all the imports, and import their imports if needed
+    if (!(`/${mainFilename}/main` in processedAST.value.letDict))
+      throw new Error(`Must have a main() in the main file ${mainFilename}`);
+
+    // { type: 'identifier'; identifier: string; identifierToken: token }
+
+    const result: internalVal = executeExpr(
+      {
+        type: 'expr',
+        expr: {
+          type: 'call',
+          arguments: [
+            {
+              argument: {
+                type: 'literal',
+                literalType: 'i32', // TODO or `f32` if `main :: f32 -> f32`
+                literalToken: {
+                  lex: input.toString(),
+                  ty: Parser.tokenType.literal,
+                  idx: -1
+                },
+                comments: 0 as never
+              },
+              delimiterToken: undefined
+            }
+          ],
+          function: {
+            type: 'identifier',
+            identifier: `/${mainFilename}/main`,
+            identifierToken: {} as never,
+            comments: 0 as never
+          },
+          openingBracketToken: 0 as never,
+          closingBracketToken: 0 as never,
+          comments: 0 as never
+        }
+      },
       processedAST.value.letDict,
       processedAST.value.typeDict,
-      input,
-      filename
-    ) as never;
-  }
-
-  type internalVal =
-    | { type: 'int'; value: number }
-    | { type: 'float'; value: number }
-    | {
-        type: 'func';
-        value: Parser.funcExpression;
-        closure: { [localIdent: string]: internalVal };
-      }
-    | {
-        type: 'complexType';
-        tyName: string;
-        discriminator: number;
-        values: internalVal[];
-      };
-
-  function evalAst(
-    astLet: { [path: string]: Parser.statementLet },
-    astType: { [path: string]: Parser.statementTypes },
-    startInput: number,
-    filename: string
-  ): internalVal {
-    const main: Parser.statementLet | undefined =
-      astLet['/' + filename + '/main'];
-
-    if (
-      main === undefined ||
-      main.name !== 'main' ||
-      main.body.type !== 'func' ||
-      main.body.parameters.length !== 1
-    )
-      throw new Error('TODO no/wrong main func');
-
-    function eval_(
-      expr: Parser.expression,
-      localData: { [localIdent: string]: internalVal }
-    ): internalVal {
-      switch (expr.type) {
-        case 'unary':
-          const d = eval_(expr.body, localData);
-          console.log('DAT', expr.operator, d);
-          if (expr.operator === '-') {
-            console.log('HAHA', -d);
-            return -d as never;
-          } else return 0 as never;
-        case 'binary':
-          return 0 as never;
-        case 'call':
-          // TODO could be identifier with function or a group
-          if (!(expr.function.type === 'func')) {
-          } else {
-            localData = { ...localData };
-            for (let i = 0; i < expr.function.parameters.length; ++i) {
-              const store: unknown =
-                i >= expr.arguments.length
-                  ? expr.function.parameters[i].argument.hasDefaultValue
-                    ? (expr.function.parameters[i].argument as any).defaultValue
-                    : 'err'
-                  : expr.arguments[i].argument;
-
-              localData[
-                expr.function.parameters[i].argument.identifierToken.lex
-              ] = store as never;
-            }
-            console.log('try to eval', expr.function.body, localData);
-            const th = eval_(expr.function.body, localData);
-            console.log('LOL', th);
-            return th;
-          }
-          return 'HUH' as never;
-        case 'func':
-          return 0 as never;
-        case 'identifier':
-          // TODO
-          if (expr.identifier in localData)
-            return eval_(localData[expr.identifier] as never, localData);
-          // TODO, else goto global scope
-          return 0 as never;
-        case 'literal':
-          // TODO
-          return Number(expr.literalToken.lex) as never;
-        case 'match':
-        case 'propertyAccess':
-          return 0 as never;
-        case 'typeInstantiation':
-          return 0 as never;
-        case 'grouping':
-          throw new Error(
-            'Internal interpreting error: groupings should have been removed already for performance reasons'
-          );
-      }
-    }
-
-    const c = eval_(
-      {
-        type: 'call',
-        function: main.body,
-        arguments: [
-          {
-            argument: {
-              type: 'literal',
-              literalType: 'i32', // TODO type
-              literalToken: {
-                ty: Parser.tokenType.literal,
-                idx: -1,
-                lex: startInput.toString() // TODO type
-              },
-              comments: []
-            },
-            delimiterToken: undefined
-          }
-        ],
-        openingBracketToken: undefined as never,
-        closingBracketToken: undefined as never,
-        comments: []
-      },
       {}
     );
-    console.log('lastly', c);
-    return c;
+
+    // TODO add f32 support
+    if (result.type !== 'int')
+      throw new Error(
+        `User error: "main()" should return an i32 but got: ${JSON.stringify(
+          result
+        )}`
+      );
+
+    return result;
+  }
+
+  function executeExpr(
+    expr: internalVal,
+    lets: {
+      [path: string]: Parser.statementLet;
+    },
+    types: {
+      [path: string]: Parser.statementTypes;
+    },
+    closure: { [localIdent: string]: internalVal }
+  ): internalVal {
+    switch (expr.type) {
+      case 'int':
+      case 'float':
+      case 'complexType':
+        // TODO yes?
+        return expr;
+      case 'expr':
+        break; // handle that below
+      default:
+        throw new Error(
+          `Internal interpreting error: the expression type ${JSON.stringify(
+            expr
+          )} is unknown`
+        );
+    }
+
+    const parseExpr: Parser.expression = expr.expr;
+    switch (parseExpr.type) {
+      case 'propertyAccess':
+        throw new Error(
+          `Internal interpreting error: should not have a property access when interpreting`
+        );
+      case 'grouping':
+        // return the inner value
+        return executeExpr(
+          { type: 'expr', expr: parseExpr.body },
+          lets,
+          types,
+          closure
+        );
+      case 'func':
+        // TODO, return the simply the function, since it doesnt state to do something with it
+        return expr;
+      case 'literal':
+        // return the actual value
+        if (parseExpr.literalType === 'i32')
+          return { type: 'int', value: Number(parseExpr.literalToken.lex) };
+        else if (parseExpr.literalType === 'f32')
+          return {
+            type: 'float',
+            value:
+              parseExpr.literalToken.lex === 'inf'
+                ? Infinity
+                : Number(parseExpr.literalToken.lex)
+          };
+        throw new Error(
+          'Internal interpreting error: literal type must be `i32` or `f32`'
+        );
+      case 'unary':
+        const unaryOp: string = parseExpr.operator;
+        const bodyVal: internalVal = executeExpr(
+          { type: 'expr', expr: parseExpr.body },
+          lets,
+          types,
+          closure
+        );
+        switch (unaryOp) {
+          case '+':
+            if (bodyVal.type !== 'int' && bodyVal.type !== 'float')
+              throw new Error(
+                `User error: can only do the unary "+" operation on i32 and f32 values`
+              );
+            return bodyVal;
+          case '-':
+            if (bodyVal.type !== 'int' && bodyVal.type !== 'float')
+              throw new Error(
+                `User error: can only do the unary "-" operation on i32 and f32 values`
+              );
+            bodyVal.value = -bodyVal.value;
+            return bodyVal;
+          case '~':
+            if (bodyVal.type !== 'int')
+              throw new Error(
+                `User error: can only do the unary "~" operation on i32 values`
+              );
+            bodyVal.value = ~bodyVal.value;
+            return bodyVal;
+          case '!':
+            if (bodyVal.type !== 'int' && bodyVal.type !== 'float')
+              throw new Error(
+                `User error: can only do the unary "~" operation on i32 and f32 values`
+              );
+            bodyVal.value = Number(!bodyVal.value);
+            return bodyVal;
+          default:
+            throw new Error(
+              `Internal error: unknown unary operato ${unaryOp} used in interpreting step`
+            );
+        }
+      case 'binary':
+        const binaryOp: string = parseExpr.operator;
+        const left: internalVal = executeExpr(
+          { type: 'expr', expr: parseExpr.leftSide },
+          lets,
+          types,
+          closure
+        );
+        const right: internalVal = executeExpr(
+          { type: 'expr', expr: parseExpr.rightSide },
+          lets,
+          types,
+          closure
+        );
+        switch (binaryOp) {
+          case '+':
+            if (
+              (left.type !== 'int' && left.type !== 'float') ||
+              (right.type !== 'int' && right.type !== 'float') ||
+              left.type !== right.type
+            )
+              throw new Error(
+                `User error: can only do the binary "+" operation on i32 and f32 values`
+              );
+
+            left.value = left.value + right.value;
+            return left;
+          case '-':
+            if (
+              (left.type !== 'int' && left.type !== 'float') ||
+              (right.type !== 'int' && right.type !== 'float') ||
+              left.type !== right.type
+            )
+              throw new Error(
+                `User error: can only do the binary "-" operation on i32 and f32 values`
+              );
+
+            left.value = left.value - right.value;
+            return left;
+          case '*':
+            if (
+              (left.type !== 'int' && left.type !== 'float') ||
+              (right.type !== 'int' && right.type !== 'float') ||
+              left.type !== right.type
+            )
+              throw new Error(
+                `User error: can only do the binary "*" operation on i32 and f32 values`
+              );
+
+            left.value = left.value * right.value;
+            return left;
+          case '<':
+            if (
+              (left.type !== 'int' && left.type !== 'float') ||
+              (right.type !== 'int' && right.type !== 'float') ||
+              left.type !== right.type
+            )
+              throw new Error(
+                `User error: can only do the binary "<" operation on i32 and f32 values`
+              );
+
+            left.value = Number(left.value < right.value);
+            return left;
+          case '==':
+            if (
+              (left.type !== 'int' && left.type !== 'float') ||
+              (right.type !== 'int' && right.type !== 'float') ||
+              left.type !== right.type
+            )
+              throw new Error(
+                `User error: can only do the binary "==" operation on i32 and f32 values`
+              );
+
+            left.value = Number(left.value == right.value);
+            return left;
+
+          default:
+            throw new Error(
+              `Internal error: unknown unary operato ${binaryOp} used in interpreting step`
+            );
+        }
+      case 'identifier':
+        // TODO actually execute and not just suspend for later??
+        if (parseExpr.identifier in closure)
+          return executeExpr(
+            closure[parseExpr.identifier],
+            lets,
+            types,
+            closure
+          );
+        // TODO, really? and why first lets and then types?
+        else if (parseExpr.identifier in lets)
+          return executeExpr(
+            // TODO, yeah?
+            { type: 'expr', expr: lets[parseExpr.identifier].body },
+            lets,
+            types,
+            closure
+          );
+        // TODO user error or internal error?
+        else return expr;
+        // yeah?
+        throw new Error(
+          `User error: identifier ${JSON.stringify(
+            parseExpr
+          )} must be in current scope (either in the current closure or from lets in general)`
+        );
+      case 'call':
+        // typeInstantiation, on i32/f32, on Function, on Identifier (could all be on the return of a internal complicated thing from e.g. a match expr)
+        // TODO yeah??
+        const toCall = executeExpr(
+          { type: 'expr', expr: parseExpr.function },
+          lets,
+          types,
+          closure
+        );
+
+        // TODO
+        switch (toCall.type) {
+          case 'complexType':
+            // TODO
+            return expr;
+          case 'expr':
+            // TODO: what about executing ints??
+            if (toCall.expr.type !== 'func')
+              throw new Error('User error: can only call functions');
+
+            function deepCpy(value: unknown): unknown {
+              if (value === null) return value;
+
+              switch (typeof value) {
+                case 'undefined':
+                case 'symbol':
+                case 'boolean':
+                case 'number':
+                case 'bigint':
+                case 'string':
+                  return value;
+                case 'function':
+                  return value;
+                case 'object':
+                  if (Array.isArray(value))
+                    return value.map((val) => deepCpy(val));
+
+                  const newObj: any = {};
+                  for (const [key, val] of Object.entries(value))
+                    newObj[key] = deepCpy(val);
+                  return newObj;
+              }
+            }
+
+            closure = deepCpy(closure) as never; // TODO, deep copy needed
+
+            const givenArgs = parseExpr.arguments.map<internalVal>((arg) => ({
+              type: 'expr',
+              expr: arg.argument
+            }));
+            const neededArgs = toCall.expr.parameters.map<
+              [string, internalVal | undefined]
+            >((param) => [
+              param.argument.identifierToken.lex,
+              param.argument.hasDefaultValue
+                ? { type: 'expr', expr: param.argument.defaultValue }
+                : undefined
+            ]);
+
+            if (givenArgs.length > neededArgs.length)
+              throw new Error(
+                'User error: called a function with too many arguments'
+              );
+
+            const finalArgs: { [localIdent: string]: internalVal }[] = [];
+            for (let i = 0; i < neededArgs.length; ++i)
+              if (i < givenArgs.length)
+                finalArgs.push({
+                  // TODO NOT like this because of lazy evaluation and performance reasons!
+                  [neededArgs[i][0]]: executeExpr(
+                    givenArgs[i],
+                    lets,
+                    types,
+                    closure
+                  )
+                });
+              else if (neededArgs[i][1] !== undefined)
+                finalArgs.push({
+                  [neededArgs[i][0]]: executeExpr(
+                    neededArgs[i][1]!,
+                    lets,
+                    types,
+                    closure
+                  )
+                });
+              else
+                throw new Error(
+                  'User error: called function with missing argument(s) which dont have default values'
+                );
+
+            // TODO, not sure if that is actually the closure, since the old values may not be accessible anymore actually
+            Object.assign(closure, ...finalArgs);
+
+            return executeExpr(
+              { type: 'expr', expr: toCall.expr.body },
+              lets,
+              types,
+              closure
+            );
+          case 'float':
+          case 'int':
+            // TODO: if equal to 0, return the first element, else return the second element
+            if (parseExpr.arguments.length !== 2)
+              throw new Error(
+                `User error: calling i32/f32 requires to have two expr but got: ${parseExpr.arguments.length}`
+              );
+
+            if (toCall.value === 0)
+              return executeExpr(
+                { type: 'expr', expr: parseExpr.arguments[0].argument },
+                lets,
+                types,
+                closure
+              );
+            else
+              return executeExpr(
+                { type: 'expr', expr: parseExpr.arguments[1].argument },
+                lets,
+                types,
+                closure
+              );
+          default:
+            throw new Error(
+              'Internal error: tried calling something with a wrong type'
+            );
+        }
+      case 'match':
+        // TODO
+        return expr;
+      case 'typeInstantiation':
+        // TODO
+        if (parseExpr.source.type !== 'identifier')
+          throw new Error('TODO what');
+        const complexType = types[parseExpr.source.identifier];
+        if (complexType === undefined)
+          throw new Error(
+            'Internal interpreting error: identifier should be accessible in current scope, but isnt'
+          );
+        else if (complexType.type !== 'complex-type')
+          // TODO, was that checked before? then it must be an internal error!
+          throw new Error(
+            'User error: tried type instantiation with a simple type.'
+          );
+
+        if (
+          complexType.body
+            .map((e) => e.argument.identifierToken.lex)
+            .includes(parseExpr.propertyToken.lex)
+        )
+          throw new Error(
+            `User error: tried to do type instatiation with property ${parseExpr.propertyToken.lex} which doesnt exist on current complex type: ${complexType.name}`
+          );
+
+        // TODO, is parseExpr.source.identifier === complexType.name??
+        return {
+          type: 'complexType',
+          tyName: parseExpr.source.identifier,
+          discriminator: parseExpr.propertyToken.lex,
+          values: []
+        };
+    }
   }
 }
+
+const result = Interpreter.interpret(
+  {
+    main: `
+    use std;
+
+    let c = 4;
+    let a = (std).b + 3;
+
+    // TODO, does not work
+    let rec = func (n: i32) => (n < 0)(n(0, rec(n - 1) + n), -1);
+    let rec2 = func (n: i32) => n(0, rec2(n - 1) + n);
+
+
+    //let main = func (data: i32): i32 => data + a + 4;
+    let main = func (a) => rec2(100);
+    `,
+    std: `
+    use main;
+    use other;
+
+    let b = c + 2;
+    let c = main.c + other.a;
+    `,
+    other: `
+    let a = 1;
+
+    use main;
+    group useless {}
+    type notNeeded = i32;
+    `
+  },
+  'main',
+  1
+);
+log(result);
 
 // console.log(
 //   Interpreter.interpret(
