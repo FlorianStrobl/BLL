@@ -448,3 +448,10 @@ export namespace Formatter {
     return code;
   }
 }
+
+console.log(
+  Formatter.beautify(
+    Parser.parse(`
+let factorial = func (n: i32): i32 => n(1, factorial(n - 1) * n);`).statements
+  )
+);

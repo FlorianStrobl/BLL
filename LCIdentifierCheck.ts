@@ -1307,9 +1307,11 @@ const result = Interpreter.interpret(
     let rec = func (n: i32) => (n < 0)(n(0, rec(n - 1) + n), -1);
     let rec2 = func (n: i32) => n(0, rec2(n - 1) + n);
 
+    let factorial = func (n: i32): i32 => n(1, factorial(n - 1) * n);
+
 
     //let main = func (data: i32): i32 => data + a + 4;
-    let main = func (a) => rec2(100);
+    let main = func (a) => factorial(5);
     `,
     std: `
     use main;
