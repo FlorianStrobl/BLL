@@ -452,6 +452,37 @@ export namespace Formatter {
 console.log(
   Formatter.beautify(
     Parser.parse(`
-let factorial = func (n: i32): i32 => n(1, factorial(n - 1) * n);`).statements
+    type Tuple[A, B] {
+      tup(A, B)
+    }
+
+    type BinaryTree[T] {
+      Empty,
+      Full(T, BinaryTree[T], BinaryTree[T])
+    }
+
+    // TODO BinaryTree[i32]->Full
+    let testTree =
+      BinaryTree->Full(
+        5,
+        BinaryTree->Full(2, BinaryTree->Empty, BinaryTree->Empty),
+        BinaryTree->Empty
+      );
+
+    let sumValues = func (tree) =>
+      match (tree) {
+        Empty => 0,
+        Full(value, left, right) => value + sumValues(left) + sumValues(right)
+      };
+
+    let main = func (a) =>
+      match (Tuple->tup(testTree, a)) {
+        tup(tree, v) =>
+          match (tree) {
+            Empty => -v,
+            Full(val, left, right) =>
+              sumValues(tree) + v
+          }
+      };`).statements
   )
 );

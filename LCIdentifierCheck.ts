@@ -788,6 +788,29 @@ let distributivity1[A, B, C] = func (x: mult[A, add[B, C]]): add[mult[A, B], mul
 //const a = ProcessAST.processCode(str, 'filename');
 
 namespace Interpreter {
+  function deepCpy<T>(value: T): T {
+    if (value === null) return value;
+
+    switch (typeof value) {
+      case 'object':
+        if (Array.isArray(value)) return value.map((val) => deepCpy(val)) as T;
+
+        const newObj: any = {};
+        for (const [key, val] of Object.entries(value))
+          newObj[key] = deepCpy(val);
+        return newObj;
+      case 'undefined':
+      case 'symbol':
+      case 'boolean':
+      case 'number':
+      case 'bigint':
+      case 'string':
+      case 'function':
+      default:
+        return value;
+    }
+  }
+
   type internalVal =
     | { type: 'int'; value: number }
     | { type: 'float'; value: number }
@@ -827,7 +850,11 @@ namespace Interpreter {
     );
 
     if (!processedAST.valid)
-      throw new Error(`Invalid code in main file: ${mainFilename}`);
+      throw new Error(
+        `Invalid code in main file: ${mainFilename}. Errors: ${JSON.stringify(
+          processedAST.processingErrors
+        )}`
+      );
 
     // #region recursively import files
     const importedFiles: string[] = [mainFilename];
@@ -1144,36 +1171,51 @@ namespace Interpreter {
         // TODO
         switch (toCall.type) {
           case 'complexType':
-            // TODO
-            return expr;
+            // TODO, check if amount is right
+            if (!(toCall.tyName in types))
+              throw new Error(
+                `User/Internal error: the types ${toCall.tyName} does not exists as a complex type in the current scope`
+              );
+
+            const ty: Parser.statementTypes = types[toCall.tyName];
+
+            if (ty.type !== 'complex-type')
+              throw new Error(
+                `User error: the type ${toCall.tyName} is not a complex type in the current scope`
+              );
+
+            const internalComplexTypeIdx: number = ty.body.findIndex(
+              (val) => val.argument.identifierToken.lex === toCall.discriminator
+            );
+
+            if (internalComplexTypeIdx === -1)
+              throw new Error(
+                `User error: the complex type pattern ${toCall.discriminator} is not part of the complex type ${ty.name}`
+              );
+
+            const expectedArgCount: number =
+              ty.body[internalComplexTypeIdx].argument.arguments.length;
+            const givenArgCount: number = parseExpr.arguments.length;
+            if (expectedArgCount !== givenArgCount)
+              throw new Error(
+                `User error: tried to instantiate type with too many arguments. Expected ${expectedArgCount} arguments, but got ${givenArgCount}`
+              );
+
+            toCall.values.push(
+              ...parseExpr.arguments.map((arg) =>
+                executeExpr(
+                  { type: 'expr', expr: arg.argument },
+                  lets,
+                  types,
+                  closure
+                )
+              )
+            );
+            return toCall;
           case 'expr':
             // TODO: what about executing ints??
             if (toCall.expr.type !== 'func')
               throw new Error('User error: can only call functions');
-
-            function deepCpy(value: unknown): unknown {
-              if (value === null) return value;
-
-              switch (typeof value) {
-                case 'undefined':
-                case 'symbol':
-                case 'boolean':
-                case 'number':
-                case 'bigint':
-                case 'string':
-                  return value;
-                case 'function':
-                  return value;
-                case 'object':
-                  if (Array.isArray(value))
-                    return value.map((val) => deepCpy(val));
-
-                  const newObj: any = {};
-                  for (const [key, val] of Object.entries(value))
-                    newObj[key] = deepCpy(val);
-                  return newObj;
-              }
-            }
 
             closure = deepCpy(closure) as never; // TODO, deep copy needed
 
@@ -1258,8 +1300,79 @@ namespace Interpreter {
             );
         }
       case 'match':
+        const scrutinee: internalVal = executeExpr(
+          { type: 'expr', expr: parseExpr.scrutinee },
+          lets,
+          types,
+          closure
+        );
+
+        if (scrutinee.type !== 'complexType')
+          throw new Error(
+            `User error: can only match complex types but got: ${scrutinee.type}`
+          );
+
+        const toExecLineIdx: number = parseExpr.body.findIndex(
+          (pattern) =>
+            !pattern.argument.isDefaultVal &&
+            pattern.argument.identifierToken.lex === scrutinee.discriminator
+        );
+        const defaultLineIdx: number = parseExpr.body.findIndex(
+          (pattern) => pattern.argument.isDefaultVal
+        );
+
+        const correctIdx: number =
+          toExecLineIdx !== -1
+            ? toExecLineIdx
+            : // fall back to the default case if no pattern matches rn
+            defaultLineIdx !== -1
+            ? defaultLineIdx
+            : -1;
+
+        if (correctIdx === -1)
+          throw new Error(
+            `User error: the pattern ${scrutinee.discriminator} is missing in the current match expression!`
+          );
+
+        // TODO new local closure/scope, just like when calling functions
+        closure = deepCpy(closure);
+
+        const matchLine = parseExpr.body[correctIdx].argument;
+        const newCtxValueNames: string[] = matchLine.isDefaultVal
+          ? []
+          : matchLine.parameters.map((param) => param.argument.lex);
+
+        // allow having less values extracted than really needed
+        if (newCtxValueNames.length > scrutinee.values.length)
+          throw new Error(
+            `User error: invalid amount of values in scrutinee with the needed match body line. expected ${scrutinee.values.length}, but got ${newCtxValueNames.length}`
+          );
+
+        const doubleIdentifier: number = newCtxValueNames.findIndex(
+          (val, i) => i !== newCtxValueNames.lastIndexOf(val)
+        );
+
+        if (doubleIdentifier !== -1)
+          throw new Error(
+            `User error: wrote a match body line with twice the same identifier: ${newCtxValueNames[doubleIdentifier]}`
+          );
+
+        const updatedClosureValues: {
+          [localIdent: string]: internalVal;
+        } = {};
+        for (let i = 0; i < scrutinee.values.length; ++i) {
+          updatedClosureValues[newCtxValueNames[i]] = scrutinee.values[i];
+        }
+
+        Object.assign(closure, updatedClosureValues);
+
         // TODO
-        return expr;
+        return executeExpr(
+          { type: 'expr', expr: matchLine.body },
+          lets,
+          types,
+          closure
+        );
       case 'typeInstantiation':
         // TODO
         if (parseExpr.source.type !== 'identifier')
@@ -1276,7 +1389,7 @@ namespace Interpreter {
           );
 
         if (
-          complexType.body
+          !complexType.body
             .map((e) => e.argument.identifierToken.lex)
             .includes(parseExpr.propertyToken.lex)
         )
@@ -1311,7 +1424,45 @@ const result = Interpreter.interpret(
 
 
     //let main = func (data: i32): i32 => data + a + 4;
-    let main = func (a) => factorial(5);
+    //let main = func (a) => factorial(5);
+
+    type Optional[T] {
+      Some(T),
+      None
+    }
+
+    type Tuple[A, B] {
+      tup(A, B)
+    }
+
+    type BinaryTree[T] {
+      Empty,
+      Full(T, BinaryTree[T], BinaryTree[T])
+    }
+
+    // TODO BinaryTree[i32]->Full
+    let testTree =
+      BinaryTree->Full(
+        5,
+        BinaryTree->Full(2, BinaryTree->Empty, BinaryTree->Empty),
+        BinaryTree->Empty
+      );
+
+    let sumValues = func (tree) =>
+      match (tree) {
+        Empty => 0,
+        Full(value, left, right) => value + sumValues(left) + sumValues(right)
+      };
+
+    let main = func (a) =>
+      match (Tuple->tup(testTree, a)) {
+        tup(tree, v) =>
+          match (tree) {
+            Empty => -v,
+            Full(val, left, right) =>
+              sumValues(tree) + v
+          }
+      };
     `,
     std: `
     use main;
@@ -1329,7 +1480,7 @@ const result = Interpreter.interpret(
     `
   },
   'main',
-  1
+  22
 );
 log(result);
 
