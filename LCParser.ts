@@ -2175,6 +2175,23 @@ export namespace Parser {
       // let x: (i32) -> ((f32), (tust,) -> tast -> () -> (tist)) -> (test) = func (a, b, c) => 4;
       const mustParse: [string, number][] = [
         [
+          `type linkedList[T] {
+        null,
+        value(T, linkedList)
+      }
+
+      let my_list =
+        linkedList->value(3, linkedList->value(2, linkedList->null));
+
+      let sum = func (ll) => match (ll) {
+        null => 0,
+        value(data, next) => data + sum(next)
+      };
+
+      let main = func (a) => sum(my_list);`,
+          4
+        ],
+        [
           `
       group ns {
         type BinTree[T] {

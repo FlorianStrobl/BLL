@@ -818,6 +818,7 @@ namespace Interpreter {
         type: 'expr';
         expr: Parser.expression;
         // TODO, needs some kind of closure, because when calling this value, it could already have WAY different closure values, because of very late lazy evaluation
+        closure: { [localIdent: string]: internalVal };
       }
     | {
         type: 'complexType';
@@ -837,6 +838,10 @@ namespace Interpreter {
     mainFilename: string,
     input: number
   ): any {
+    const timeIt: boolean = true;
+
+    if (timeIt) console.time('pre-execution time');
+
     if (!(mainFilename in files))
       throw new Error(
         `The main file ${mainFilename} does not exist in the current files: $${JSON.stringify(
@@ -905,6 +910,9 @@ namespace Interpreter {
 
     // { type: 'identifier'; identifier: string; identifierToken: token }
 
+    if (timeIt) console.timeEnd('pre-execution time');
+
+    if (timeIt) console.time('raw execution time');
     const result: internalVal = executeExpr(
       {
         type: 'expr',
@@ -934,12 +942,14 @@ namespace Interpreter {
           openingBracketToken: 0 as never,
           closingBracketToken: 0 as never,
           comments: 0 as never
-        }
+        },
+        closure: {}
       },
       processedAST.value.letDict,
       processedAST.value.typeDict,
       {}
     );
+    if (timeIt) console.timeEnd('raw execution time');
 
     // TODO add f32 support
     if (result.type !== 'int')
@@ -962,6 +972,9 @@ namespace Interpreter {
     },
     closure: { [localIdent: string]: internalVal }
   ): internalVal {
+    // TODO just to debug rn
+    closure = deepCpy(closure);
+
     switch (expr.type) {
       case 'int':
       case 'float':
@@ -987,7 +1000,7 @@ namespace Interpreter {
       case 'grouping':
         // return the inner value
         return executeExpr(
-          { type: 'expr', expr: parseExpr.body },
+          { type: 'expr', expr: parseExpr.body, closure: { TODO: 0 as any } },
           lets,
           types,
           closure
@@ -1013,7 +1026,7 @@ namespace Interpreter {
       case 'unary':
         const unaryOp: string = parseExpr.operator;
         const bodyVal: internalVal = executeExpr(
-          { type: 'expr', expr: parseExpr.body },
+          { type: 'expr', expr: parseExpr.body, closure: { TODO: 0 as any } },
           lets,
           types,
           closure
@@ -1054,13 +1067,21 @@ namespace Interpreter {
       case 'binary':
         const binaryOp: string = parseExpr.operator;
         const left: internalVal = executeExpr(
-          { type: 'expr', expr: parseExpr.leftSide },
+          {
+            type: 'expr',
+            expr: parseExpr.leftSide,
+            closure: { TODO: 0 as any }
+          },
           lets,
           types,
           closure
         );
         const right: internalVal = executeExpr(
-          { type: 'expr', expr: parseExpr.rightSide },
+          {
+            type: 'expr',
+            expr: parseExpr.rightSide,
+            closure: { TODO: 0 as any }
+          },
           lets,
           types,
           closure
@@ -1133,6 +1154,14 @@ namespace Interpreter {
             );
         }
       case 'identifier':
+        if (parseExpr.identifier in expr.closure)
+          return executeExpr(
+            expr.closure[parseExpr.identifier],
+            lets,
+            types,
+            closure
+          );
+
         // TODO actually execute and not just suspend for later??
         if (parseExpr.identifier in closure)
           return executeExpr(
@@ -1144,14 +1173,21 @@ namespace Interpreter {
         // TODO, really? and why first lets and then types?
         else if (parseExpr.identifier in lets)
           return executeExpr(
-            // TODO, yeah?
-            { type: 'expr', expr: lets[parseExpr.identifier].body },
+            // TODO HERE NOW TODO, yes, but this has an other closure!!
+            {
+              type: 'expr',
+              expr: lets[parseExpr.identifier].body,
+              closure: { TODO: 0 as any }
+            },
             lets,
             types,
             closure
           );
         // TODO user error or internal error?
-        else return expr;
+        else {
+          console.log(expr.expr);
+          return expr;
+        }
         // yeah?
         throw new Error(
           `User error: identifier ${JSON.stringify(
@@ -1161,12 +1197,25 @@ namespace Interpreter {
       case 'call':
         // typeInstantiation, on i32/f32, on Function, on Identifier (could all be on the return of a internal complicated thing from e.g. a match expr)
         // TODO yeah??
-        const toCall = executeExpr(
-          { type: 'expr', expr: parseExpr.function },
+        let toCall = executeExpr(
+          {
+            type: 'expr',
+            expr: parseExpr.function,
+            closure: { TODO: 0 as any }
+          },
           lets,
           types,
           closure
         );
+
+        // TODO
+        // while (toCall.type === 'expr' && toCall.expr.type === 'identifier')
+        //   toCall = executeExpr(
+        //     { type: 'expr', expr: toCall.expr, closure: closure },
+        //     lets,
+        //     types,
+        //     closure
+        //   );
 
         // TODO
         switch (toCall.type) {
@@ -1185,7 +1234,9 @@ namespace Interpreter {
               );
 
             const internalComplexTypeIdx: number = ty.body.findIndex(
-              (val) => val.argument.identifierToken.lex === toCall.discriminator
+              (val) =>
+                val.argument.identifierToken.lex ===
+                (toCall as any).discriminator
             );
 
             if (internalComplexTypeIdx === -1)
@@ -1204,7 +1255,11 @@ namespace Interpreter {
             toCall.values.push(
               ...parseExpr.arguments.map((arg) =>
                 executeExpr(
-                  { type: 'expr', expr: arg.argument },
+                  {
+                    type: 'expr',
+                    expr: arg.argument,
+                    closure: { TODO: 0 as any }
+                  },
                   lets,
                   types,
                   closure
@@ -1215,20 +1270,28 @@ namespace Interpreter {
           case 'expr':
             // TODO: what about executing ints??
             if (toCall.expr.type !== 'func')
-              throw new Error('User error: can only call functions');
+              throw new Error(
+                `User error: can only call functions, but got: ${toCall.expr.type}`
+              );
 
             closure = deepCpy(closure) as never; // TODO, deep copy needed
+            // TODO, if toCall is from different scope, then just remove the entire closure
 
             const givenArgs = parseExpr.arguments.map<internalVal>((arg) => ({
               type: 'expr',
-              expr: arg.argument
+              expr: arg.argument,
+              closure: { TODO: 0 as any }
             }));
             const neededArgs = toCall.expr.parameters.map<
               [string, internalVal | undefined]
             >((param) => [
               param.argument.identifierToken.lex,
               param.argument.hasDefaultValue
-                ? { type: 'expr', expr: param.argument.defaultValue }
+                ? {
+                    type: 'expr',
+                    expr: param.argument.defaultValue,
+                    closure: {}
+                  }
                 : undefined
             ]);
 
@@ -1237,6 +1300,7 @@ namespace Interpreter {
                 'User error: called a function with too many arguments'
               );
 
+            // TODO not execute them, but let it be done in the lazy evaluation part!
             const finalArgs: { [localIdent: string]: internalVal }[] = [];
             for (let i = 0; i < neededArgs.length; ++i)
               if (i < givenArgs.length)
@@ -1265,9 +1329,15 @@ namespace Interpreter {
 
             // TODO, not sure if that is actually the closure, since the old values may not be accessible anymore actually
             Object.assign(closure, ...finalArgs);
+            //console.log('CALLING', closure, finalArgs);
 
             return executeExpr(
-              { type: 'expr', expr: toCall.expr.body },
+              {
+                type: 'expr',
+                expr: toCall.expr.body,
+                // TODO too hacky
+                closure: { ...deepCpy(closure), ...deepCpy(toCall.closure) }
+              },
               lets,
               types,
               closure
@@ -1282,14 +1352,22 @@ namespace Interpreter {
 
             if (toCall.value === 0)
               return executeExpr(
-                { type: 'expr', expr: parseExpr.arguments[0].argument },
+                {
+                  type: 'expr',
+                  expr: parseExpr.arguments[0].argument,
+                  closure: { TODO: 0 as any }
+                },
                 lets,
                 types,
                 closure
               );
             else
               return executeExpr(
-                { type: 'expr', expr: parseExpr.arguments[1].argument },
+                {
+                  type: 'expr',
+                  expr: parseExpr.arguments[1].argument,
+                  closure: { TODO: 0 as any }
+                },
                 lets,
                 types,
                 closure
@@ -1301,7 +1379,11 @@ namespace Interpreter {
         }
       case 'match':
         const scrutinee: internalVal = executeExpr(
-          { type: 'expr', expr: parseExpr.scrutinee },
+          {
+            type: 'expr',
+            expr: parseExpr.scrutinee,
+            closure: { TODO: 0 as any }
+          },
           lets,
           types,
           closure
@@ -1368,7 +1450,7 @@ namespace Interpreter {
 
         // TODO
         return executeExpr(
-          { type: 'expr', expr: matchLine.body },
+          { type: 'expr', expr: matchLine.body, closure: { TODO: 0 as any } },
           lets,
           types,
           closure
@@ -1408,6 +1490,31 @@ namespace Interpreter {
   }
 }
 
+log(
+  Interpreter.interpret(
+    {
+      fileA: `
+    type linkedList[T] {
+      null,
+      value(T, linkedList)
+    }
+
+    let my_list =
+      linkedList->value(3, linkedList->value(2, linkedList->null));
+
+    let sum = func (ll) => match (ll) {
+      null => 0,
+      value(data, next) => data + sum(next)
+    };
+
+    let main = func (a) => sum(my_list);`
+    },
+    'fileA',
+    3
+  )
+);
+
+/*
 const result = Interpreter.interpret(
   {
     main: `
@@ -1454,15 +1561,22 @@ const result = Interpreter.interpret(
         Full(value, left, right) => value + sumValues(left) + sumValues(right)
       };
 
-    let main = func (a) =>
-      match (Tuple->tup(testTree, a)) {
-        tup(tree, v) =>
-          match (tree) {
-            Empty => -v,
-            Full(val, left, right) =>
-              sumValues(tree) + v
-          }
-      };
+    // let main = func (a) =>
+    //   match (Tuple->tup(testTree, a)) {
+    //     tup(tree, v) =>
+    //       match (tree) {
+    //         Empty => -v,
+    //         Full(val, left, right) =>
+    //           sumValues(tree) + v
+    //       }
+    //   };
+
+    use lc;
+    //let main = func (arg) => lc.true(4);
+    let ha = func (x) => x + 1;
+    let hb = func (x) => x + 2;
+
+    let main = func (arg) => lc.if(lc.true)(3)(6);
     `,
     std: `
     use main;
@@ -1477,12 +1591,38 @@ const result = Interpreter.interpret(
     use main;
     group useless {}
     type notNeeded = i32;
+    `,
+    lc: `
+    let true = func (x) => func (y) => x;
+    let false = func (x) => func (y) => y;
+
+    let not = func (x) => x(false)(true);
+    let and = func (x) => func (y) => x(y)(x);
+    let or = func (x) => func (y) => x(x)(y);
+    let if = func (b) => func (x) => func (y) => b(x)(y);
+
+    let zero = func (f) => func (x) => x;
+    let one = func (f) => func (x) => f(x);
+    let two = func (f) => func (x) => f(f(x));
+
+    let tuple = 0;
+    let first = 0;
+    let second = 0;
+    let linkedList = 0;
+    let successor = 0;
+    let plus = 0;
+    let mult = 0;
+    let pow = 0;
+
+    let boolToI32 = func (bool) => bool(1)(0);
+    let uintToI32 = func (uint) => uint(func (x) => x + 1)(0);
     `
   },
   'main',
-  22
+  5
 );
-log(result);
+//log(result);
+*/
 
 // console.log(
 //   Interpreter.interpret(

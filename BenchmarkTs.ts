@@ -1,4 +1,19 @@
-const iterCount: number = 10;
+console.time();
+function ha(x: number) {
+  return x + 1;
+}
+function hb(x: number) {
+  return x + 2;
+}
+
+function main(arg: number) {
+  return ha(hb(3));
+}
+
+const result = main(5);
+console.timeEnd();
+
+const iterCount: number = 0;
 
 const len: number = 1_000_000;
 const array: string[] = new Array(len)

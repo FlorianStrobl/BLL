@@ -1,18 +1,7 @@
-// prettier with syntax highlighting and bracket matching (see VSCode)
-// + code region folding
-// takes the ast as input and returns a string with annotations for VSCode
-
-// TODO fix comments
-// TODO add line breaks on more than 80 chars per line
-
 import { Parser } from './LCParser';
 
-// TODO, do spaces correctly, do comments, break on too many lines, put use-statements on the very top
-
 export namespace Formatter {
-  let colorActive: boolean = false;
   const indentSize: string = '  ';
-
   const Colors = {
     symbol: `${0xab};${0xb2};${0xbf}`, // white
     comments: `${0x80};${0x80};${0x80}`, // gray
@@ -29,15 +18,20 @@ export namespace Formatter {
     primitiveType: `${0xff};${0xa5};${0x00}` // orange
   };
 
-  // #region helper
-  function printComments(comments: Parser.token[], indent: string): string {
+  let colorActive: boolean = false;
+
+  function printComments(
+    comments: Parser.token[],
+    indentation: string
+  ): string {
     return comments.length === 0
-      ? ''
+      ? '' // nothing to print
       : comments
-          .map((comment, i) => indent + addColor(comment.lex, Colors.comments))
+          .map(
+            (comment) => indentation + addColor(comment.lex, Colors.comments)
+          )
           .join('\n') + '\n';
   }
-  // #endregion
 
   function printTypeExpression(expression: Parser.typeExpression): string {
     switch (expression.type) {
@@ -310,7 +304,7 @@ export namespace Formatter {
             (addColor('group ', Colors.keywordGroup) +
               addColor(statement.identifierToken.lex, Colors.identifier) +
               addColor(' {\n', Colors.symbol) +
-              beautify(statement.body, indent + indentSize) +
+              beautify(statement.body, indent + indentSize, colorActive) +
               indent +
               addColor('}', Colors.symbol)))
         );
@@ -449,40 +443,10 @@ export namespace Formatter {
   }
 }
 
-console.log(
-  Formatter.beautify(
-    Parser.parse(`
-    type Tuple[A, B] {
-      tup(A, B)
-    }
+// prettier with syntax highlighting and bracket matching (see VSCode)
+// + code region folding TODO
+// takes the ast as input and returns a string with annotations for VSCode
 
-    type BinaryTree[T] {
-      Empty,
-      Full(T, BinaryTree[T], BinaryTree[T])
-    }
-
-    // TODO BinaryTree[i32]->Full
-    let testTree =
-      BinaryTree->Full(
-        5,
-        BinaryTree->Full(2, BinaryTree->Empty, BinaryTree->Empty),
-        BinaryTree->Empty
-      );
-
-    let sumValues = func (tree) =>
-      match (tree) {
-        Empty => 0,
-        Full(value, left, right) => value + sumValues(left) + sumValues(right)
-      };
-
-    let main = func (a) =>
-      match (Tuple->tup(testTree, a)) {
-        tup(tree, v) =>
-          match (tree) {
-            Empty => -v,
-            Full(val, left, right) =>
-              sumValues(tree) + v
-          }
-      };`).statements
-  )
-);
+// TODO fix comments
+// TODO add line breaks on more than 80 chars per line
+// TODO, do spaces correctly, do comments, break on too many lines, put use-statements on the very top
