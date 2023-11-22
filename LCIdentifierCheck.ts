@@ -1201,7 +1201,7 @@ namespace Interpreter {
           {
             type: 'expr',
             expr: parseExpr.function,
-            closure: { TODO: 0 as any }
+            closure: {}
           },
           lets,
           types,
@@ -1507,7 +1507,8 @@ log(
       value(data, next) => data + sum(next)
     };
 
-    let main = func (a) => sum(my_list);`
+    let main = func (a) => sum(my_list);
+    `
     },
     'fileA',
     3
