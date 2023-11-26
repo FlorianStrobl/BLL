@@ -29,7 +29,7 @@ export namespace Lexer {
     '/', // divide (binary, f32/for i32: rounding down, TODO what about div by 0 on i32: make it undefined behaviour)
     '**', // exponentiation (binary, i32/f32)
     //'***', // root or log (binary, i32/f32)
-    '!', // logical not (unary, 0 -> 1, any -> 0, i32/f32)
+    '!', // logical not (unary, 0 -> 1, any -> 0, i32)
 
     // only ints
     '%', // remainder (binary, i32)
@@ -1172,7 +1172,7 @@ _
       let successfullTests: number = 0;
       for (const code of mustLexe) {
         const lexed = Lexer.lexe(code[0]);
-        if (!lexed.valid || lexed.tokens.length !== code[1])
+        if (lexed.valid === false || lexed.tokens.length !== code[1])
           console.error(
             'error in mustLexe, invalid lexer for code:',
             code[0],
@@ -1183,7 +1183,7 @@ _
       }
       for (const code of mustNotLexe) {
         const lexed = Lexer.lexe(code[0]);
-        if (lexed.valid || lexed.lexerErrors.length !== code[1])
+        if (lexed.valid === true || lexed.lexerErrors.length !== code[1])
           console.error(
             'error in mustNotLexe, invalid lexer for code:',
             code[0],

@@ -837,7 +837,7 @@ namespace Interpreter {
     files: { [filename: string]: string },
     mainFilename: string,
     input: number
-  ): any {
+  ): internalVal {
     const timeIt: boolean = true;
 
     if (timeIt) console.time('pre-execution time');
@@ -870,16 +870,16 @@ namespace Interpreter {
     while (toImportFiles.length !== 0) {
       const toImportFile: string = toImportFiles.pop()!;
 
+      // do not import files twice so skip it
+      if (importedFiles.includes(toImportFile)) continue;
+      importedFiles.push(toImportFile);
+
       if (!(toImportFile in files))
         throw new Error(
           `The imported file ${toImportFile} is missing from the files ${JSON.stringify(
             Object.keys(files)
           )}`
         );
-
-      // do not import files twice so skip it
-      if (importedFiles.includes(toImportFile)) continue;
-      importedFiles.push(toImportFile);
 
       const processedFile = ProcessAST.processCode(
         files[toImportFile],
@@ -888,11 +888,16 @@ namespace Interpreter {
 
       // TODO better error, since it could be "recursively" imported from an imported file
       if (!processedFile.valid)
-        throw new Error(`Couldnt compile the imported file ${toImportFile}`);
+        throw new Error(
+          `Couldnt compile the imported file ${toImportFile} because of error: ${JSON.stringify(
+            processedFile.processingErrors
+          )}`
+        );
 
       // imported files, must be imported at the outer scope aswell
-      for (const [newFileImport, _] of processedFile.value.imports)
-        toImportFiles.push(newFileImport);
+      toImportFiles.push(
+        ...processedFile.value.imports.map(([newFilename, _]) => newFilename)
+      );
 
       // save the new values in the main `processedAST` var
       processedAST.value.imports.push(...processedFile.value.imports);
@@ -905,14 +910,34 @@ namespace Interpreter {
     // #endregion
 
     // now process all the imports, and import their imports if needed
-    if (!(`/${mainFilename}/main` in processedAST.value.letDict))
-      throw new Error(`Must have a main() in the main file ${mainFilename}`);
+    const mainFilePath = `/${mainFilename}/main`;
+    if (!(mainFilePath in processedAST.value.letDict))
+      throw new Error(
+        `Missing "main" function in the main file ${mainFilename}.`
+      );
 
-    // { type: 'identifier'; identifier: string; identifierToken: token }
+    const mainFunc = processedAST.value.letDict[mainFilePath];
+    if (mainFunc.body.type !== 'func')
+      throw new Error(
+        `the "main" function in the main file must be a let statement with a body of type function.`
+      );
+    else if (mainFunc.body.parameters.length !== 1)
+      throw new Error(
+        `the "main" function must take exactly one parameter as input`
+      );
 
     if (timeIt) console.timeEnd('pre-execution time');
 
     if (timeIt) console.time('raw execution time');
+    const mainFuncType: 'int' | 'float' =
+      mainFunc.body.hasExplicitType &&
+      mainFunc.body.typeExpression.type === 'primitive-type' &&
+      (mainFunc.body.typeExpression.primitiveToken.lex === 'i32' ||
+        mainFunc.body.typeExpression.primitiveToken.lex === 'f32')
+        ? mainFunc.body.typeExpression.primitiveToken.lex === 'i32'
+          ? 'int'
+          : 'float'
+        : 'int';
     const result: internalVal = executeExpr(
       {
         type: 'expr',
@@ -922,7 +947,7 @@ namespace Interpreter {
             {
               argument: {
                 type: 'literal',
-                literalType: 'i32', // TODO or `f32` if `main :: f32 -> f32`
+                literalType: mainFuncType === 'int' ? 'i32' : 'f32', // TODO or `f32` if `main :: f32 -> f32`
                 literalToken: {
                   lex: input.toString(),
                   ty: Parser.tokenType.literal,
@@ -935,7 +960,7 @@ namespace Interpreter {
           ],
           function: {
             type: 'identifier',
-            identifier: `/${mainFilename}/main`,
+            identifier: mainFilePath,
             identifierToken: {} as never,
             comments: 0 as never
           },
@@ -952,9 +977,9 @@ namespace Interpreter {
     if (timeIt) console.timeEnd('raw execution time');
 
     // TODO add f32 support
-    if (result.type !== 'int')
+    if (result.type !== mainFuncType)
       throw new Error(
-        `User error: "main()" should return an i32 but got: ${JSON.stringify(
+        `User error: "main()" should return an ${mainFuncType} but got the result: ${JSON.stringify(
           result
         )}`
       );
@@ -1053,9 +1078,9 @@ namespace Interpreter {
             bodyVal.value = ~bodyVal.value;
             return bodyVal;
           case '!':
-            if (bodyVal.type !== 'int' && bodyVal.type !== 'float')
+            if (bodyVal.type !== 'int')
               throw new Error(
-                `User error: can only do the unary "~" operation on i32 and f32 values`
+                `User error: can only do the unary "!" operation on i32 values`
               );
             bodyVal.value = Number(!bodyVal.value);
             return bodyVal;
@@ -1086,67 +1111,39 @@ namespace Interpreter {
           types,
           closure
         );
+        if (
+          left.type === 'expr' ||
+          left.type === 'complexType' ||
+          right.type === 'expr' ||
+          right.type === 'complexType'
+        )
+          throw new Error(
+            `User error: can only do the binary "${binaryOp}" operation on numeric values`
+          );
+        if (left.type !== right.type)
+          throw new Error(
+            `User error: can only do the binary "${binaryOp}" operation on equally typed values`
+          );
+
         switch (binaryOp) {
           case '+':
-            if (
-              (left.type !== 'int' && left.type !== 'float') ||
-              (right.type !== 'int' && right.type !== 'float') ||
-              left.type !== right.type
-            )
-              throw new Error(
-                `User error: can only do the binary "+" operation on i32 and f32 values`
-              );
-
             left.value = left.value + right.value;
             return left;
           case '-':
-            if (
-              (left.type !== 'int' && left.type !== 'float') ||
-              (right.type !== 'int' && right.type !== 'float') ||
-              left.type !== right.type
-            )
-              throw new Error(
-                `User error: can only do the binary "-" operation on i32 and f32 values`
-              );
-
             left.value = left.value - right.value;
             return left;
           case '*':
-            if (
-              (left.type !== 'int' && left.type !== 'float') ||
-              (right.type !== 'int' && right.type !== 'float') ||
-              left.type !== right.type
-            )
-              throw new Error(
-                `User error: can only do the binary "*" operation on i32 and f32 values`
-              );
-
             left.value = left.value * right.value;
             return left;
           case '<':
-            if (
-              (left.type !== 'int' && left.type !== 'float') ||
-              (right.type !== 'int' && right.type !== 'float') ||
-              left.type !== right.type
-            )
-              throw new Error(
-                `User error: can only do the binary "<" operation on i32 and f32 values`
-              );
-
             left.value = Number(left.value < right.value);
             return left;
           case '==':
-            if (
-              (left.type !== 'int' && left.type !== 'float') ||
-              (right.type !== 'int' && right.type !== 'float') ||
-              left.type !== right.type
-            )
-              throw new Error(
-                `User error: can only do the binary "==" operation on i32 and f32 values`
-              );
-
-            left.value = Number(left.value == right.value);
-            return left;
+            const eqAns: internalVal = {
+              type: 'int',
+              value: Number(left.value == right.value)
+            };
+            return eqAns;
 
           default:
             throw new Error(
@@ -1493,6 +1490,26 @@ namespace Interpreter {
 log(
   Interpreter.interpret(
     {
+      test: `
+//let sum = func (zahl) => (zahl == 0)(zahl + sum(zahl - 1), 0);
+
+type Tree[T] {
+  E,
+  F(T, Tree[T], Tree[T])
+}
+
+let f = func (a, b) => b;
+
+let baum1 = Tree->F(5, Tree->F(3, Tree->E, Tree->E), Tree->E);
+
+let sumTree = func (tree) =>
+  match (tree) {
+    E => 0,
+    F(wert, left, right) => wert + sumTree(left) + sumTree(right)
+  };
+
+let main = func (n) => f(2 + 3, 3 + 1);
+      `,
       fileA: `
     type linkedList[T] {
       null,
@@ -1510,8 +1527,8 @@ log(
     let main = func (a) => sum(my_list);
     `
     },
-    'fileA',
-    3
+    'test',
+    10
   )
 );
 

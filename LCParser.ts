@@ -543,7 +543,7 @@ export namespace Parser {
       newParseError(emptyList.errorMessage);
 
     if (!commentInfo.parseComments && outerComments.length !== 0) {
-      if (argumentList.length === 0)
+      if (commentInfo.parseComments === false && argumentList.length === 0)
         // outer comments belongt from the beginning on, to the outer scope because there are no arguments
         commentInfo.globalComments.push(...outerComments);
       else {
