@@ -798,7 +798,7 @@ namespace Interpreter {
         const newObj: any = {};
         for (const [key, val] of Object.entries(value))
           newObj[key] = deepCpy(val);
-        return newObj;
+        return newObj as T;
       case 'undefined':
       case 'symbol':
       case 'boolean':
@@ -928,8 +928,8 @@ namespace Interpreter {
 
     if (timeIt) console.timeEnd('pre-execution time');
 
-    if (timeIt) console.time('raw execution time');
-    const mainFuncType: 'int' | 'float' =
+    // main :: T -> T, where T is either i32 or f32
+    let mainFuncType: 'int' | 'float' =
       mainFunc.body.hasExplicitType &&
       mainFunc.body.typeExpression.type === 'primitive-type' &&
       (mainFunc.body.typeExpression.primitiveToken.lex === 'i32' ||
@@ -938,6 +938,13 @@ namespace Interpreter {
           ? 'int'
           : 'float'
         : 'int';
+    let formattedInput: string = Math.abs(input).toString().toLowerCase();
+    if (formattedInput === Infinity.toString().toLowerCase())
+      formattedInput = 'inf';
+    if (!Number.isSafeInteger(Number(formattedInput))) mainFuncType = 'float';
+    const inputSign: number = Math.sign(input);
+
+    if (timeIt) console.time('raw execution time');
     const result: internalVal = executeExpr(
       {
         type: 'expr',
@@ -946,14 +953,20 @@ namespace Interpreter {
           arguments: [
             {
               argument: {
-                type: 'literal',
-                literalType: mainFuncType === 'int' ? 'i32' : 'f32', // TODO or `f32` if `main :: f32 -> f32`
-                literalToken: {
-                  lex: input.toString(),
-                  ty: Parser.tokenType.literal,
-                  idx: -1
-                },
-                comments: 0 as never
+                type: 'unary',
+                operator: inputSign === -1 ? '-' : '+',
+                operatorToken: 0 as never,
+                comments: 0 as never,
+                body: {
+                  type: 'literal',
+                  literalType: mainFuncType === 'int' ? 'i32' : 'f32',
+                  literalToken: {
+                    lex: formattedInput,
+                    ty: Parser.tokenType.literal,
+                    idx: -1
+                  },
+                  comments: 0 as never
+                }
               },
               delimiterToken: undefined
             }
@@ -971,8 +984,7 @@ namespace Interpreter {
         closure: {}
       },
       processedAST.value.letDict,
-      processedAST.value.typeDict,
-      {}
+      processedAST.value.typeDict
     );
     if (timeIt) console.timeEnd('raw execution time');
 
@@ -994,20 +1006,16 @@ namespace Interpreter {
     },
     types: {
       [path: string]: Parser.statementTypes;
-    },
-    closure: { [localIdent: string]: internalVal }
+    }
   ): internalVal {
     // TODO just to debug rn
-    closure = deepCpy(closure);
-
     switch (expr.type) {
+      case 'expr':
+        break; // handle that below
       case 'int':
       case 'float':
       case 'complexType':
-        // TODO yes?
         return expr;
-      case 'expr':
-        break; // handle that below
       default:
         throw new Error(
           `Internal interpreting error: the expression type ${JSON.stringify(
@@ -1017,57 +1025,61 @@ namespace Interpreter {
     }
 
     const parseExpr: Parser.expression = expr.expr;
+    const closure: {
+      [localIdent: string]: internalVal;
+    } = deepCpy(expr.closure); // TODO is deepCpy really necessary?
+
     switch (parseExpr.type) {
       case 'propertyAccess':
         throw new Error(
           `Internal interpreting error: should not have a property access when interpreting`
         );
-      case 'grouping':
-        // return the inner value
-        return executeExpr(
-          { type: 'expr', expr: parseExpr.body, closure: { TODO: 0 as any } },
-          lets,
-          types,
-          closure
-        );
       case 'func':
-        // TODO, return the simply the function, since it doesnt state to do something with it
         return expr;
+      case 'grouping':
+        return executeExpr(
+          { type: 'expr', expr: parseExpr.body, closure },
+          lets,
+          types
+        );
       case 'literal':
         // return the actual value
-        if (parseExpr.literalType === 'i32')
-          return { type: 'int', value: Number(parseExpr.literalToken.lex) };
-        else if (parseExpr.literalType === 'f32')
+        const literalVal: number =
+          parseExpr.literalToken.lex === 'inf'
+            ? Infinity
+            : Number(parseExpr.literalToken.lex);
+
+        if (parseExpr.literalType === 'i32') {
+          if (!Number.isSafeInteger(literalVal))
+            throw new Error(
+              `The number ${parseExpr.literalToken.lex} is not a valid integer.`
+            );
+          return { type: 'int', value: literalVal };
+        } else if (parseExpr.literalType === 'f32')
           return {
             type: 'float',
-            value:
-              parseExpr.literalToken.lex === 'inf'
-                ? Infinity
-                : Number(parseExpr.literalToken.lex)
+            value: literalVal
           };
+
         throw new Error(
           'Internal interpreting error: literal type must be `i32` or `f32`'
         );
       case 'unary':
         const unaryOp: string = parseExpr.operator;
         const bodyVal: internalVal = executeExpr(
-          { type: 'expr', expr: parseExpr.body, closure: { TODO: 0 as any } },
+          { type: 'expr', expr: parseExpr.body, closure },
           lets,
-          types,
-          closure
+          types
         );
+        if (bodyVal.type === 'complexType' || bodyVal.type === 'expr')
+          throw new Error(
+            `User error: the unary operator "${unaryOp}" can only be used with numeric values.`
+          );
+
         switch (unaryOp) {
           case '+':
-            if (bodyVal.type !== 'int' && bodyVal.type !== 'float')
-              throw new Error(
-                `User error: can only do the unary "+" operation on i32 and f32 values`
-              );
             return bodyVal;
           case '-':
-            if (bodyVal.type !== 'int' && bodyVal.type !== 'float')
-              throw new Error(
-                `User error: can only do the unary "-" operation on i32 and f32 values`
-              );
             bodyVal.value = -bodyVal.value;
             return bodyVal;
           case '~':
@@ -1095,22 +1107,21 @@ namespace Interpreter {
           {
             type: 'expr',
             expr: parseExpr.leftSide,
-            closure: { TODO: 0 as any }
+            closure
           },
           lets,
-          types,
-          closure
+          types
         );
         const right: internalVal = executeExpr(
           {
             type: 'expr',
             expr: parseExpr.rightSide,
-            closure: { TODO: 0 as any }
+            closure
           },
           lets,
-          types,
-          closure
+          types
         );
+
         if (
           left.type === 'expr' ||
           left.type === 'complexType' ||
@@ -1120,7 +1131,7 @@ namespace Interpreter {
           throw new Error(
             `User error: can only do the binary "${binaryOp}" operation on numeric values`
           );
-        if (left.type !== right.type)
+        else if (left.type !== right.type)
           throw new Error(
             `User error: can only do the binary "${binaryOp}" operation on equally typed values`
           );
@@ -1135,15 +1146,83 @@ namespace Interpreter {
           case '*':
             left.value = left.value * right.value;
             return left;
-          case '<':
-            left.value = Number(left.value < right.value);
+          case '/':
+            if (right.type === 'int' && right.value === 0)
+              throw new Error(`User error: divided by 0.`);
+            left.value = left.value / right.value;
+            if (left.type === 'int') left.value = Math.trunc(left.value);
+            return left;
+          case '**':
+            left.value = left.value ** right.value;
+            return left;
+          case '%':
+            if (left.type !== 'int')
+              throw new Error(`User error: can only use "%" with i32 values`);
+            left.value = left.value % right.value;
+            return left;
+          case '&':
+            if (left.type !== 'int')
+              throw new Error(`User error: can only use "&" with i32 values`);
+            left.value = left.value & right.value;
+            return left;
+          case '|':
+            if (left.type !== 'int')
+              throw new Error(`User error: can only use "|" with i32 values`);
+            left.value = left.value | right.value;
+            return left;
+          case '^':
+            if (left.type !== 'int')
+              throw new Error(`User error: can only use "^" with i32 values`);
+            left.value = left.value ^ right.value;
+            return left;
+          case '<<':
+            // TODO limits for size
+            if (left.type !== 'int')
+              throw new Error(`User error: can only use "<<" with i32 values`);
+            left.value = left.value << right.value;
+            return left;
+          case '>>':
+            // TODO limits for size
+            if (left.type !== 'int')
+              throw new Error(`User error: can only use ">>" with i32 values`);
+            left.value = left.value >> right.value;
             return left;
           case '==':
             const eqAns: internalVal = {
               type: 'int',
-              value: Number(left.value == right.value)
+              value: Number(left.value === right.value)
             };
             return eqAns;
+          case '!=':
+            const neqAns: internalVal = {
+              type: 'int',
+              value: Number(left.value !== right.value)
+            };
+            return neqAns;
+          case '>':
+            const gtAns: internalVal = {
+              type: 'int',
+              value: Number(left.value > right.value)
+            };
+            return gtAns;
+          case '<':
+            const smAns: internalVal = {
+              type: 'int',
+              value: Number(left.value < right.value)
+            };
+            return smAns;
+          case '>=':
+            const geAns: internalVal = {
+              type: 'int',
+              value: Number(left.value >= right.value)
+            };
+            return geAns;
+          case '<=':
+            const seAns: internalVal = {
+              type: 'int',
+              value: Number(left.value <= right.value)
+            };
+            return seAns;
 
           default:
             throw new Error(
@@ -1151,22 +1230,9 @@ namespace Interpreter {
             );
         }
       case 'identifier':
-        if (parseExpr.identifier in expr.closure)
-          return executeExpr(
-            expr.closure[parseExpr.identifier],
-            lets,
-            types,
-            closure
-          );
-
-        // TODO actually execute and not just suspend for later??
         if (parseExpr.identifier in closure)
-          return executeExpr(
-            closure[parseExpr.identifier],
-            lets,
-            types,
-            closure
-          );
+          return executeExpr(closure[parseExpr.identifier], lets, types);
+        // TODO actually execute and not just suspend for later??
         // TODO, really? and why first lets and then types?
         else if (parseExpr.identifier in lets)
           return executeExpr(
@@ -1174,15 +1240,13 @@ namespace Interpreter {
             {
               type: 'expr',
               expr: lets[parseExpr.identifier].body,
-              closure: { TODO: 0 as any }
+              closure
             },
             lets,
-            types,
-            closure
+            types
           );
         // TODO user error or internal error?
         else {
-          console.log(expr.expr);
           return expr;
         }
         // yeah?
@@ -1198,11 +1262,10 @@ namespace Interpreter {
           {
             type: 'expr',
             expr: parseExpr.function,
-            closure: {}
+            closure
           },
           lets,
-          types,
-          closure
+          types
         );
 
         // TODO
@@ -1255,11 +1318,10 @@ namespace Interpreter {
                   {
                     type: 'expr',
                     expr: arg.argument,
-                    closure: { TODO: 0 as any }
+                    closure
                   },
                   lets,
-                  types,
-                  closure
+                  types
                 )
               )
             );
@@ -1271,13 +1333,14 @@ namespace Interpreter {
                 `User error: can only call functions, but got: ${toCall.expr.type}`
               );
 
-            closure = deepCpy(closure) as never; // TODO, deep copy needed
+            //closure = deepCpy(closure) as never;
+            // TODO, deep copy needed
             // TODO, if toCall is from different scope, then just remove the entire closure
 
             const givenArgs = parseExpr.arguments.map<internalVal>((arg) => ({
               type: 'expr',
               expr: arg.argument,
-              closure: { TODO: 0 as any }
+              closure
             }));
             const neededArgs = toCall.expr.parameters.map<
               [string, internalVal | undefined]
@@ -1287,7 +1350,7 @@ namespace Interpreter {
                 ? {
                     type: 'expr',
                     expr: param.argument.defaultValue,
-                    closure: {}
+                    closure
                   }
                 : undefined
             ]);
@@ -1297,26 +1360,20 @@ namespace Interpreter {
                 'User error: called a function with too many arguments'
               );
 
-            // TODO not execute them, but let it be done in the lazy evaluation part!
+            // TODO DO NOT execute them, but let it be done in the lazy evaluation part!
             const finalArgs: { [localIdent: string]: internalVal }[] = [];
             for (let i = 0; i < neededArgs.length; ++i)
               if (i < givenArgs.length)
                 finalArgs.push({
                   // TODO NOT like this because of lazy evaluation and performance reasons!
-                  [neededArgs[i][0]]: executeExpr(
-                    givenArgs[i],
-                    lets,
-                    types,
-                    closure
-                  )
+                  [neededArgs[i][0]]: executeExpr(givenArgs[i], lets, types)
                 });
               else if (neededArgs[i][1] !== undefined)
                 finalArgs.push({
                   [neededArgs[i][0]]: executeExpr(
                     neededArgs[i][1]!,
                     lets,
-                    types,
-                    closure
+                    types
                   )
                 });
               else
@@ -1325,7 +1382,7 @@ namespace Interpreter {
                 );
 
             // TODO, not sure if that is actually the closure, since the old values may not be accessible anymore actually
-            Object.assign(closure, ...finalArgs);
+            Object.assign(toCall.closure, ...finalArgs);
             //console.log('CALLING', closure, finalArgs);
 
             return executeExpr(
@@ -1333,11 +1390,10 @@ namespace Interpreter {
                 type: 'expr',
                 expr: toCall.expr.body,
                 // TODO too hacky
-                closure: { ...deepCpy(closure), ...deepCpy(toCall.closure) }
+                closure: { ...deepCpy(toCall.closure) }
               },
               lets,
-              types,
-              closure
+              types
             );
           case 'float':
           case 'int':
@@ -1352,22 +1408,20 @@ namespace Interpreter {
                 {
                   type: 'expr',
                   expr: parseExpr.arguments[0].argument,
-                  closure: { TODO: 0 as any }
+                  closure
                 },
                 lets,
-                types,
-                closure
+                types
               );
             else
               return executeExpr(
                 {
                   type: 'expr',
                   expr: parseExpr.arguments[1].argument,
-                  closure: { TODO: 0 as any }
+                  closure
                 },
                 lets,
-                types,
-                closure
+                types
               );
           default:
             throw new Error(
@@ -1379,11 +1433,10 @@ namespace Interpreter {
           {
             type: 'expr',
             expr: parseExpr.scrutinee,
-            closure: { TODO: 0 as any }
+            closure
           },
           lets,
-          types,
-          closure
+          types
         );
 
         if (scrutinee.type !== 'complexType')
@@ -1414,7 +1467,6 @@ namespace Interpreter {
           );
 
         // TODO new local closure/scope, just like when calling functions
-        closure = deepCpy(closure);
 
         const matchLine = parseExpr.body[correctIdx].argument;
         const newCtxValueNames: string[] = matchLine.isDefaultVal
@@ -1443,19 +1495,21 @@ namespace Interpreter {
           updatedClosureValues[newCtxValueNames[i]] = scrutinee.values[i];
         }
 
-        Object.assign(closure, updatedClosureValues);
+        // TODO
+        // Object.assign({}, updatedClosureValues);
 
         // TODO
         return executeExpr(
-          { type: 'expr', expr: matchLine.body, closure: { TODO: 0 as any } },
+          { type: 'expr', expr: matchLine.body, closure },
           lets,
-          types,
-          closure
+          types
         );
       case 'typeInstantiation':
-        // TODO
         if (parseExpr.source.type !== 'identifier')
-          throw new Error('TODO what');
+          throw new Error(
+            'Internal error: type instantiations should always be from an (internal) identifier to an identifier.'
+          );
+
         const complexType = types[parseExpr.source.identifier];
         if (complexType === undefined)
           throw new Error(
@@ -1468,9 +1522,10 @@ namespace Interpreter {
           );
 
         if (
-          !complexType.body
-            .map((e) => e.argument.identifierToken.lex)
-            .includes(parseExpr.propertyToken.lex)
+          !complexType.body.some(
+            (e) =>
+              e.argument.identifierToken.lex === parseExpr.propertyToken.lex
+          )
         )
           throw new Error(
             `User error: tried to do type instatiation with property ${parseExpr.propertyToken.lex} which doesnt exist on current complex type: ${complexType.name}`
@@ -1508,27 +1563,70 @@ let sumTree = func (tree) =>
     F(wert, left, right) => wert + sumTree(left) + sumTree(right)
   };
 
-let main = func (n) => f(2 + 3, 3 + 1);
+let a = func (a) => b(a, a+1);
+let b = func (a, b) => 1(a + 2, b + 2);
+let c = func (a) => func (b) => a;
+
+use lc;
+
+let main = func (n) => lc.churchIntToI32(lc.pred(lc.four));
       `,
-      fileA: `
-    type linkedList[T] {
-      null,
-      value(T, linkedList)
-    }
+      lc: `
+    // booleans
+    let true = func (x) => func (y) => x;
+    let false = func (x) => func (y) => y;
 
-    let my_list =
-      linkedList->value(3, linkedList->value(2, linkedList->null));
+    // logical operations on booleans
+    let if = func (b) => func (x) => func (y) => b(x)(y);
+    let not = func (x) => x(false)(true);
+    let and = func (x) => func (y) => x(y)(x);
+    let or = func (x) => func (y) => x(x)(y);
 
-    let sum = func (ll) => match (ll) {
-      null => 0,
-      value(data, next) => data + sum(next)
-    };
+    // church numerals
+    let zero = func (f) => func (x) => x;
+    let one = func (f) => func (x) => f(x);
+    let two = func (f) => func (x) => f( f(x) );
+    let three = succ(two);
+    let four = succ(three);
+    let five = succ(four);
 
-    let main = func (a) => sum(my_list);
+    // successor/predecessor of church numerals
+    let succ = func (n) => func (f) => func (x) => f( n(f)(x) );
+    let pred = func (n) => func (f) => func (x) =>
+      n( func (g) => func (h) => h(g(f)) )( func (u) => x )( func (u) => u );
+    let pred2 = func (n) => // way slower
+      n( func (g) => func (k) => isZero( g(one) )( k )( succ( g(k) ) ) )( func (v) => zero )( zero );
+    let pred3 = func (n) => first( n(phi)(pair(zero)(zero)) );
+
+    // arithmetic on church numerals
+    let plus = func (n) => func (m) => func (f) => func (x) => m( f )( n(f)(x) );
+    let mult = func (n) => func (m) => func (f) => m( n(f) );
+    let pow = func (base) => func (exp) => exp(base);
+    let sub = func (n) => func (m) => m(pred)(n); // n - m with n > m, else 0
+
+    // arithmetic checks on church numerals
+    let isZero = func (n) => n(func (x) => false)(true);
+    // <=
+    let leq = func (n) => func (m) => isZero( sub(n)(m) );
+
+    // tuples and linked lists
+    // (a, b)
+    let pair = func (a) => func (b) => func (extract) => extract(a)(b);
+    let first = func (p) => p(true);
+    let second = func (p) => p(false);
+    let nil = func (x) => true;
+    let null = func (p) => p( func (x) => func (y) => false ); // checks if the p is a pair or nil
+    // TODO does not work?? because of succ??
+    // (m, n) -> (n, n + 1)
+    let phi = func (x) => pair( second(x) )( succ( second(x) ) );
+
+    let boolToI32 = func (bool) => bool(1)(0);
+    let churchIntToI32 = func (uint) => uint(func (x) => x + 1)(0);
+    let i32ToChurchInt = func (n) => (n <= 0)(succ( i32ToChurchInt(n - 1) ), zero);
     `
     },
     'test',
-    10
+    6
   )
 );
 
