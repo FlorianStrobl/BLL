@@ -1360,21 +1360,18 @@ namespace Interpreter {
                 'User error: called a function with too many arguments'
               );
 
+            // TODO still working??
             // TODO DO NOT execute them, but let it be done in the lazy evaluation part!
             const finalArgs: { [localIdent: string]: internalVal }[] = [];
             for (let i = 0; i < neededArgs.length; ++i)
               if (i < givenArgs.length)
                 finalArgs.push({
                   // TODO NOT like this because of lazy evaluation and performance reasons!
-                  [neededArgs[i][0]]: executeExpr(givenArgs[i], lets, types)
+                  [neededArgs[i][0]]: givenArgs[i]
                 });
               else if (neededArgs[i][1] !== undefined)
                 finalArgs.push({
-                  [neededArgs[i][0]]: executeExpr(
-                    neededArgs[i][1]!,
-                    lets,
-                    types
-                  )
+                  [neededArgs[i][0]]: neededArgs[i][1]!
                 });
               else
                 throw new Error(
@@ -1569,7 +1566,11 @@ let c = func (a) => func (b) => a;
 
 use lc;
 
-let main = func (n) => lc.churchIntToI32(lc.pred(lc.four));
+// lc.F(lc.fix(lc.F))(lc.three)
+// lc.y(lc.F)(lc.three)
+// lc.fact(lc.three)
+
+let main = func (n) => lc.churchIntToI32( lc.fact(lc.two) );
       `,
       lc: `
     // booleans
@@ -1616,10 +1617,36 @@ let main = func (n) => lc.churchIntToI32(lc.pred(lc.four));
     let second = func (p) => p(false);
     let nil = func (x) => true;
     let null = func (p) => p( func (x) => func (y) => false ); // checks if the p is a pair or nil
-    // TODO does not work?? because of succ??
     // (m, n) -> (n, n + 1)
     let phi = func (x) => pair( second(x) )( succ( second(x) ) );
 
+    // combinators
+    let id = func (x) => x;
+    let fix = func (f) => f( fix(f) );
+    let y = func (f) => (func (x) => f(x(x)))(func (x) => f(x(x)));
+    let theta = (func(x)=>func(y)=>y(x(x(y))))(func(x)=>func(y)=>y(x(x(y))));
+
+    // SKI-combinator
+    let I = func (x) => x;
+    let K = func (x) => func (y) => x;
+    let S = func (x) => func (y) => func (z) => x(z)(y(z));
+
+    // BCKW-system
+    let B = func (x) => func (y) => func (z) => x(y(z));
+    let C = func (x) => func (y) => func (z) => x(z)(y);
+    let W = func (x) => func (y) => x(y)(y);
+
+    let U = func (x) => x(x);
+    let omega = U(U);
+
+    // factorial, but defined recursively
+    let fact = func (n) => isZero(n)( one )( mult(n)( fact( pred(n) ) ) );
+    let F = func (f) => func (n) => isZero(n)(one)(mult(n)(f(pred(n))));
+
+    // gaussian sum
+    let sum = func (n) => isZero(n)( n )( plus(n)( sum (pred(n)) ) );
+
+    // lc to bll and vice versa
     let boolToI32 = func (bool) => bool(1)(0);
     let churchIntToI32 = func (uint) => uint(func (x) => x + 1)(0);
     let i32ToChurchInt = func (n) => (n <= 0)(succ( i32ToChurchInt(n - 1) ), zero);
