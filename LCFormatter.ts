@@ -1,8 +1,7 @@
 import { Parser } from './LCParser';
 
 export namespace Formatter {
-  const indentSize: string = '  ';
-  const Colors = {
+  export const Colors = {
     symbol: `${0xab};${0xb2};${0xbf}`, // white
     comments: `${0x80};${0x80};${0x80}`, // gray
     numberLiteral: `${0xe5};${0xc0};${0x7b}`, // yellow
@@ -18,7 +17,8 @@ export namespace Formatter {
     primitiveType: `${0xff};${0xa5};${0x00}` // orange
   };
 
-  let colorActive: boolean = false;
+  let indentSize: string = '  ';
+  let colorActive: boolean = true;
 
   function printComments(
     comments: Parser.token[],
@@ -27,13 +27,13 @@ export namespace Formatter {
     return comments.length === 0
       ? '' // nothing to print
       : comments
-          .map(
-            (comment) => indentation + addColor(comment.lex, Colors.comments)
-          )
+          .map((comment) => indentation + addColor(comment.l, Colors.comments))
           .join('\n') + '\n';
   }
 
-  function printTypeExpression(expression: Parser.typeExpression): string {
+  export function printTypeExpression(
+    expression: Parser.typeExpression
+  ): string {
     switch (expression.type) {
       case 'grouping':
         return (
@@ -45,12 +45,12 @@ export namespace Formatter {
       case 'primitive-type':
         return (
           printComments(expression.comments, '') +
-          addColor(expression.primitiveToken.lex, Colors.primitiveType)
+          addColor(expression.primitiveToken.l, Colors.primitiveType)
         );
       case 'identifier':
         return (
           printComments(expression.comments, '') +
-          addColor(expression.identifierToken.lex, Colors.identifier)
+          addColor(expression.identifierToken.l, Colors.identifier)
         );
       case 'func-type':
         return (
@@ -68,7 +68,7 @@ export namespace Formatter {
           printComments(expression.comments, '') +
           (printTypeExpression(expression.source) +
             addColor('.', Colors.symbol) +
-            addColor(expression.propertyToken.lex, Colors.identifier))
+            addColor(expression.propertyToken.l, Colors.identifier))
         );
       case 'genericSubstitution':
         return (
@@ -83,7 +83,7 @@ export namespace Formatter {
     }
   }
 
-  function printExpression(
+  export function printExpression(
     expression: Parser.expression,
     indentation: string
   ): string {
@@ -98,26 +98,26 @@ export namespace Formatter {
       case 'literal':
         return (
           printComments(expression.comments, indentation) +
-          addColor(expression.literalToken.lex, Colors.numberLiteral)
+          addColor(expression.literalToken.l, Colors.numberLiteral)
         );
       case 'identifier':
         return (
           printComments(expression.comments, indentation) +
-          addColor(expression.identifierToken.lex, Colors.identifier)
+          addColor(expression.identifierToken.l, Colors.identifier)
         );
       case 'propertyAccess':
         return (
           printComments(expression.comments, indentation) +
           (printExpression(expression.source, indentation) +
             addColor('.', Colors.symbol) +
-            addColor(expression.propertyToken.lex, Colors.identifier))
+            addColor(expression.propertyToken.l, Colors.identifier))
         );
       case 'typeInstantiation':
         return (
           printComments(expression.comments, indentation) +
           (printExpression(expression.source, indentation) +
             addColor('->', Colors.symbol) +
-            addColor(expression.propertyToken.lex, Colors.identifier))
+            addColor(expression.typeLineToken.l, Colors.identifier))
         );
       case 'call':
         return (
@@ -159,7 +159,7 @@ export namespace Formatter {
               .map(
                 (parameter) =>
                   addColor(
-                    parameter.argument.identifierToken.lex,
+                    parameter.argument.identifierToken.l,
                     Colors.identifier
                   ) +
                   (parameter.argument.hasExplicitType
@@ -201,16 +201,13 @@ export namespace Formatter {
                   const arg: Parser.matchBodyLine = expression.body[0].argument;
                   const pattern: string = arg.isDefaultVal
                     ? ''
-                    : addColor(arg.identifierToken.lex, Colors.identifier) +
+                    : addColor(arg.identifierToken.l, Colors.identifier) +
                       (arg.parameters.length === 0
                         ? ''
                         : addColor('(', Colors.symbol) +
                           arg.parameters
                             .map((parameter) =>
-                              addColor(
-                                parameter.argument.lex,
-                                Colors.identifier
-                              )
+                              addColor(parameter.argument.l, Colors.identifier)
                             )
                             .join(addColor(', ', Colors.symbol)) +
                           addColor(')', Colors.symbol)) +
@@ -247,14 +244,14 @@ export namespace Formatter {
                   ((bodyLine.argument.isDefaultVal
                     ? ''
                     : addColor(
-                        bodyLine.argument.identifierToken.lex,
+                        bodyLine.argument.identifierToken.l,
                         Colors.identifier
                       ) +
                       (bodyLine.argument.parameters.length !== 0
                         ? addColor('(', Colors.symbol) +
                           bodyLine.argument.parameters
                             .map((a) =>
-                              addColor(a.argument.lex, Colors.identifier)
+                              addColor(a.argument.l, Colors.identifier)
                             )
                             .join(addColor(', ', Colors.symbol)) +
                           addColor(')', Colors.symbol)
@@ -273,7 +270,10 @@ export namespace Formatter {
     }
   }
 
-  function printStatement(statement: Parser.statement, indent: string): string {
+  export function printStatement(
+    statement: Parser.statement,
+    indent: string
+  ): string {
     switch (statement.type) {
       case 'comment':
       case 'empty':
@@ -284,7 +284,7 @@ export namespace Formatter {
           printComments(statement.comments, indent) +
           (indent +
             (addColor('use ', Colors.keywordUse) +
-              addColor(statement.filename.lex, Colors.filename) +
+              addColor(statement.filename.l, Colors.filename) +
               addColor(';', Colors.symbol)))
         );
       case 'group':
@@ -294,7 +294,7 @@ export namespace Formatter {
             printComments(statement.comments, indent) +
             indent +
             addColor('group ', Colors.keywordGroup) +
-            addColor(statement.identifierToken.lex, Colors.identifier) +
+            addColor(statement.identifierToken.l, Colors.identifier) +
             addColor(' { }', Colors.symbol)
           );
 
@@ -302,9 +302,9 @@ export namespace Formatter {
           printComments(statement.comments, indent) +
           (indent +
             (addColor('group ', Colors.keywordGroup) +
-              addColor(statement.identifierToken.lex, Colors.identifier) +
+              addColor(statement.identifierToken.l, Colors.identifier) +
               addColor(' {\n', Colors.symbol) +
-              beautify(statement.body, indent + indentSize, colorActive) +
+              beautifyAST(statement.body, indent + indentSize) +
               indent +
               addColor('}', Colors.symbol)))
         );
@@ -313,10 +313,7 @@ export namespace Formatter {
           ? addColor('[', Colors.symbol) +
             statement.genericIdentifiers
               .map((genericIdentifier) =>
-                addColor(
-                  genericIdentifier.argument.lex,
-                  Colors.genericIdentifier
-                )
+                addColor(genericIdentifier.argument.l, Colors.genericIdentifier)
               )
               .join(addColor(', ', Colors.symbol)) +
             addColor(']', Colors.symbol)
@@ -335,7 +332,7 @@ export namespace Formatter {
           printComments(statement.comments, indent) +
           (indent +
             (addColor('let ', Colors.keywordLet) +
-              addColor(statement.identifierToken.lex, Colors.identifier) +
+              addColor(statement.identifierToken.l, Colors.identifier) +
               genericPart +
               typePart +
               addColor(' = ', Colors.symbol) +
@@ -347,10 +344,7 @@ export namespace Formatter {
           ? addColor('[', Colors.symbol) +
             statement.genericIdentifiers
               .map((genericIdentifier) =>
-                addColor(
-                  genericIdentifier.argument.lex,
-                  Colors.genericIdentifier
-                )
+                addColor(genericIdentifier.argument.l, Colors.genericIdentifier)
               )
               .join(addColor(', ', Colors.symbol)) +
             addColor(']', Colors.symbol)
@@ -360,7 +354,7 @@ export namespace Formatter {
           printComments(statement.comments, indent) +
           (indent +
             (addColor('type ', Colors.keywordType) +
-              addColor(statement.identifierToken.lex, Colors.identifier) +
+              addColor(statement.identifierToken.l, Colors.identifier) +
               genericPart_ +
               addColor(' = ', Colors.symbol) +
               printTypeExpression(statement.body).trimStart() +
@@ -371,10 +365,7 @@ export namespace Formatter {
           ? addColor('[', Colors.symbol) +
             statement.genericIdentifiers
               .map((genericIdentifier) =>
-                addColor(
-                  genericIdentifier.argument.lex,
-                  Colors.genericIdentifier
-                )
+                addColor(genericIdentifier.argument.l, Colors.genericIdentifier)
               )
               .join(addColor(', ', Colors.symbol)) +
             addColor(']', Colors.symbol)
@@ -393,7 +384,7 @@ export namespace Formatter {
                     indent +
                     indentSize +
                     addColor(
-                      complexTypeLine.argument.identifierToken.lex,
+                      complexTypeLine.argument.identifierToken.l,
                       Colors.identifier
                     ) +
                     (complexTypeLine.argument.hasBrackets
@@ -413,7 +404,7 @@ export namespace Formatter {
           printComments(statement.comments, indent) +
           (indent +
             (addColor('type ', Colors.keywordType) +
-              addColor(statement.identifierToken.lex, Colors.identifier) +
+              addColor(statement.identifierToken.l, Colors.identifier) +
               genericPart__ +
               bodyStr))
         );
@@ -425,18 +416,37 @@ export namespace Formatter {
   }
 
   export function beautify(
-    ast: Parser.statement[],
-    indent: string = '',
-    withColor: boolean = true
+    code: string,
+    settings: {
+      withColor?: boolean;
+      withComments?: boolean;
+      defaultIndentation?: string;
+    } = { withColor: true, withComments: true, defaultIndentation: '  ' }
   ): string {
-    colorActive = withColor;
+    indentSize = settings.defaultIndentation ?? '  ';
+    colorActive = settings.withColor ?? true;
+
+    const ast = Parser.parse(code, { noComments: !settings.withComments });
+    if (!ast.valid)
+      throw new Error(
+        `Could not format code because code cannot be parsed. Errors: ${JSON.stringify(
+          ast.parseErrors
+        )}`
+      );
+    return beautifyAST(ast.statements);
+  }
+
+  export function beautifyAST(
+    ast: Parser.statement[],
+    currentIndent: string = ''
+  ): string {
     let code = '';
 
     let lastStatementType: string = ast.at(0)?.type ?? '';
     for (const statement of ast) {
       if (lastStatementType !== statement.type) code += '\n';
       lastStatementType = statement.type;
-      code += printStatement(statement, indent) + '\n';
+      code += printStatement(statement, currentIndent) + '\n';
     }
 
     return code;

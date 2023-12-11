@@ -1,19 +1,16 @@
-import { Lexer } from './LCLexer';
-import { Parser } from './LCParser';
 import { Interpreter } from './LCInterpreter';
 import { Compiler } from './LCCompiler';
+import { Parser } from './LCParser';
 import { Formatter } from './LCFormatter';
-import * as errs from './FErrorMsgs';
-import * as test from './LCIdentifierCheck';
+import * as errs from './LCCodeAnnotation';
 import * as fs from 'fs';
-
-// const ans = fs.readFileSync('./std.bll').toString();
-// console.log('HERE', Parser.parse(ans));
 
 // @ts-ignore
 import { inspect } from 'util';
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
+
+// const ans = fs.readFileSync('./std.bll').toString();
 
 /**
  * let a = 5; // no error
@@ -40,6 +37,7 @@ const log = (args: any) =>
  * }
  */
 
+// #region preprocessing
 const filename = 'src';
 const code = `
 type complex[T] {
@@ -55,14 +53,14 @@ let get = func (x: complex[i32]) =>
 
 let main = func (a) => a + (
   (- (2 - 3 - 4) == - -5)                  &
-  (2 ** 3 ** 4  == 2.4178516392292583e+24) &
+  (2.0 ** 3.0 ** 4.0  == 2.4178516392292583e+24) &
   (2 * 3 * 4 == 24)                        &
   ((2 + 3 * 4 == 2 + (3 * 4))              &
   ((2 + 3) * 4 != 2 + 3 * 4))              &
   (0.1 + 0.2 == 0.30000000000000004))
   ;`;
 const argument: number = 5;
-const _code = `
+const code2 = `
 // **
 
 type binaryTree[T] {
@@ -99,9 +97,9 @@ type binaryTree[T] {
 // let factorial = func (n: i32): i32 => n( /*n==0*/ 1, /*n!=0*/ n * factorial(n-1) );
 
 // with any arg: 22
-//let main = func (arg: f32): f32 => f1();
+//let main = func (arg: f64): f64 => f1();
 // with arg2=5: 3
-let f1 = func (arg2: f32 = 22.5): f32 => f(arg2);
+let f1 = func (arg2: f64 = 22.5): f64 => f(arg2);
 
 // with arg=5: 16
 // let main = func (arg: i32): i32 => f2(arg+2);
@@ -112,37 +110,44 @@ let f1 = func (arg2: f32 = 22.5): f32 => f(arg2);
 //let g = func (x, y) => x / y;
 `;
 
-const lexedCode = Lexer.lexe(code);
-if (!lexedCode.valid)
-  throw new Error(
-    'could not lexe the code! ' + lexedCode.lexerErrors?.toString()
-  ); // TODO formatted error
-
 const parsedCode = Parser.parse(code);
 if (!parsedCode.valid)
   throw new Error(
     'could not parse the code! ' + parsedCode.parseErrors?.toString()
   ); // TODO formatted error
 
-const formattedCode: string = Formatter.beautify(parsedCode.statements);
-const interpreterResult: number = Interpreter.interpretAst(
-  parsedCode.statements,
+const formattedCode: string = Formatter.beautify(code);
+const interpreterResult: number = Interpreter.interpret(
+  { main: code },
+  'main',
   argument
 );
 const asm: string = Compiler.compile(parsedCode.statements, code, filename);
+// #endregion
 
-console.log(`--------------------------------------------------------------------------
-Beautified code:`);
-console.log(formattedCode);
-console.log(`--------------------------------------------------------------------------
-AST:`);
-log(parsedCode.statements);
-console.log(`--------------------------------------------------------------------------
-Compiled code (asm):`);
-console.log(asm);
-console.log(`--------------------------------------------------------------------------
-Interpreted code with ${argument}:`);
-console.log(interpreterResult);
+const output: string = `${
+  true
+    ? `--------------------------------------------------------------------------
+Beautified code:\n${formattedCode}\n`
+    : ''
+}${
+  false
+    ? `--------------------------------------------------------------------------
+AST:\n${JSON.stringify(parsedCode.statements)}\n`
+    : ''
+}${
+  false
+    ? `--------------------------------------------------------------------------
+Compiled code (asm):\n${asm}\n`
+    : ''
+}${
+  true
+    ? `--------------------------------------------------------------------------
+Interpreted code with ${argument}:\n${interpreterResult}`
+    : ''
+}`;
+
+console.log(output);
 
 /**
  * TODO:

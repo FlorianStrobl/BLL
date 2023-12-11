@@ -19,8 +19,10 @@ export const enum ErrorID {
   invalidNumericLiteralELast = 0x0003,
   invalidNumericLiteralEFollowedByPoint = 0x0004,
   invalidNumericLiteralPointLast = 0x0005,
-  invalidCommentUnclosed = 0x0006
+  invalidCommentUnclosed = 0x0006,
   // TODO add invalidOperator, e.g. "->" even tho only "->*" is valid
+
+  invalidBinOpNotSameType = 0x5001
 }
 
 interface Error {
@@ -33,7 +35,7 @@ interface Error {
 
   msg: string; // the error message to print
 
-  compilerStep?: 'lexer' | 'parser' | 'compiler'; // the part in the compiler where it caused the error
+  compilerStep?: 'lexer' | 'parser' | 'intermediate' | 'compiler'; // the part in the compiler where it caused the error
   internalFunctionName?: string; // optionally the name of the function where the error happend
 
   additionalInformations?: {};
@@ -82,6 +84,12 @@ const Errors: {
     step: 'lexer',
     type: 'invalid comment ',
     msg: 'a comment starting with `/*` must be closed by `*/`'
+  },
+
+  [ErrorID.invalidBinOpNotSameType]: {
+    step: 'compiler',
+    type: 'wrong types while using binary operator',
+    msg: 'binary operators need the same data type on both sides.'
   }
 };
 
@@ -182,8 +190,9 @@ function errorMainMsgFormatted(error: Error): string {
   }
 }
 
-export function printMessage(type: 'error', value: Error): void;
+export function printMessage(type: 'warning', value: string): void;
 export function printMessage(type: 'message', value: string): void;
+export function printMessage(type: 'error', value: Error): void;
 export function printMessage(
   type: 'message' | 'error' | 'warning',
   value: string | Error
@@ -192,10 +201,13 @@ export function printMessage(
 
   switch (type) {
     case 'message':
+    case 'warning':
+      message += value;
       break;
     case 'error':
-      // https://discord.com/channels/@me/691250517820571649/1095310448359903233
       value = value as Error;
+
+      // https://discord.com/channels/@me/691250517820571649/1095310448359903233
 
       // .replaceAll("#[0]", error.code[error.idx]).replaceAll("#[0]", error.idx.toString())
 
@@ -215,8 +227,6 @@ export function printMessage(
 
       message += errorMainPart(value);
 
-      break;
-    case 'warning':
       break;
   }
 

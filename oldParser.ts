@@ -1,7 +1,4 @@
 import { Lexer } from './LCLexer';
-// for debugging only
-// @ts-ignore
-import { inspect } from 'util';
 
 // TODO, make a larser: if found one error, stop parsing immediatly and finish the lexing, then print the errors
 
@@ -14,7 +11,7 @@ import { inspect } from 'util';
 }
 
 type a {
-  x(i32, f32, i32)
+  x(i32, f64, i32)
 }
 
 type optional[t] {
@@ -166,7 +163,7 @@ export namespace Parser {
   function match(...tokens: string[]): Lexer.token | undefined {
     function check(value: string): boolean {
       if (isAtEnd()) return false;
-      return peek()?.lex === value; // peek() only undefined if isAtEnd() === false
+      return peek()?.l === value; // peek() only undefined if isAtEnd() === false
     }
 
     for (const token of tokens) if (check(token)) return advance();
@@ -234,7 +231,7 @@ export namespace Parser {
     while (match('==', '!=')) {
       left = {
         type: 'binary',
-        operator: previous().lex as '==',
+        operator: previous().l as '==',
         operatorLex: previous(),
         left,
         right: parseExprLvl4()
@@ -250,7 +247,7 @@ export namespace Parser {
     while (match('<', '>', '<=', '>=')) {
       left = {
         type: 'binary',
-        operator: previous().lex as '<',
+        operator: previous().l as '<',
         operatorLex: previous(),
         left,
         right: parseExprLvl5()
@@ -266,7 +263,7 @@ export namespace Parser {
     while (match('<<', '>>')) {
       left = {
         type: 'binary',
-        operator: previous().lex as '<<',
+        operator: previous().l as '<<',
         operatorLex: previous(),
         left,
         right: parseExprLvl6()
@@ -282,7 +279,7 @@ export namespace Parser {
     while (match('+', '-')) {
       left = {
         type: 'binary',
-        operator: previous().lex as '+',
+        operator: previous().l as '+',
         operatorLex: previous(),
         left,
         right: parseExprLvl7()
@@ -298,7 +295,7 @@ export namespace Parser {
     while (match('*', '/', '%')) {
       left = {
         type: 'binary',
-        operator: previous().lex as '*',
+        operator: previous().l as '*',
         operatorLex: previous(),
         left,
         right: parseExprLvl8()
@@ -316,7 +313,7 @@ export namespace Parser {
     if (match('**', '***')) {
       left = {
         type: 'binary',
-        operator: previous().lex as '**',
+        operator: previous().l as '**',
         operatorLex: previous(),
         left,
         right: parseExprLvl8() // same level because precedence order
@@ -332,7 +329,7 @@ export namespace Parser {
     if (match('!', '-', '+', '~')) {
       return {
         type: 'unary',
-        operator: previous().lex as '-',
+        operator: previous().l as '-',
         operatorLex: previous(),
         body: parseExprLvl9()
       };
@@ -345,7 +342,7 @@ export namespace Parser {
   function parseExprLvl10() {
     let left: any = primary();
     while (match('(', '.')) {
-      if (previous().lex === '.') {
+      if (previous().l === '.') {
         const property = advance();
         left = { type: 'PropertyAccess', target: left, property };
       } else {
@@ -375,16 +372,16 @@ export namespace Parser {
       if (!match(')')) throw Error('Expression wasnt closed'); // TODO
       expression.endBracket = previous();
       return expression;
-    } else if (peek()!.ty === tokenTypes.literal) {
+    } else if (peek()!.t === tokenTypes.literal) {
       return { type: 'literal', literal: advance()! };
-    } else if (peek()!.ty === tokenTypes.identifier) {
+    } else if (peek()!.t === tokenTypes.identifier) {
       // TODO do not do () because of (x.y).z
       // TODO, x, x(), x.y, x.y() but not x.y().z
       let identifier = advance()!;
 
       return { type: 'identifier', identifier: identifier };
 
-      if (peek()!.lex !== '.') {
+      if (peek()!.l !== '.') {
         // let openBrace;
         // if ((openBrace = match('('))) {
         //   let callArguments = [parseExpression()]; // TODO TODO because there can be "," in between!
@@ -407,7 +404,7 @@ export namespace Parser {
       let dot: Lexer.token | undefined;
       while ((dot = match('.'))) {
         path.push(dot);
-        if (peek()!.ty === tokenTypes.identifier) path.push(advance());
+        if (peek()!.t === tokenTypes.identifier) path.push(advance());
         else throw Error('`identifier . not an identifier` is not ok'); // TODO
       }
 
@@ -467,7 +464,7 @@ export namespace Parser {
     const args: token[] = [];
     const commas: token[] = [];
 
-    while (peek()?.lex !== ')') {
+    while (peek()?.l !== ')') {
       if (args.length > 0) {
         let lastComma = match(',');
         if (lastComma === undefined)
@@ -475,11 +472,11 @@ export namespace Parser {
         commas.push(lastComma);
 
         // TODO: warning for trailing commas
-        if (peek()?.lex === ')') break; // had trailing comma
+        if (peek()?.l === ')') break; // had trailing comma
       }
 
       let identifier: Lexer.token | undefined = advance();
-      if (identifier === undefined || identifier.ty !== tokenTypes.identifier)
+      if (identifier === undefined || identifier.t !== tokenTypes.identifier)
         throw Error('must have identifier between two commas'); // TODO
 
       args.push(identifier);
@@ -502,7 +499,7 @@ export namespace Parser {
     // matched "let" lastly
 
     const identifier: Lexer.token | undefined = advance();
-    if (identifier?.ty !== tokenTypes.identifier)
+    if (identifier?.t !== tokenTypes.identifier)
       throw Error('invalid token type in parse let statement'); // TODO
 
     let assigmentOperator: Lexer.token | undefined;
@@ -519,7 +516,7 @@ export namespace Parser {
 
   function parseNamespaceStatement(): namespaceStatementT {
     const identifier: Lexer.token | undefined = advance();
-    if (identifier?.ty !== tokenTypes.identifier)
+    if (identifier?.t !== tokenTypes.identifier)
       throw Error('namespaces must have a name'); // TODO
 
     let openingBracket: Lexer.token | undefined;
@@ -571,19 +568,19 @@ export namespace Parser {
 
     let path: token[] = [];
 
-    if (peek()?.lex === '.') parseDots();
+    if (peek()?.l === '.') parseDots();
 
     let semicolon: Lexer.token | undefined;
     while (!(semicolon = match(';'))) {
       let identifier = advance();
-      if (identifier !== undefined && identifier.ty === tokenTypes.identifier) {
+      if (identifier !== undefined && identifier.t === tokenTypes.identifier) {
         path.push(identifier);
 
         let slash: Lexer.token | undefined;
         if ((slash = match('/'))) {
           path.push(slash);
           // its /./ or /../
-          while (peek()?.lex === '.') parseDots();
+          while (peek()?.l === '.') parseDots();
           //else: its folder/value
         }
       } else throw Error('import statement must have identifiers in it');
@@ -612,7 +609,7 @@ export namespace Parser {
     code: string,
     fileName: string
   ): statementT[] | undefined {
-    _lexemes = lexemes.filter((l) => l.ty !== tokenTypes.comment);
+    _lexemes = lexemes.filter((l) => l.t !== tokenTypes.comment);
     _code = code;
     _fileName = fileName;
 
@@ -625,9 +622,6 @@ export namespace Parser {
     return program;
   }
 }
-
-const c = 'let x = 5;';
-console.log(Parser.parse(Lexer.lexe(c).tokens, 'test', 'test'));
 
 // check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#, go, rustc, py
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
@@ -669,7 +663,7 @@ if invalid lexeme comes, just break parsing and continue lexing to the end, to g
 
   TYPE:
     ( TYPE )
-    "f32"
+    "f64"
     "i32"
     "undetermined"
     TYPE -> TYPE

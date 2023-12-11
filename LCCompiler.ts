@@ -397,10 +397,10 @@ export namespace Compiler {
         }
 
         return exp.literalType === 'i32'
-          ? intLiteralToInt(exp.literalToken.lex).toString()
-          : floatLiteralToFloat(exp.literalToken.lex).toString();
+          ? intLiteralToInt(exp.literalToken.l).toString()
+          : floatLiteralToFloat(exp.literalToken.l).toString();
       case 'identifier':
-        return '%' + exp.identifierToken.lex;
+        return '%' + exp.identifierToken.l;
       case 'match':
         return 'NOT DONE YET';
       case 'propertyAccess':
@@ -411,7 +411,6 @@ export namespace Compiler {
         // TODO even wrong, because of lazy evaluation... (do not exec all the expr beforhand)
         for (const arg of exp.arguments) {
           // TODO
-          // console.log('called this with ', JSON.stringify(arg));
           _str += `%Z${varCounter.c++} = i32 ${todoCompileSimpleExpression(
             arg.argument,
             varCounter
@@ -422,7 +421,7 @@ export namespace Compiler {
         let funcName: string = 'DEBUG';
         funcName =
           exp.function.type === 'identifier'
-            ? exp.function.identifierToken.lex
+            ? exp.function.identifierToken.l
             : funcName;
 
         return `${_str} %Z${varCounter.c++} = call i32 @${funcName}(${new Array(
@@ -444,14 +443,13 @@ export namespace Compiler {
 
     const funcReturnType = 'i32';
 
-    const funcIdentifier = func.identifierToken.lex;
+    const funcIdentifier = func.identifierToken.l;
 
     let funcParameters = '';
     for (const [key, param] of Object.entries(func.body.parameters))
       if (Number(key) === func.body.parameters.length - 1)
-        funcParameters += `${'i32'} %${param.argument.identifierToken.lex}`;
-      else
-        funcParameters += `${'i32'} %${param.argument.identifierToken.lex}, `;
+        funcParameters += `${'i32'} %${param.argument.identifierToken.l}`;
+      else funcParameters += `${'i32'} %${param.argument.identifierToken.l}, `;
 
     let idCounter = { c: 0 };
     const funcBody = todoCompileSimpleExpression(func.body.body, idCounter);

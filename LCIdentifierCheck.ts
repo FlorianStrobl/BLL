@@ -2,9 +2,7 @@ import { Parser } from './LCParser';
 // @ts-ignore
 import { inspect } from 'util';
 
-const log = (args: any) =>
-  console.log(inspect(args, { depth: 999, colors: true }));
-
+// TODO remove brackets
 export namespace ProcessAST {
   // #region constants and types
   const processingErrors: processingError[] = [];
@@ -15,8 +13,8 @@ export namespace ProcessAST {
     imports: [string, Parser.statement][]; // hold a reference to the original AST
     // can be undef because e.g. std does not have a main func
     // e.g. "/main": { main } or "/group1/my_type": { my_type }
-    letDict: { [path: string]: Parser.statementLet }; // Map<string, Parser.statement>
-    typeDict: { [path: string]: Parser.statementTypes }; // Map<string, Parser.statement>
+    letDict: { [path: string]: Parser.letStatement }; // Map<string, Parser.statement>
+    typeDict: { [path: string]: Parser.typeStatement }; // Map<string, Parser.statement>
     namespaceScopes: [string, Parser.statement][];
   }
 
@@ -25,7 +23,7 @@ export namespace ProcessAST {
     localIdentifiers: string[];
     importFilenames: string[];
     filename: string;
-    typeDict: { [path: string]: Parser.statementTypes };
+    typeDict: { [path: string]: Parser.typeStatement };
   };
   // #endregion
 
@@ -65,7 +63,7 @@ export namespace ProcessAST {
           // skip
           break;
         case 'import':
-          processedAST.imports.push([statement.filename.lex, statement]);
+          processedAST.imports.push([statement.filename.l, statement]);
           break;
         case 'let':
           const letName: string = currentScope + statement.name;
@@ -170,7 +168,7 @@ export namespace ProcessAST {
         scope: `/${get_outer_groups(key, 1).join('/')}/`, // scope
         // not the own name for this one:
         localIdentifiers: value.isGeneric
-          ? value.genericIdentifiers.map((gIdent) => gIdent.argument.lex)
+          ? value.genericIdentifiers.map((gIdent) => gIdent.argument.l)
           : [],
         importFilenames,
         filename,
@@ -203,24 +201,24 @@ export namespace ProcessAST {
   }
 
   function processStmtIdent(
-    stmt: Parser.statementLet,
+    stmt: Parser.letStatement,
     scope: string,
     importFilenames: string[],
     filename: string,
     typeDict: {
-      [path: string]: Parser.statementTypes;
+      [path: string]: Parser.typeStatement;
     },
     letDict: {
-      [path: string]: Parser.statementLet;
+      [path: string]: Parser.letStatement;
     }
-  ): Parser.statementLet {
+  ): Parser.letStatement {
     // TODO test this code
 
     if (stmt.hasExplicitType)
       stmt.typeExpression = processTypeExprIdent(stmt.typeExpression, {
         scope,
         localIdentifiers: stmt.isGeneric
-          ? stmt.genericIdentifiers.map((gIdent) => gIdent.argument.lex)
+          ? stmt.genericIdentifiers.map((gIdent) => gIdent.argument.l)
           : [],
         importFilenames,
         filename,
@@ -230,7 +228,7 @@ export namespace ProcessAST {
     stmt.body = processExprIdent(stmt.body, {
       scope,
       localTypeIdentifiers: stmt.isGeneric
-        ? stmt.genericIdentifiers.map((gIdent) => gIdent.argument.lex)
+        ? stmt.genericIdentifiers.map((gIdent) => gIdent.argument.l)
         : [],
       importFilenames,
       localExprIdentifiers: [],
@@ -296,7 +294,7 @@ export namespace ProcessAST {
 
         return typeExpr;
       case 'propertyAccess':
-        let propertyAccessPath: string = typeExpr.propertyToken.lex;
+        let propertyAccessPath: string = typeExpr.propertyToken.l;
 
         // get the given propertyAccessPath
         let tmp: Parser.typeExpression = typeExpr.source;
@@ -308,8 +306,7 @@ export namespace ProcessAST {
         ) {
           if (tmp.type === 'grouping') tmp = tmp.body;
           else if (tmp.type === 'propertyAccess') {
-            propertyAccessPath =
-              tmp.propertyToken.lex + '/' + propertyAccessPath;
+            propertyAccessPath = tmp.propertyToken.l + '/' + propertyAccessPath;
             tmp = tmp.source;
           }
         }
@@ -358,7 +355,7 @@ export namespace ProcessAST {
         }
 
         newProcessingError(
-          `Could not find the following identifier in type propertyAccess: ${propertyAccessPath}`
+          `Could not find the following identifier in type propertyAccess: "${propertyAccessPath}"`
         );
 
         return typeExpr;
@@ -375,10 +372,10 @@ export namespace ProcessAST {
       localExprIdentifiers: string[];
       importFilenames: string[];
       typeDict: {
-        [path: string]: Parser.statementTypes;
+        [path: string]: Parser.typeStatement;
       };
       letDict: {
-        [path: string]: Parser.statementLet;
+        [path: string]: Parser.letStatement;
       };
     }
   ): Parser.expression {
@@ -436,7 +433,7 @@ export namespace ProcessAST {
         });
 
         const newLocalIdentifiers: string[] = expr.parameters.map(
-          (param) => param.argument.identifierToken.lex
+          (param) => param.argument.identifierToken.l
         );
 
         // TODO test this out
@@ -464,7 +461,7 @@ export namespace ProcessAST {
 
         expr.body = expr.body.map((matchLine) => {
           const newLocalIdentifiers: string[] = !matchLine.argument.isDefaultVal
-            ? matchLine.argument.parameters.map((param) => param.argument.lex)
+            ? matchLine.argument.parameters.map((param) => param.argument.l)
             : [];
 
           // merge local identifiers
@@ -515,12 +512,12 @@ export namespace ProcessAST {
         }
 
         newProcessingError(
-          `could not find the current identifier ${expr.identifier} in the scope of this expression`
+          `could not find the current identifier "${expr.identifier}" in the scope of this expression`
         );
 
         return expr;
       case 'propertyAccess':
-        let propertyAccessPath: string = expr.propertyToken.lex;
+        let propertyAccessPath: string = expr.propertyToken.l;
 
         // get the given propertyAccessPath
         let tmp: Parser.expression = expr.source;
@@ -532,8 +529,7 @@ export namespace ProcessAST {
         ) {
           if (tmp.type === 'grouping') tmp = tmp.body;
           else if (tmp.type === 'propertyAccess') {
-            propertyAccessPath =
-              tmp.propertyToken.lex + '/' + propertyAccessPath;
+            propertyAccessPath = tmp.propertyToken.l + '/' + propertyAccessPath;
             tmp = tmp.source;
           }
         }
@@ -581,7 +577,7 @@ export namespace ProcessAST {
         }
 
         newProcessingError(
-          `Could not find the following identifier in expr propertyAccess: ${propertyAccessPath}`
+          `Could not find the following identifier in expr propertyAccess: "${propertyAccessPath}"`
         );
 
         return expr;
@@ -662,6 +658,7 @@ export namespace ProcessAST {
     return { valid: true, value };
   }
 }
+
 /*
 const str = `
 //let main = func () => 5;
@@ -678,7 +675,7 @@ type a = i32;
 type b = ((filename).a);
 type c[a] = a -> b;
 
-//type y = ((((i32)) -> ((f32)))).test.hey;
+//type y = ((((i32)) -> ((f64)))).test.hey;
 
 type lol[k] {
   a(i32),
@@ -715,7 +712,7 @@ group h {
 
 let a = h.f->g(34,62,5,73);
 `;*/
-const str = `
+const testCode = `
 group ns {
   type BinTree[T] {
     empty,
@@ -785,877 +782,6 @@ let distributivity1[A, B, C] = func (x: mult[A, add[B, C]]): add[mult[A, B], mul
       or(c) => Or->or(Tuple->tup(a, c))
     }
   };`;
-//const a = ProcessAST.processCode(str, 'filename');
-
-namespace Interpreter {
-  function deepCpy<T>(value: T): T {
-    if (value === null) return value;
-
-    switch (typeof value) {
-      case 'object':
-        if (Array.isArray(value)) return value.map((val) => deepCpy(val)) as T;
-
-        const newObj: any = {};
-        for (const [key, val] of Object.entries(value))
-          newObj[key] = deepCpy(val);
-        return newObj as T;
-      case 'undefined':
-      case 'symbol':
-      case 'boolean':
-      case 'number':
-      case 'bigint':
-      case 'string':
-      case 'function':
-      default:
-        return value;
-    }
-  }
-
-  type internalVal =
-    | { type: 'int'; value: number }
-    | { type: 'float'; value: number }
-    | {
-        type: 'expr';
-        expr: Parser.expression;
-        // TODO, needs some kind of closure, because when calling this value, it could already have WAY different closure values, because of very late lazy evaluation
-        closure: { [localIdent: string]: internalVal };
-      }
-    | {
-        type: 'complexType';
-        tyName: string;
-        discriminator: string;
-        values: internalVal[];
-      };
-
-  // TODO:
-  // interpreting preprocessing aka. remove all the type annotations, since they are useless for actual execution
-  // have a data type wrapper for `i32`, `f32` and complex types and save the structure of complex types
-  // (like its discriminator, to know what path to take in match exprs)
-  // replace all the identifiers by their value if possible (check for recursive things even between two different idents)
-  // replace all the const exprs by their value
-  export function interpret(
-    files: { [filename: string]: string },
-    mainFilename: string,
-    input: number
-  ): internalVal {
-    const timeIt: boolean = true;
-
-    if (timeIt) console.time('pre-execution time');
-
-    if (!(mainFilename in files))
-      throw new Error(
-        `The main file ${mainFilename} does not exist in the current files: $${JSON.stringify(
-          Object.keys(files)
-        )}`
-      );
-
-    const processedAST = ProcessAST.processCode(
-      files[mainFilename],
-      mainFilename
-    );
-
-    if (!processedAST.valid)
-      throw new Error(
-        `Invalid code in main file: ${mainFilename}. Errors: ${JSON.stringify(
-          processedAST.processingErrors
-        )}`
-      );
-
-    // #region recursively import files
-    const importedFiles: string[] = [mainFilename];
-
-    const toImportFiles: string[] = processedAST.value.imports.map(
-      ([filename, _]) => filename
-    );
-    while (toImportFiles.length !== 0) {
-      const toImportFile: string = toImportFiles.pop()!;
-
-      // do not import files twice so skip it
-      if (importedFiles.includes(toImportFile)) continue;
-      importedFiles.push(toImportFile);
-
-      if (!(toImportFile in files))
-        throw new Error(
-          `The imported file ${toImportFile} is missing from the files ${JSON.stringify(
-            Object.keys(files)
-          )}`
-        );
-
-      const processedFile = ProcessAST.processCode(
-        files[toImportFile],
-        toImportFile
-      );
-
-      // TODO better error, since it could be "recursively" imported from an imported file
-      if (!processedFile.valid)
-        throw new Error(
-          `Couldnt compile the imported file ${toImportFile} because of error: ${JSON.stringify(
-            processedFile.processingErrors
-          )}`
-        );
-
-      // imported files, must be imported at the outer scope aswell
-      toImportFiles.push(
-        ...processedFile.value.imports.map(([newFilename, _]) => newFilename)
-      );
-
-      // save the new values in the main `processedAST` var
-      processedAST.value.imports.push(...processedFile.value.imports);
-      processedAST.value.namespaceScopes.push(
-        ...processedFile.value.namespaceScopes
-      );
-      Object.assign(processedAST.value.letDict, processedFile.value.letDict);
-      Object.assign(processedAST.value.typeDict, processedFile.value.typeDict);
-    }
-    // #endregion
-
-    // now process all the imports, and import their imports if needed
-    const mainFilePath = `/${mainFilename}/main`;
-    if (!(mainFilePath in processedAST.value.letDict))
-      throw new Error(
-        `Missing "main" function in the main file ${mainFilename}.`
-      );
-
-    const mainFunc = processedAST.value.letDict[mainFilePath];
-    if (mainFunc.body.type !== 'func')
-      throw new Error(
-        `the "main" function in the main file must be a let statement with a body of type function.`
-      );
-    else if (mainFunc.body.parameters.length !== 1)
-      throw new Error(
-        `the "main" function must take exactly one parameter as input`
-      );
-
-    if (timeIt) console.timeEnd('pre-execution time');
-
-    // main :: T -> T, where T is either i32 or f32
-    let mainFuncType: 'int' | 'float' =
-      mainFunc.body.hasExplicitType &&
-      mainFunc.body.typeExpression.type === 'primitive-type' &&
-      (mainFunc.body.typeExpression.primitiveToken.lex === 'i32' ||
-        mainFunc.body.typeExpression.primitiveToken.lex === 'f32')
-        ? mainFunc.body.typeExpression.primitiveToken.lex === 'i32'
-          ? 'int'
-          : 'float'
-        : 'int';
-    let formattedInput: string = Math.abs(input).toString().toLowerCase();
-    if (formattedInput === Infinity.toString().toLowerCase())
-      formattedInput = 'inf';
-    if (!Number.isSafeInteger(Number(formattedInput))) mainFuncType = 'float';
-    const inputSign: number = Math.sign(input);
-
-    if (timeIt) console.time('raw execution time');
-    const result: internalVal = executeExpr(
-      {
-        type: 'expr',
-        expr: {
-          type: 'call',
-          arguments: [
-            {
-              argument: {
-                type: 'unary',
-                operator: inputSign === -1 ? '-' : '+',
-                operatorToken: 0 as never,
-                comments: 0 as never,
-                body: {
-                  type: 'literal',
-                  literalType: mainFuncType === 'int' ? 'i32' : 'f32',
-                  literalToken: {
-                    lex: formattedInput,
-                    ty: Parser.tokenType.literal,
-                    idx: -1
-                  },
-                  comments: 0 as never
-                }
-              },
-              delimiterToken: undefined
-            }
-          ],
-          function: {
-            type: 'identifier',
-            identifier: mainFilePath,
-            identifierToken: {} as never,
-            comments: 0 as never
-          },
-          openingBracketToken: 0 as never,
-          closingBracketToken: 0 as never,
-          comments: 0 as never
-        },
-        closure: {}
-      },
-      processedAST.value.letDict,
-      processedAST.value.typeDict
-    );
-    if (timeIt) console.timeEnd('raw execution time');
-
-    // TODO add f32 support
-    if (result.type !== mainFuncType)
-      throw new Error(
-        `User error: "main()" should return an ${mainFuncType} but got the result: ${JSON.stringify(
-          result
-        )}`
-      );
-
-    return result;
-  }
-
-  function executeExpr(
-    expr: internalVal,
-    lets: {
-      [path: string]: Parser.statementLet;
-    },
-    types: {
-      [path: string]: Parser.statementTypes;
-    }
-  ): internalVal {
-    // TODO just to debug rn
-    switch (expr.type) {
-      case 'expr':
-        break; // handle that below
-      case 'int':
-      case 'float':
-      case 'complexType':
-        return expr;
-      default:
-        throw new Error(
-          `Internal interpreting error: the expression type ${JSON.stringify(
-            expr
-          )} is unknown`
-        );
-    }
-
-    const parseExpr: Parser.expression = expr.expr;
-    const closure: {
-      [localIdent: string]: internalVal;
-    } = deepCpy(expr.closure); // TODO is deepCpy really necessary?
-
-    switch (parseExpr.type) {
-      case 'propertyAccess':
-        throw new Error(
-          `Internal interpreting error: should not have a property access when interpreting`
-        );
-      case 'func':
-        return expr;
-      case 'grouping':
-        return executeExpr(
-          { type: 'expr', expr: parseExpr.body, closure },
-          lets,
-          types
-        );
-      case 'literal':
-        // return the actual value
-        const literalVal: number =
-          parseExpr.literalToken.lex === 'inf'
-            ? Infinity
-            : Number(parseExpr.literalToken.lex);
-
-        if (parseExpr.literalType === 'i32') {
-          if (!Number.isSafeInteger(literalVal))
-            throw new Error(
-              `The number ${parseExpr.literalToken.lex} is not a valid integer.`
-            );
-          return { type: 'int', value: literalVal };
-        } else if (parseExpr.literalType === 'f32')
-          return {
-            type: 'float',
-            value: literalVal
-          };
-
-        throw new Error(
-          'Internal interpreting error: literal type must be `i32` or `f32`'
-        );
-      case 'unary':
-        const unaryOp: string = parseExpr.operator;
-        const bodyVal: internalVal = executeExpr(
-          { type: 'expr', expr: parseExpr.body, closure },
-          lets,
-          types
-        );
-        if (bodyVal.type === 'complexType' || bodyVal.type === 'expr')
-          throw new Error(
-            `User error: the unary operator "${unaryOp}" can only be used with numeric values.`
-          );
-
-        switch (unaryOp) {
-          case '+':
-            return bodyVal;
-          case '-':
-            bodyVal.value = -bodyVal.value;
-            return bodyVal;
-          case '~':
-            if (bodyVal.type !== 'int')
-              throw new Error(
-                `User error: can only do the unary "~" operation on i32 values`
-              );
-            bodyVal.value = ~bodyVal.value;
-            return bodyVal;
-          case '!':
-            if (bodyVal.type !== 'int')
-              throw new Error(
-                `User error: can only do the unary "!" operation on i32 values`
-              );
-            bodyVal.value = Number(!bodyVal.value);
-            return bodyVal;
-          default:
-            throw new Error(
-              `Internal error: unknown unary operato ${unaryOp} used in interpreting step`
-            );
-        }
-      case 'binary':
-        const binaryOp: string = parseExpr.operator;
-        const left: internalVal = executeExpr(
-          {
-            type: 'expr',
-            expr: parseExpr.leftSide,
-            closure
-          },
-          lets,
-          types
-        );
-        const right: internalVal = executeExpr(
-          {
-            type: 'expr',
-            expr: parseExpr.rightSide,
-            closure
-          },
-          lets,
-          types
-        );
-
-        if (
-          left.type === 'expr' ||
-          left.type === 'complexType' ||
-          right.type === 'expr' ||
-          right.type === 'complexType'
-        )
-          throw new Error(
-            `User error: can only do the binary "${binaryOp}" operation on numeric values`
-          );
-        else if (left.type !== right.type)
-          throw new Error(
-            `User error: can only do the binary "${binaryOp}" operation on equally typed values`
-          );
-
-        switch (binaryOp) {
-          case '+':
-            left.value = left.value + right.value;
-            return left;
-          case '-':
-            left.value = left.value - right.value;
-            return left;
-          case '*':
-            left.value = left.value * right.value;
-            return left;
-          case '/':
-            if (right.type === 'int' && right.value === 0)
-              throw new Error(`User error: divided by 0.`);
-            left.value = left.value / right.value;
-            if (left.type === 'int') left.value = Math.trunc(left.value);
-            return left;
-          case '**':
-            left.value = left.value ** right.value;
-            return left;
-          case '%':
-            if (left.type !== 'int')
-              throw new Error(`User error: can only use "%" with i32 values`);
-            left.value = left.value % right.value;
-            return left;
-          case '&':
-            if (left.type !== 'int')
-              throw new Error(`User error: can only use "&" with i32 values`);
-            left.value = left.value & right.value;
-            return left;
-          case '|':
-            if (left.type !== 'int')
-              throw new Error(`User error: can only use "|" with i32 values`);
-            left.value = left.value | right.value;
-            return left;
-          case '^':
-            if (left.type !== 'int')
-              throw new Error(`User error: can only use "^" with i32 values`);
-            left.value = left.value ^ right.value;
-            return left;
-          case '<<':
-            // TODO limits for size
-            if (left.type !== 'int')
-              throw new Error(`User error: can only use "<<" with i32 values`);
-            left.value = left.value << right.value;
-            return left;
-          case '>>':
-            // TODO limits for size
-            if (left.type !== 'int')
-              throw new Error(`User error: can only use ">>" with i32 values`);
-            left.value = left.value >> right.value;
-            return left;
-          case '==':
-            const eqAns: internalVal = {
-              type: 'int',
-              value: Number(left.value === right.value)
-            };
-            return eqAns;
-          case '!=':
-            const neqAns: internalVal = {
-              type: 'int',
-              value: Number(left.value !== right.value)
-            };
-            return neqAns;
-          case '>':
-            const gtAns: internalVal = {
-              type: 'int',
-              value: Number(left.value > right.value)
-            };
-            return gtAns;
-          case '<':
-            const smAns: internalVal = {
-              type: 'int',
-              value: Number(left.value < right.value)
-            };
-            return smAns;
-          case '>=':
-            const geAns: internalVal = {
-              type: 'int',
-              value: Number(left.value >= right.value)
-            };
-            return geAns;
-          case '<=':
-            const seAns: internalVal = {
-              type: 'int',
-              value: Number(left.value <= right.value)
-            };
-            return seAns;
-
-          default:
-            throw new Error(
-              `Internal error: unknown unary operato ${binaryOp} used in interpreting step`
-            );
-        }
-      case 'identifier':
-        if (parseExpr.identifier in closure)
-          return executeExpr(closure[parseExpr.identifier], lets, types);
-        // TODO actually execute and not just suspend for later??
-        // TODO, really? and why first lets and then types?
-        else if (parseExpr.identifier in lets)
-          return executeExpr(
-            // TODO HERE NOW TODO, yes, but this has an other closure!!
-            {
-              type: 'expr',
-              expr: lets[parseExpr.identifier].body,
-              closure
-            },
-            lets,
-            types
-          );
-        // TODO user error or internal error?
-        else {
-          return expr;
-        }
-        // yeah?
-        throw new Error(
-          `User error: identifier ${JSON.stringify(
-            parseExpr
-          )} must be in current scope (either in the current closure or from lets in general)`
-        );
-      case 'call':
-        // typeInstantiation, on i32/f32, on Function, on Identifier (could all be on the return of a internal complicated thing from e.g. a match expr)
-        // TODO yeah??
-        let toCall = executeExpr(
-          {
-            type: 'expr',
-            expr: parseExpr.function,
-            closure
-          },
-          lets,
-          types
-        );
-
-        // TODO
-        // while (toCall.type === 'expr' && toCall.expr.type === 'identifier')
-        //   toCall = executeExpr(
-        //     { type: 'expr', expr: toCall.expr, closure: closure },
-        //     lets,
-        //     types,
-        //     closure
-        //   );
-
-        // TODO
-        switch (toCall.type) {
-          case 'complexType':
-            // TODO, check if amount is right
-            if (!(toCall.tyName in types))
-              throw new Error(
-                `User/Internal error: the types ${toCall.tyName} does not exists as a complex type in the current scope`
-              );
-
-            const ty: Parser.statementTypes = types[toCall.tyName];
-
-            if (ty.type !== 'complex-type')
-              throw new Error(
-                `User error: the type ${toCall.tyName} is not a complex type in the current scope`
-              );
-
-            const internalComplexTypeIdx: number = ty.body.findIndex(
-              (val) =>
-                val.argument.identifierToken.lex ===
-                (toCall as any).discriminator
-            );
-
-            if (internalComplexTypeIdx === -1)
-              throw new Error(
-                `User error: the complex type pattern ${toCall.discriminator} is not part of the complex type ${ty.name}`
-              );
-
-            const expectedArgCount: number =
-              ty.body[internalComplexTypeIdx].argument.arguments.length;
-            const givenArgCount: number = parseExpr.arguments.length;
-            if (expectedArgCount !== givenArgCount)
-              throw new Error(
-                `User error: tried to instantiate type with too many arguments. Expected ${expectedArgCount} arguments, but got ${givenArgCount}`
-              );
-
-            toCall.values.push(
-              ...parseExpr.arguments.map((arg) =>
-                executeExpr(
-                  {
-                    type: 'expr',
-                    expr: arg.argument,
-                    closure
-                  },
-                  lets,
-                  types
-                )
-              )
-            );
-            return toCall;
-          case 'expr':
-            // TODO: what about executing ints??
-            if (toCall.expr.type !== 'func')
-              throw new Error(
-                `User error: can only call functions, but got: ${toCall.expr.type}`
-              );
-
-            //closure = deepCpy(closure) as never;
-            // TODO, deep copy needed
-            // TODO, if toCall is from different scope, then just remove the entire closure
-
-            const givenArgs = parseExpr.arguments.map<internalVal>((arg) => ({
-              type: 'expr',
-              expr: arg.argument,
-              closure
-            }));
-            const neededArgs = toCall.expr.parameters.map<
-              [string, internalVal | undefined]
-            >((param) => [
-              param.argument.identifierToken.lex,
-              param.argument.hasDefaultValue
-                ? {
-                    type: 'expr',
-                    expr: param.argument.defaultValue,
-                    closure
-                  }
-                : undefined
-            ]);
-
-            if (givenArgs.length > neededArgs.length)
-              throw new Error(
-                'User error: called a function with too many arguments'
-              );
-
-            // TODO still working??
-            // TODO DO NOT execute them, but let it be done in the lazy evaluation part!
-            const finalArgs: { [localIdent: string]: internalVal }[] = [];
-            for (let i = 0; i < neededArgs.length; ++i)
-              if (i < givenArgs.length)
-                finalArgs.push({
-                  // TODO NOT like this because of lazy evaluation and performance reasons!
-                  [neededArgs[i][0]]: givenArgs[i]
-                });
-              else if (neededArgs[i][1] !== undefined)
-                finalArgs.push({
-                  [neededArgs[i][0]]: neededArgs[i][1]!
-                });
-              else
-                throw new Error(
-                  'User error: called function with missing argument(s) which dont have default values'
-                );
-
-            // TODO, not sure if that is actually the closure, since the old values may not be accessible anymore actually
-            Object.assign(toCall.closure, ...finalArgs);
-            //console.log('CALLING', closure, finalArgs);
-
-            return executeExpr(
-              {
-                type: 'expr',
-                expr: toCall.expr.body,
-                // TODO too hacky
-                closure: { ...deepCpy(toCall.closure) }
-              },
-              lets,
-              types
-            );
-          case 'float':
-          case 'int':
-            // TODO: if equal to 0, return the first element, else return the second element
-            if (parseExpr.arguments.length !== 2)
-              throw new Error(
-                `User error: calling i32/f32 requires to have two expr but got: ${parseExpr.arguments.length}`
-              );
-
-            if (toCall.value === 0)
-              return executeExpr(
-                {
-                  type: 'expr',
-                  expr: parseExpr.arguments[0].argument,
-                  closure
-                },
-                lets,
-                types
-              );
-            else
-              return executeExpr(
-                {
-                  type: 'expr',
-                  expr: parseExpr.arguments[1].argument,
-                  closure
-                },
-                lets,
-                types
-              );
-          default:
-            throw new Error(
-              'Internal error: tried calling something with a wrong type'
-            );
-        }
-      case 'match':
-        const scrutinee: internalVal = executeExpr(
-          {
-            type: 'expr',
-            expr: parseExpr.scrutinee,
-            closure
-          },
-          lets,
-          types
-        );
-
-        if (scrutinee.type !== 'complexType')
-          throw new Error(
-            `User error: can only match complex types but got: ${scrutinee.type}`
-          );
-
-        const toExecLineIdx: number = parseExpr.body.findIndex(
-          (pattern) =>
-            !pattern.argument.isDefaultVal &&
-            pattern.argument.identifierToken.lex === scrutinee.discriminator
-        );
-        const defaultLineIdx: number = parseExpr.body.findIndex(
-          (pattern) => pattern.argument.isDefaultVal
-        );
-
-        const correctIdx: number =
-          toExecLineIdx !== -1
-            ? toExecLineIdx
-            : // fall back to the default case if no pattern matches rn
-            defaultLineIdx !== -1
-            ? defaultLineIdx
-            : -1;
-
-        if (correctIdx === -1)
-          throw new Error(
-            `User error: the pattern ${scrutinee.discriminator} is missing in the current match expression!`
-          );
-
-        // TODO new local closure/scope, just like when calling functions
-
-        const matchLine = parseExpr.body[correctIdx].argument;
-        const newCtxValueNames: string[] = matchLine.isDefaultVal
-          ? []
-          : matchLine.parameters.map((param) => param.argument.lex);
-
-        // allow having less values extracted than really needed
-        if (newCtxValueNames.length > scrutinee.values.length)
-          throw new Error(
-            `User error: invalid amount of values in scrutinee with the needed match body line. expected ${scrutinee.values.length}, but got ${newCtxValueNames.length}`
-          );
-
-        const doubleIdentifier: number = newCtxValueNames.findIndex(
-          (val, i) => i !== newCtxValueNames.lastIndexOf(val)
-        );
-
-        if (doubleIdentifier !== -1)
-          throw new Error(
-            `User error: wrote a match body line with twice the same identifier: ${newCtxValueNames[doubleIdentifier]}`
-          );
-
-        const updatedClosureValues: {
-          [localIdent: string]: internalVal;
-        } = {};
-        for (let i = 0; i < scrutinee.values.length; ++i) {
-          updatedClosureValues[newCtxValueNames[i]] = scrutinee.values[i];
-        }
-
-        // TODO
-        // Object.assign({}, updatedClosureValues);
-
-        // TODO
-        return executeExpr(
-          { type: 'expr', expr: matchLine.body, closure },
-          lets,
-          types
-        );
-      case 'typeInstantiation':
-        if (parseExpr.source.type !== 'identifier')
-          throw new Error(
-            'Internal error: type instantiations should always be from an (internal) identifier to an identifier.'
-          );
-
-        const complexType = types[parseExpr.source.identifier];
-        if (complexType === undefined)
-          throw new Error(
-            'Internal interpreting error: identifier should be accessible in current scope, but isnt'
-          );
-        else if (complexType.type !== 'complex-type')
-          // TODO, was that checked before? then it must be an internal error!
-          throw new Error(
-            'User error: tried type instantiation with a simple type.'
-          );
-
-        if (
-          !complexType.body.some(
-            (e) =>
-              e.argument.identifierToken.lex === parseExpr.propertyToken.lex
-          )
-        )
-          throw new Error(
-            `User error: tried to do type instatiation with property ${parseExpr.propertyToken.lex} which doesnt exist on current complex type: ${complexType.name}`
-          );
-
-        // TODO, is parseExpr.source.identifier === complexType.name??
-        return {
-          type: 'complexType',
-          tyName: parseExpr.source.identifier,
-          discriminator: parseExpr.propertyToken.lex,
-          values: []
-        };
-    }
-  }
-}
-
-log(
-  Interpreter.interpret(
-    {
-      test: `
-//let sum = func (zahl) => (zahl == 0)(zahl + sum(zahl - 1), 0);
-
-type Tree[T] {
-  E,
-  F(T, Tree[T], Tree[T])
-}
-
-let f = func (a, b) => b;
-
-let baum1 = Tree->F(5, Tree->F(3, Tree->E, Tree->E), Tree->E);
-
-let sumTree = func (tree) =>
-  match (tree) {
-    E => 0,
-    F(wert, left, right) => wert + sumTree(left) + sumTree(right)
-  };
-
-let a = func (a) => b(a, a+1);
-let b = func (a, b) => 1(a + 2, b + 2);
-let c = func (a) => func (b) => a;
-
-use lc;
-
-// lc.F(lc.fix(lc.F))(lc.three)
-// lc.y(lc.F)(lc.three)
-// lc.fact(lc.three)
-
-let main = func (n) => lc.churchIntToI32( lc.fact(lc.two) );
-      `,
-      lc: `
-    // booleans
-    let true = func (x) => func (y) => x;
-    let false = func (x) => func (y) => y;
-
-    // logical operations on booleans
-    let if = func (b) => func (x) => func (y) => b(x)(y);
-    let not = func (x) => x(false)(true);
-    let and = func (x) => func (y) => x(y)(x);
-    let or = func (x) => func (y) => x(x)(y);
-
-    // church numerals
-    let zero = func (f) => func (x) => x;
-    let one = func (f) => func (x) => f(x);
-    let two = func (f) => func (x) => f( f(x) );
-    let three = succ(two);
-    let four = succ(three);
-    let five = succ(four);
-
-    // successor/predecessor of church numerals
-    let succ = func (n) => func (f) => func (x) => f( n(f)(x) );
-    let pred = func (n) => func (f) => func (x) =>
-      n( func (g) => func (h) => h(g(f)) )( func (u) => x )( func (u) => u );
-    let pred2 = func (n) => // way slower
-      n( func (g) => func (k) => isZero( g(one) )( k )( succ( g(k) ) ) )( func (v) => zero )( zero );
-    let pred3 = func (n) => first( n(phi)(pair(zero)(zero)) );
-
-    // arithmetic on church numerals
-    let plus = func (n) => func (m) => func (f) => func (x) => m( f )( n(f)(x) );
-    let mult = func (n) => func (m) => func (f) => m( n(f) );
-    let pow = func (base) => func (exp) => exp(base);
-    let sub = func (n) => func (m) => m(pred)(n); // n - m with n > m, else 0
-
-    // arithmetic checks on church numerals
-    let isZero = func (n) => n(func (x) => false)(true);
-    // <=
-    let leq = func (n) => func (m) => isZero( sub(n)(m) );
-
-    // tuples and linked lists
-    // (a, b)
-    let pair = func (a) => func (b) => func (extract) => extract(a)(b);
-    let first = func (p) => p(true);
-    let second = func (p) => p(false);
-    let nil = func (x) => true;
-    let null = func (p) => p( func (x) => func (y) => false ); // checks if the p is a pair or nil
-    // (m, n) -> (n, n + 1)
-    let phi = func (x) => pair( second(x) )( succ( second(x) ) );
-
-    // combinators
-    let id = func (x) => x;
-    let fix = func (f) => f( fix(f) );
-    let y = func (f) => (func (x) => f(x(x)))(func (x) => f(x(x)));
-    let theta = (func(x)=>func(y)=>y(x(x(y))))(func(x)=>func(y)=>y(x(x(y))));
-
-    // SKI-combinator
-    let I = func (x) => x;
-    let K = func (x) => func (y) => x;
-    let S = func (x) => func (y) => func (z) => x(z)(y(z));
-
-    // BCKW-system
-    let B = func (x) => func (y) => func (z) => x(y(z));
-    let C = func (x) => func (y) => func (z) => x(z)(y);
-    let W = func (x) => func (y) => x(y)(y);
-
-    let U = func (x) => x(x);
-    let omega = U(U);
-
-    // factorial, but defined recursively
-    let fact = func (n) => isZero(n)( one )( mult(n)( fact( pred(n) ) ) );
-    let F = func (f) => func (n) => isZero(n)(one)(mult(n)(f(pred(n))));
-
-    // gaussian sum
-    let sum = func (n) => isZero(n)( n )( plus(n)( sum (pred(n)) ) );
-
-    // lc to bll and vice versa
-    let boolToI32 = func (bool) => bool(1)(0);
-    let churchIntToI32 = func (uint) => uint(func (x) => x + 1)(0);
-    let i32ToChurchInt = func (n) => (n <= 0)(succ( i32ToChurchInt(n - 1) ), zero);
-    `
-    },
-    'test',
-    6
-  )
-);
 
 /*
 const result = Interpreter.interpret(
@@ -1766,24 +892,6 @@ const result = Interpreter.interpret(
 );
 //log(result);
 */
-
-// console.log(
-//   Interpreter.interpret(
-//     `
-// let main = func (x) => - - x;
-
-// group h {
-//   type f {
-//     g(i32, i32, i32, i32)
-//   }
-// }
-
-// let a = h.f->g(34,62,5,73);
-// `,
-//     3,
-//     `that`
-//   )
-// );
 
 // TODO propertyToken on a funcType does not make sense and should error
 

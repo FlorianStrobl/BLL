@@ -3,35 +3,36 @@ export namespace Lexer {
   // #region valid lexemes signatures
   const keywords: string[] = [
     // statements:
-    'use', // imports all identifiers from other file (either local file, or global file)
-    'group', // identifier as wrapper around identifiers
-    'let', // binds a lambda term to an identifier (can be generic)
-    'type', // binds a type (alias or complex) to an identifier (can be generic)
+    'use', // imports all identifiers from other file (either from the local files, or global file)
+    'group', // identifier as wrapper around identifiers which helps readability
+    'let', // binds a lambda term to an identifier and can be generic
+    'type', // binds a type (alias or complex) to an identifier and can be generic
 
     // expressions:
     'func', // function expression
     'match', // expression to unwrap values of complex-types
 
     // types:
-    'i32', // signed 32 bit integer in two's complement
-    'f32', // single precision 32 bit float from the IEEE754-2008 standard
+    'i32', // signed 32 bit integer using two's complement for decoding
+    'f64', // single precision 32 bit float being conform to the IEEE754-2008 standard
 
     // literals:
-    'inf', // f32 infinity
-    'nan' // f32 not a number
+    'inf', // infinity of type f64
+    'nan' // not a number of type f64
   ];
 
   const symbols: string[] = [
-    // only for same primitive types
-    '+', // add (binary, unary, i32/f32)
-    '-', // sub (binary, unary, i32/f32)
-    '*', // multiplication (binary, i32/f32)
-    '/', // divide (binary, f32/for i32: rounding down, TODO what about div by 0 on i32: make it undefined behaviour)
-    '**', // exponentiation (binary, i32/f32)
-    //'***', // root or log (binary, i32/f32)
-    '!', // logical not (unary, 0 -> 1, any -> 0, i32)
+    // arithmetic operators which work for floats and integers
+    '+', // addition (unary or binary, i32/f64)
+    '-', // subtraction (unary or binary, i32/f64)
+    '*', // multiplication (binary, i32/f64)
+    '/', // division (binary, f64/i32)
+    // note for i32 division: crashes the program if the dividend is 0
+    '**', // exponentiation (binary, i32/f64)
 
-    // only ints
+    // arithmetic, logical and shift operators which work on integers
+    '!', // logical not (unary, i32)
+    // note on its behaviour: !0 == 1, !nonzeroInteger ==  0
     '%', // remainder (binary, i32)
     '~', // not (unary, i32)
     '&', // and (binary, i32)
@@ -41,12 +42,12 @@ export namespace Lexer {
     '>>', // logical right shift (binary, i32)
 
     // compare
-    '==', // equal (binary, i32/f32)
-    '!=', // not equal (binary, i32/f32)
-    '<=', // less than or equal (binary, i32/f32)
-    '>=', // greater than or equal (binary, i32/f32)
-    '<', // less than (binary, i32/f32)
-    '>', // greater than (binary, i32/f32)
+    '==', // equal (binary, i32/f64)
+    '!=', // not equal (binary, i32/f64)
+    '<=', // less than or equal (binary, i32/f64)
+    '>=', // greater than or equal (binary, i32/f64)
+    '<', // less than (binary, i32/f64)
+    '>', // greater than (binary, i32/f64)
 
     // misc
     '=', // assigments of values to identifiers in let and type statements
@@ -57,17 +58,18 @@ export namespace Lexer {
     ',', // seperator for arguments in funcs or calling funcs (with trailing commas too)
     '.', // accessing identifiers from groups
 
-    '(', // grouping, func arguments/parameters/calls, complex type line
+    '(', // grouping, func arguments/parameters/calls or complex type line
     ')',
-    '{', // groups or complex type statements, or match expressions
+    '{', // groups, complex type statements or match expressions
     '}',
-    '[', // generic type annotations for lets and types
+    '[', // generic type annotations for let and type statements
     ']'
   ];
 
   const stringStarts: string[] = ["'", '"', '`'];
   const stringEscapeSymbol: string = '\\'; // only valid inside strings
   const escapableStringChars: string[] = ['\\', 'n', 't', 'r', 'u'];
+
   const hexDigits: string[] = [
     '0',
     '1',
@@ -94,16 +96,22 @@ export namespace Lexer {
   ];
 
   const validChars: string[] = [
+    // whitespaces:
     ' ',
     '\t',
     '\n',
     '\r',
     '_',
+    // A-Z:
     ...new Array(26).fill('').map((_, i) => String.fromCharCode(65 + i)),
+    // a-z:
     ...new Array(26).fill('').map((_, i) => String.fromCharCode(97 + i)),
+    // 0-9:
     ...new Array(10).fill('').map((_, i) => i.toString()),
+    // symbols:
     ...'+-*/%&|^~=!><;:,.(){}[]'.split(''),
-    ...stringStarts // because of error messages
+    // because of error messages:
+    ...stringStarts
   ];
 
   const maxSymbolLen: number = symbols.reduce(
@@ -120,11 +128,11 @@ export namespace Lexer {
 
   // #region types, interfaces and enums
   export interface token {
-    // raw character sequence in the src code, matching a token pattern
-    lex: string;
-    ty: tokenType;
+    // lexeme: raw character sequence in the src code, matching a token pattern
+    l: string;
+    t: tokenType;
     // index of the lexeme in the src code
-    idx: number;
+    i: number;
   }
 
   export enum tokenType {
@@ -188,7 +196,7 @@ export namespace Lexer {
         invalidIdentifierIdx: number;
       };
 
-  export type lexerError = { lex: string; idx: number } & (
+  export type lexerError = { l: string; i: number } & (
     | { type: 'invalid chars' }
     | {
         type: 'invalid chars in comment';
@@ -217,12 +225,14 @@ export namespace Lexer {
   // #endregion
 
   // #region helper functions
+  // checks if the string matches with the toMatch variable or one of its variants
   function matches(string: string, toMatch: string | string[]): boolean {
     return (
       string === toMatch || (Array.isArray(toMatch) && toMatch.includes(string))
     );
   }
 
+  // checks if the character matches the given ascii index ranges
   function matchRange(char: string, fromChar: string, toChar: string): boolean {
     return (
       fromChar.charCodeAt(0) <= char.charCodeAt(0) &&
@@ -239,9 +249,6 @@ export namespace Lexer {
   // #region consume functions
   // assert: an identifier is at idx
   function consumeWord(code: string, idx: number): nextToken {
-    // optimization: exclude most identifiers from the isKeyword check later
-    const canBeKeyword: boolean = firstCharOfKeywords.includes(code[idx]);
-
     // increase the index to the maximum possible valid identifier length
     let endIdx: number = idx;
     for (
@@ -256,17 +263,19 @@ export namespace Lexer {
 
     const identifier: string = code.substring(idx, endIdx);
 
+    // optimization: exclude most identifiers to be a keyword
+    const canBeKeyword: boolean = firstCharOfKeywords.includes(code[idx]);
     return {
       type: 'token',
       value: {
-        lex: identifier,
-        ty:
+        l: identifier,
+        t:
           canBeKeyword && keywords.includes(identifier)
             ? identifier === 'nan' || identifier === 'inf'
               ? tokenType.literal
               : tokenType.keyword
             : tokenType.identifier,
-        idx
+        i: idx
       }
     };
   }
@@ -302,8 +311,8 @@ export namespace Lexer {
         type: 'error',
         value: {
           type: 'invalid operator',
-          lex: biggestSubstr,
-          idx,
+          l: biggestSubstr,
+          i: idx,
           potentialOperators: symbols.filter((symbol) =>
             symbol.startsWith(biggestSubstr)
           )
@@ -314,9 +323,9 @@ export namespace Lexer {
     return {
       type: 'token',
       value: {
-        lex: code.substring(idx, potentialSymEndIdx),
-        ty: tokenType.symbol,
-        idx
+        l: code.substring(idx, potentialSymEndIdx),
+        t: tokenType.symbol,
+        i: idx
       }
     };
   }
@@ -324,10 +333,10 @@ export namespace Lexer {
   // assertion: a numeric literal is at idx
   // TODO what about having an identifier directly behind the numeric literal?
   function consumeNumericLiteral(code: string, idx: number): nextToken {
-    if (!(idxValid(idx, code) && matchRange(code[idx], '0', '9')))
-      throw new Error(
-        'Internal lexer error: assertions for lexing a numeric literal where not met.'
-      );
+    // if (!(idxValid(idx, code) && matchRange(code[idx], '0', '9')))
+    //   throw new Error(
+    //     'Internal lexer error: assertions for lexing a numeric literal where not met.'
+    //   );
 
     const errors: numericLiteralError[] = [];
     let endIdx: number = idx;
@@ -335,7 +344,7 @@ export namespace Lexer {
     // lexe greedily all characters from the alphabet of the given type
     function maxDigitsIdx(
       startIdx: number,
-      type: 'dec' | 'bin' | 'oct' | 'hex'
+      type: 'dec' | 'bin' | 'oct' | 'hex' = 'dec'
     ): number {
       if (!idxValid(startIdx, code))
         throw new Error(
@@ -344,6 +353,7 @@ export namespace Lexer {
 
       let lastCharUnderscore: boolean = false;
 
+      // cant start with underscores
       if (code[startIdx] === '_')
         errors.push({
           type: 'numeric literal part started with underscore',
@@ -388,7 +398,7 @@ export namespace Lexer {
         lastCharUnderscore = matches(code[endIdx], '_');
       }
 
-      // if ended with underscore, bad TODO
+      // can't end with underscore too
       if (idxValid(endIdx - 1, code) && code[endIdx - 1] === '_')
         errors.push({
           type: 'part of numeric literal ended with underscore',
@@ -429,12 +439,12 @@ export namespace Lexer {
         if (idxValid(endIdx, code) && matchRange(code[endIdx], '0', '9')) {
           // => lexe the next numeric literal (potentially with (the same) errors)
           // merge the lexemes and return the error
-          const nextToken = lexeNextToken(code, endIdx);
+          const nextToken: nextToken | 'eof' = lexeNextToken(code, endIdx);
 
           if (
             nextToken === 'eof' ||
             (nextToken.type === 'token' &&
-              nextToken.value.ty !== tokenType.literal) ||
+              nextToken.value.t !== tokenType.literal) ||
             (nextToken.type === 'error' &&
               nextToken.value.type !== 'invalid numeric literal')
           )
@@ -452,7 +462,7 @@ export namespace Lexer {
             type: 'error',
             value: {
               type: 'invalid numeric literal',
-              lex: code.substring(idx, endIdx) + nextToken.value.lex,
+              l: code.substring(idx, endIdx) + nextToken.value.l,
               errors: [
                 ...errors,
                 // TODO idxs not as array
@@ -462,7 +472,7 @@ export namespace Lexer {
                 },
                 ...newErrors
               ],
-              idx
+              i: idx
             }
           };
         }
@@ -476,6 +486,7 @@ export namespace Lexer {
       let firstDotIdx: number = -1;
       let firstEIdx: number = -1;
 
+      // consume all the following dots and Es even if consumed some already
       out: while (idxValid(endIdx, code)) {
         // TODO, what if already had a `.` or an `e`
         switch (code[endIdx]) {
@@ -494,6 +505,7 @@ export namespace Lexer {
               });
             } else firstDotIdx = endIdx;
 
+            // "."
             endIdx++;
 
             if (idxValid(endIdx, code)) {
@@ -517,6 +529,7 @@ export namespace Lexer {
               });
             } else firstEIdx = endIdx;
 
+            // "e"
             endIdx++;
 
             if (idxValid(endIdx, code)) {
@@ -545,31 +558,31 @@ export namespace Lexer {
         type: 'error',
         value: {
           type: 'invalid numeric literal',
-          lex: code.substring(idx, endIdx),
+          l: code.substring(idx, endIdx),
           errors,
-          idx
+          i: idx
         }
       };
 
     return {
       type: 'token',
       value: {
-        lex: code.substring(idx, endIdx),
-        ty: tokenType.literal,
-        idx
+        l: code.substring(idx, endIdx),
+        t: tokenType.literal,
+        i: idx
       }
     };
   }
 
   // assert: a comment is at idx
   function consumeComment(code: string, idx: number): nextToken {
-    if (
-      !(idxValid(idx, code) && matches(code[idx], '/')) ||
-      !(idxValid(idx + 1, code) && matches(code[idx + 1], ['*', '/']))
-    )
-      throw new Error(
-        'Internal lexer error: assertions for calling consumeComment where not met'
-      );
+    // if (
+    //   !(idxValid(idx, code) && matches(code[idx], '/')) ||
+    //   !(idxValid(idx + 1, code) && matches(code[idx + 1], ['*', '/']))
+    // )
+    //   throw new Error(
+    //     'Internal lexer error: assertions for calling consumeComment where not met'
+    //   );
 
     // two types: "/" and "*"
     const isType1: boolean = code[idx + 1] === '/';
@@ -603,14 +616,14 @@ export namespace Lexer {
         type: 'error',
         value: {
           type: 'eof in /* comment',
-          lex: code.substring(idx, code.length),
-          idx
+          l: code.substring(idx, code.length),
+          i: idx
         }
       };
 
     return {
       type: 'token',
-      value: { lex: code.substring(idx, i), ty: tokenType.comment, idx }
+      value: { l: code.substring(idx, i), t: tokenType.comment, i: idx }
     };
 
     // any char should be allowed inside a comment?
@@ -680,15 +693,15 @@ export namespace Lexer {
     if (!idxValid(i, code))
       return {
         type: 'error',
-        value: { type: 'eof in string', lex: string, idx }
+        value: { type: 'eof in string', l: string, i: idx }
       };
     else if (escapeErrorIdxs.length !== 0)
       return {
         type: 'error',
         value: {
           type: 'used escape symbol not properly in string',
-          lex: string,
-          idx,
+          l: string,
+          i: idx,
           idxs: escapeErrorIdxs
         }
       };
@@ -697,8 +710,8 @@ export namespace Lexer {
         type: 'error',
         value: {
           type: 'used escape symbol with \\u not properly in string',
-          lex: string,
-          idx,
+          l: string,
+          i: idx,
           idxs: escapeErrorU
         }
       };
@@ -707,15 +720,15 @@ export namespace Lexer {
         type: 'error',
         value: {
           type: 'invalid character in string',
-          lex: string,
-          idx,
+          l: string,
+          i: idx,
           idxs: invalidSymbolIdxs
         }
       };
 
     return {
       type: 'error',
-      value: { type: 'string used', lex: string, idx }
+      value: { type: 'string used', l: string, i: idx }
     };
   }
   // #endregion
@@ -750,7 +763,7 @@ export namespace Lexer {
       return consumeNumericLiteral(code, idx);
 
     // matches the beginning of a comment
-    // must be checked before consumeSymbol()
+    // must be checked before consumeSymbol() since `/` is also a symbol
     if (
       matches(code[idx], '/') &&
       idxValid(idx + 1, code) &&
@@ -761,7 +774,7 @@ export namespace Lexer {
     // matches the beginning of a symbol
     if (matches(code[idx], firstCharOfSymbols)) return consumeSymbol(code, idx);
 
-    // lexe strings for detailed error messages
+    // matches string start: lexe them for detailed error messages
     if (matches(code[idx], stringStarts)) return consumeString(code, idx);
 
     // the current char does not match any valid token start
@@ -774,19 +787,20 @@ export namespace Lexer {
       );
 
     // get all the invalid chars behind the current invalid char by its end index
-    let endIdx = idx;
+    let endInvCharsIdx: number = idx;
     for (
       ;
-      idxValid(endIdx, code) && !matches(code[endIdx], validChars);
-      ++endIdx
+      idxValid(endInvCharsIdx, code) &&
+      !matches(code[endInvCharsIdx], validChars);
+      ++endInvCharsIdx
     );
 
     return {
       type: 'error',
       value: {
         type: 'invalid chars',
-        lex: code.substring(idx, endIdx),
-        idx
+        l: code.substring(idx, endInvCharsIdx),
+        i: idx
       }
     };
   }
@@ -802,8 +816,7 @@ export namespace Lexer {
       if (nToken === 'eof') return;
 
       const gotNewIdx: boolean =
-        idx !== (idx = nToken.value.idx + nToken.value.lex.length);
-
+        idx !== (idx = nToken.value.i + nToken.value.l.length);
       if (!gotNewIdx)
         throw new Error('Internal lexer error: could not lexe the next token.');
 
@@ -839,61 +852,62 @@ export namespace Lexer {
       : { valid: false, tokens, lexerErrors };
   }
   // #endregion
+}
+// just for testing purposes
+export function debugLexer(
+  times: number = 2,
+  timerAndIO: boolean = true,
+  example: boolean = false
+): boolean {
+  const timerName: string = 'Lexer tests';
 
-  export function debugLexer(
-    times: number = 2,
-    timerAndIO: boolean = true,
-    example: boolean = false
-  ): boolean {
-    const timerName: string = 'Lexer tests';
+  const x = Lexer.lexe('let xyz: i32 = 52 == 0x5a; // test');
+  if (times !== 0 && timerAndIO && example)
+    console.log(`[Debug Lexer] Example tokens: '${JSON.stringify(x)}'`);
 
-    const x = Lexer.lexe('let xyz: i32 = 52 == 0x5a; // test');
-    if (times !== 0 && timerAndIO && example)
-      console.log(`[Debug Lexer] Example tokens: '${JSON.stringify(x)}'`);
+  let correct: boolean = false;
 
-    let correct: boolean = false;
-
-    for (let i = 0; i < times; ++i) {
-      // #region tests
-      const mustLexe: [string, number][] = [
-        // TODO, should lexe those?
-        [`5let`, 2],
-        [`5test`, 2],
-        ['0b1F', 2],
-        ['0xAx', 2],
-        [`09A4`, 2],
-        ['0A', 2],
-        ['0X', 2],
-        ['0B', 2],
-        ['0O', 2],
-        ['0E0', 1],
-        ['03434a35', 2],
-        ['0x0243F02F_34FA_a', 1],
-        ['nan', 1],
-        ['inf', 1],
-        ['//', 1],
-        ['// ', 1],
-        ['/**/', 1],
-        ['/**/ ', 1],
-        ['// 😀', 1],
-        ['/*😀*/', 1],
-        ['//test\n//other comment', 2],
-        ['// ?', 1],
-        ['.5', 2],
-        [
-          'a id+a _a___b3c_ + ++ -+ => 3 0.4e2 0.5e-2 0xff 0b10101 0o4025 /**comment / with * **/ let keywords // test comment ??',
-          21
-        ],
-        ['', 0],
-        ['let x = (func (a) => a)(3+1);', 17],
-        [
-          `
+  for (let i = 0; i < times; ++i) {
+    // #region tests
+    const mustLexe: [string, number][] = [
+      // TODO, should lexe those?
+      [`5let`, 2],
+      [`5test`, 2],
+      ['0b1F', 2],
+      ['0xAx', 2],
+      [`09A4`, 2],
+      ['0A', 2],
+      ['0X', 2],
+      ['0B', 2],
+      ['0O', 2],
+      ['0E0', 1],
+      ['03434a35', 2],
+      ['0x0243F02F_34FA_a', 1],
+      ['nan', 1],
+      ['inf', 1],
+      ['//', 1],
+      ['// ', 1],
+      ['/**/', 1],
+      ['/**/ ', 1],
+      ['// 😀', 1],
+      ['/*😀*/', 1],
+      ['//test\n//other comment', 2],
+      ['// ?', 1],
+      ['.5', 2],
+      [
+        'a id+a _a___b3c_ + ++ -+ => 3 0.4e2 0.5e-2 0xff 0b10101 0o4025 /**comment / with * **/ let keywords // test comment ??',
+        21
+      ],
+      ['', 0],
+      ['let x = (func (a) => a)(3+1);', 17],
+      [
+        `
 let num: i32 /* signed */ = + 5.5_3e+2; // an integer
 /**/`,
-          11
-        ],
-        [
-          `
+        11
+      ],
+      [
+        `
 use std;
 // use my_libs/./wrong_lib/../math_lib/./my_math_lib.bl l;
 
@@ -906,17 +920,17 @@ let num4 = 0o7;
 
 // example code
 let a: i32 = IO.in[i32](0); // gets an i32 from the console
-let b: i32 = Math.sq(a); // a ** 2, TO DO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f32]
+let b: i32 = Math.sq(a); // a ** 2, TO DO compiler/interpreter must deduce that Math.sq[i32] is called and not Math.sq[f64]
 let c: i32 = IO.out(b); // prints b and assigneds b to c
 let a: i32 = 3 == 3;
 
 let d = func (x: i32) => 5_4.1e-3;
 // 5, 5.1e2,  5., 5e, 5e., 5.e, 5.1e, 5e1., 5e1.2
 `,
-          90
-        ],
-        [
-          `;
+        90
+      ],
+      [
+        `;
 /**//**/
 /**/5
 /**/let
@@ -968,250 +982,249 @@ _
 // "string"
 
 ;`,
-          132
-        ],
-        ['let x: i32 = 5;', 7],
-        ['', 0],
-        [' ', 0],
-        [' \t\n\r', 0],
-        ['5/**/identifier;3++hey//', 9],
-        [';', 1],
-        ['a', 1],
-        ['_', 1],
-        ['let', 1],
-        ['identifier_', 1],
-        ['id1_ id_2 _id3', 3],
-        ['//', 1],
-        [`*/`, 2],
-        ['/**/', 1],
-        ['.5', 2],
-        [`/regexp/`, 3],
-        ['0', 1],
-        ['5', 1],
-        ['5.3', 1],
-        ['5.3e3', 1],
-        ['5.3e+3', 1],
-        ['5.3e-3', 1],
-        ['5e3', 1],
-        ['0b0', 1],
-        ['0b01', 1],
-        ['0x0', 1],
-        ['0x0123456789abcdefABCDEF', 1],
-        ['0o0', 1],
-        ['0o01234567', 1],
-        [`0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e+0_1_2_3`, 1],
-        [`_0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e-0_1_2_3`, 3],
-        ['~', 1],
-        ['!', 1],
-        ['%', 1],
-        ['^', 1],
-        ['&', 1],
-        ['*', 1],
-        ['(', 1],
-        [')', 1],
-        ['_', 1],
-        ['-', 1],
-        ['+', 1],
-        ['=', 1],
-        ['[', 1],
-        ['{', 1],
-        [']', 1],
-        ['}', 1],
-        ['|', 1],
-        [';', 1],
-        [':', 1],
-        ['/', 1],
-        ['.', 1],
-        ['>', 1],
-        [',', 1],
-        ['<', 1],
-        ['0xa+3', 3],
-        ['0xE+3', 3],
-        ['0xaE+3', 3],
-        ['03_4.2', 1],
-        ['0xeee', 1],
-        ['534e354', 1],
-        ['03_3.0_2', 1],
-        ['0.0e-0', 1],
-        ['0e0', 1],
+        132
+      ],
+      ['let x: i32 = 5;', 7],
+      ['', 0],
+      [' ', 0],
+      [' \t\n\r', 0],
+      ['5/**/identifier;3++hey//', 9],
+      [';', 1],
+      ['a', 1],
+      ['_', 1],
+      ['let', 1],
+      ['identifier_', 1],
+      ['id1_ id_2 _id3', 3],
+      ['//', 1],
+      [`*/`, 2],
+      ['/**/', 1],
+      ['.5', 2],
+      [`/regexp/`, 3],
+      ['0', 1],
+      ['5', 1],
+      ['5.3', 1],
+      ['5.3e3', 1],
+      ['5.3e+3', 1],
+      ['5.3e-3', 1],
+      ['5e3', 1],
+      ['0b0', 1],
+      ['0b01', 1],
+      ['0x0', 1],
+      ['0x0123456789abcdefABCDEF', 1],
+      ['0o0', 1],
+      ['0o01234567', 1],
+      [`0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e+0_1_2_3`, 1],
+      [`_0_0_1_2_3_4_5_6_7_8_9_3.0_1_2_3e-0_1_2_3`, 3],
+      ['~', 1],
+      ['!', 1],
+      ['%', 1],
+      ['^', 1],
+      ['&', 1],
+      ['*', 1],
+      ['(', 1],
+      [')', 1],
+      ['_', 1],
+      ['-', 1],
+      ['+', 1],
+      ['=', 1],
+      ['[', 1],
+      ['{', 1],
+      [']', 1],
+      ['}', 1],
+      ['|', 1],
+      [';', 1],
+      [':', 1],
+      ['/', 1],
+      ['.', 1],
+      ['>', 1],
+      [',', 1],
+      ['<', 1],
+      ['0xa+3', 3],
+      ['0xE+3', 3],
+      ['0xaE+3', 3],
+      ['03_4.2', 1],
+      ['0xeee', 1],
+      ['534e354', 1],
+      ['03_3.0_2', 1],
+      ['0.0e-0', 1],
+      ['0e0', 1],
 
-        [
-          `type test {
-        t1,
-        t2(a.x)
-      }
-
-      type a {
-        x(i32, f32, i32)
-      }
-
-      type optional[t] {
-        None,
-        Some(t)
-      }
-
-      let f = func (x: test): optional[a] =>
-        match(x): optional[a] {
-          test.t1 => optional.None;
-          test.t2(aa, bb, cc) => optional.Some(a.x(aa, bb, cc));
-        };`,
-          99
-        ],
-        ...symbols.map((e: string) => [e, 1] as [string, number]),
-        ...keywords.map((e: string) => [e, 1] as [string, number])
-      ];
-      const mustNotLexe: [string, number][] = [
-        ['5E', 1],
-        ['0x', 1],
-        ['0b', 1],
-        ['0o', 1],
-        ['0o ', 1],
-        ['0x ', 1],
-        ['0b ', 1],
-        ['0789_234_52._3_e3', 1],
-        ['0789_234_52.3e3.3e2.', 1],
-        ['4___2._3_', 1],
-        ['4___2.__3_', 1],
-        ['4___2._3__', 1],
-        ['0x_0243F02F_34FA_a', 1],
-        ['0x0243F02F_34FA_a_', 1],
-        ['0b10230x1', 1],
-        ['/*/', 1],
-        ['/*/ ', 1],
-        ['/*f/', 1],
-        ['/**f/', 1],
-        ['0xlk', 1],
-        ['😀😀😀 3__4', 2],
-        ['0b12', 1],
-        ['0o78', 1],
-        ['0o79', 1],
-        ['0oA', 1],
-        ['0bA', 1],
-        ['03_.2', 1],
-        ['03._2', 1],
-        ['03.0__2', 1],
-        ['03__3.0_2', 1],
-        ['"string"', 1],
-        ['5.3.2', 1],
-        ['"😀"', 1],
-        ['"""', 2],
-        [`\\`, 1],
-        [`'`, 1],
-        [`\``, 1],
-        [`"`, 1],
-        [`?`, 1],
-        [`@`, 1],
-        [`#`, 1],
-        [`$`, 1],
-        [`0_3_.0_3e+0_3`, 1],
-        [`😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼`, 9],
-        [`5e1.`, 1],
-        [`5e1.2`, 1],
-        [`5.1e`, 1],
-        [`5.e`, 1],
-        [`5e.`, 1],
-        [`5e`, 1],
-        [`0b12A3`, 1],
-        [`0xP`, 1],
-        [`0o99A`, 1],
-        ['/*', 1],
-        ['/* ', 1],
-        ['/**', 1],
-        ['/** ', 1],
-        ['/*/', 1],
-        ['/* * /', 1],
-        ['/*** /', 1],
-        ['5.', 1],
-        ['5_', 1],
-        ['5_3_', 1],
-        ['5__3', 1],
-        ['5e', 1],
-        ['5e+', 1],
-        ['5e3.6', 1],
-        ['5e-', 1],
-        ['0x', 1],
-        ['0o', 1],
-        ['0b', 1],
-        ['0b123', 1],
-        ['0o178', 1],
-        ['0_.0e-0', 1],
-        ['0_.e-0', 1],
-        ['0.e-0', 1],
-        ['0.0e-', 1],
-        ['0.0e+', 1],
-        ['0.0e', 1],
-        ['0.e', 1],
-        ['0.e0', 1],
-        ['\\u1234', 1],
-        ['\\uFFfF', 1],
-        ['\\uxy', 1],
-        ['51.e-3', 1],
-        ['0o012345678', 1],
-        ['"', 1],
-        ['5..3', 1],
-        ['5e1e2', 1], // TODO, why?
-        ["'\\u4zzz'", 1],
-        ["'\\u '", 1],
-        ["'\\t'", 1],
-        ["'", 1],
-        ["''", 1],
-        ['``', 1],
-        ['""', 1],
-        ["'\\\\'", 1],
-        ["'\\\\\\'", 1],
-        [
-          "'\
-      [hey'",
-          1
-        ],
-        ['5e_4', 1]
-      ];
-
-      if (timerAndIO) console.time(timerName);
-
-      let successfullTests: number = 0;
-      for (const code of mustLexe) {
-        const lexed = Lexer.lexe(code[0]);
-        if (lexed.valid === false || lexed.tokens.length !== code[1])
-          console.error(
-            'error in mustLexe, invalid lexer for code:',
-            code[0],
-            lexed,
-            lexed.tokens.length
-          );
-        else successfullTests++;
-      }
-      for (const code of mustNotLexe) {
-        const lexed = Lexer.lexe(code[0]);
-        if (lexed.valid === true || lexed.lexerErrors.length !== code[1])
-          console.error(
-            'error in mustNotLexe, invalid lexer for code:',
-            code[0],
-            lexed
-          );
-        else successfullTests++;
-      }
-      if (timerAndIO) console.timeEnd(timerName);
-
-      correct = successfullTests === mustLexe.length + mustNotLexe.length;
-      if (timerAndIO && correct) {
-        console.debug(
-          `Lexer successfully lexed ${successfullTests} tests and ${
-            mustLexe.map((e) => e[0]).join('').length +
-            mustNotLexe.map((e) => e[0]).join('').length
-          } characters.`
-        );
-      } else if (!correct)
-        console.error(
-          `${
-            mustLexe.length + mustNotLexe.length - successfullTests
-          } failed tests in the Lexer-stage!`
-        );
-      // #endregion
+      [
+        `type test {
+      t1,
+      t2(a.x)
     }
 
-    return correct;
+    type a {
+      x(i32, f64, i32)
+    }
+
+    type optional[t] {
+      None,
+      Some(t)
+    }
+
+    let f = func (x: test): optional[a] =>
+      match(x): optional[a] {
+        test.t1 => optional.None;
+        test.t2(aa, bb, cc) => optional.Some(a.x(aa, bb, cc));
+      };`,
+        99
+      ]
+      //...symbols.map((e: string) => [e, 1] as [string, number]),
+      //...keywords.map((e: string) => [e, 1] as [string, number])
+    ];
+    const mustNotLexe: [string, number][] = [
+      ['5E', 1],
+      ['0x', 1],
+      ['0b', 1],
+      ['0o', 1],
+      ['0o ', 1],
+      ['0x ', 1],
+      ['0b ', 1],
+      ['0789_234_52._3_e3', 1],
+      ['0789_234_52.3e3.3e2.', 1],
+      ['4___2._3_', 1],
+      ['4___2.__3_', 1],
+      ['4___2._3__', 1],
+      ['0x_0243F02F_34FA_a', 1],
+      ['0x0243F02F_34FA_a_', 1],
+      ['0b10230x1', 1],
+      ['/*/', 1],
+      ['/*/ ', 1],
+      ['/*f/', 1],
+      ['/**f/', 1],
+      ['0xlk', 1],
+      ['😀😀😀 3__4', 2],
+      ['0b12', 1],
+      ['0o78', 1],
+      ['0o79', 1],
+      ['0oA', 1],
+      ['0bA', 1],
+      ['03_.2', 1],
+      ['03._2', 1],
+      ['03.0__2', 1],
+      ['03__3.0_2', 1],
+      ['"string"', 1],
+      ['5.3.2', 1],
+      ['"😀"', 1],
+      ['"""', 2],
+      [`\\`, 1],
+      [`'`, 1],
+      [`\``, 1],
+      [`"`, 1],
+      [`?`, 1],
+      [`@`, 1],
+      [`#`, 1],
+      [`$`, 1],
+      [`0_3_.0_3e+0_3`, 1],
+      [`😀 ඒ ქ ℂ ∑ ぜ ᾙ ⅶ 潼`, 9],
+      [`5e1.`, 1],
+      [`5e1.2`, 1],
+      [`5.1e`, 1],
+      [`5.e`, 1],
+      [`5e.`, 1],
+      [`5e`, 1],
+      [`0b12A3`, 1],
+      [`0xP`, 1],
+      [`0o99A`, 1],
+      ['/*', 1],
+      ['/* ', 1],
+      ['/**', 1],
+      ['/** ', 1],
+      ['/*/', 1],
+      ['/* * /', 1],
+      ['/*** /', 1],
+      ['5.', 1],
+      ['5_', 1],
+      ['5_3_', 1],
+      ['5__3', 1],
+      ['5e', 1],
+      ['5e+', 1],
+      ['5e3.6', 1],
+      ['5e-', 1],
+      ['0x', 1],
+      ['0o', 1],
+      ['0b', 1],
+      ['0b123', 1],
+      ['0o178', 1],
+      ['0_.0e-0', 1],
+      ['0_.e-0', 1],
+      ['0.e-0', 1],
+      ['0.0e-', 1],
+      ['0.0e+', 1],
+      ['0.0e', 1],
+      ['0.e', 1],
+      ['0.e0', 1],
+      ['\\u1234', 1],
+      ['\\uFFfF', 1],
+      ['\\uxy', 1],
+      ['51.e-3', 1],
+      ['0o012345678', 1],
+      ['"', 1],
+      ['5..3', 1],
+      ['5e1e2', 1], // TODO, why?
+      ["'\\u4zzz'", 1],
+      ["'\\u '", 1],
+      ["'\\t'", 1],
+      ["'", 1],
+      ["''", 1],
+      ['``', 1],
+      ['""', 1],
+      ["'\\\\'", 1],
+      ["'\\\\\\'", 1],
+      [
+        "'\
+    [hey'",
+        1
+      ],
+      ['5e_4', 1]
+    ];
+
+    if (timerAndIO) console.time(timerName);
+
+    let successfullTests: number = 0;
+    for (const code of mustLexe) {
+      const lexed = Lexer.lexe(code[0]);
+      if (lexed.valid === false || lexed.tokens.length !== code[1])
+        console.error(
+          'error in mustLexe, invalid lexer for code:',
+          code[0],
+          lexed,
+          lexed.tokens.length
+        );
+      else successfullTests++;
+    }
+    for (const code of mustNotLexe) {
+      const lexed = Lexer.lexe(code[0]);
+      if (lexed.valid === true || lexed.lexerErrors.length !== code[1])
+        console.error(
+          'error in mustNotLexe, invalid lexer for code:',
+          code[0],
+          lexed
+        );
+      else successfullTests++;
+    }
+    if (timerAndIO) console.timeEnd(timerName);
+
+    correct = successfullTests === mustLexe.length + mustNotLexe.length;
+    if (timerAndIO && correct) {
+      console.debug(
+        `Lexer successfully lexed ${successfullTests} tests and ${
+          mustLexe.map((e) => e[0]).join('').length +
+          mustNotLexe.map((e) => e[0]).join('').length
+        } characters.`
+      );
+    } else if (!correct)
+      console.error(
+        `${
+          mustLexe.length + mustNotLexe.length - successfullTests
+        } failed tests in the Lexer-stage!`
+      );
+    // #endregion
   }
 
-  debugLexer(0, true, false);
+  return correct;
 }
+
+debugLexer(0, true, false);
