@@ -1,5 +1,7 @@
 import { Parser } from './LCParser';
 
+// TODO fix comments, add line breaks on more than 80 chars per line, code folding, bracket matching, (imports at very top)
+
 export namespace Formatter {
   export const Colors = {
     symbol: `${0xab};${0xb2};${0xbf}`, // white
@@ -19,13 +21,14 @@ export namespace Formatter {
 
   let indentSize: string = '  ';
   let colorActive: boolean = true;
+  let htmlActive: boolean = false;
 
   function printComments(
     comments: Parser.token[],
     indentation: string
   ): string {
     return comments.length === 0
-      ? '' // nothing to print
+      ? ''
       : comments
           .map((comment) => indentation + addColor(comment.l, Colors.comments))
           .join('\n') + '\n';
@@ -233,7 +236,6 @@ export namespace Formatter {
             '\n' +
             indentation +
             indentSize +
-            // TODO local comments, correct indentation AND args
             expression.body
               .map((bodyLine) => {
                 return (
@@ -277,8 +279,8 @@ export namespace Formatter {
     switch (statement.type) {
       case 'comment':
       case 'empty':
+        // remove the ';' of empty statements
         return printComments(statement.comments, indent).trimEnd();
-      // remove empty statements
       case 'import':
         return (
           printComments(statement.comments, indent) +
@@ -412,7 +414,14 @@ export namespace Formatter {
   }
 
   function addColor(msg: string, color: string): string {
-    return colorActive ? `\x1b[38;2;${color}m` + msg + `\u001b[0m` : msg;
+    if (!colorActive) return msg;
+
+    return htmlActive
+      ? `<span style="color: #${color
+          .split(';')
+          .map((n) => Number(n).toString(16))
+          .join('')}">${msg}</span>`
+      : `\x1b[38;2;${color}m` + msg + `\u001b[0m`;
   }
 
   export function beautify(
@@ -421,10 +430,12 @@ export namespace Formatter {
       withColor?: boolean;
       withComments?: boolean;
       defaultIndentation?: string;
+      forHTML?: boolean;
     } = { withColor: true, withComments: true, defaultIndentation: '  ' }
   ): string {
     indentSize = settings.defaultIndentation ?? '  ';
     colorActive = settings.withColor ?? true;
+    htmlActive = settings.forHTML ?? false;
 
     const ast = Parser.parse(code, { noComments: !settings.withComments });
     if (!ast.valid)
@@ -452,11 +463,3 @@ export namespace Formatter {
     return code;
   }
 }
-
-// prettier with syntax highlighting and bracket matching (see VSCode)
-// + code region folding TODO
-// takes the ast as input and returns a string with annotations for VSCode
-
-// TODO fix comments
-// TODO add line breaks on more than 80 chars per line
-// TODO, do spaces correctly, do comments, break on too many lines, put use-statements on the very top

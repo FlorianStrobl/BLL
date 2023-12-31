@@ -1,17 +1,3 @@
-/*
-  TODO
-  syntax errors
-  type error
-  warning
-  Compilation errors
-  runtime errors??
-  https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error
-*/
-
-// TODO
-
-// TODO, what if invalid lexemes like #[0], which is internally used for color coding etc.
-
 export const enum ErrorID {
   unexpectedEndOfFile = 0x0000,
   invalidCharacter = 0x0001,
@@ -20,8 +6,7 @@ export const enum ErrorID {
   invalidNumericLiteralEFollowedByPoint = 0x0004,
   invalidNumericLiteralPointLast = 0x0005,
   invalidCommentUnclosed = 0x0006,
-  // TODO add invalidOperator, e.g. "->" even tho only "->*" is valid
-
+  // add invalidOperator, e.g. "->" even tho only "->*" is valid
   invalidBinOpNotSameType = 0x5001
 }
 

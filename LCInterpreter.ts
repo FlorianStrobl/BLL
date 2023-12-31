@@ -4,6 +4,8 @@ import { Annotate } from './LCCodeAnnotation';
 // @ts-ignore
 import { inspect } from 'util';
 
+// TODO types
+
 const log = (args: any) =>
   console.log(inspect(args, { depth: 999, colors: true }));
 
@@ -781,330 +783,352 @@ export namespace Interpreter {
   }
 }
 
-const test = Interpreter.interpret(
-  {
-    test: `
-//let sum = func (zahl) => (zahl == 0)(zahl + sum(zahl - 1), 0);
+// const test = Interpreter.interpret(
+//   {
+//     t: `
+// let f = func (a, b) => func (c) => a + b + c;
+// let main = func (argument: i32): i32 => 3 * f(argument, 1)(2);
+//     `,
+//     test: `
+// //let sum = func (zahl) => (zahl == 0)(zahl + sum(zahl - 1), 0);
 
-type Tree[T] {
-E,
-F(T, Tree[T], Tree[T])
-}
+// type Tree[T] {
+// E,
+// F(T, Tree[T], Tree[T])
+// }
 
-let sumTree = func (tree) =>
-match (tree) {
-  E => 0,
-  F(wert, left, right) => wert + sumTree(left) + sumTree(right)
-};
+// let sumTree = func (tree) =>
+// match (tree) {
+//   E => 0,
+//   F(wert, left, right) => wert + sumTree(left) + sumTree(right)
+// };
 
-use lc;
+// use lc;
 
-// lc.F(lc.fix(lc.F))(lc.three)
-// lc.y(lc.F)(lc.three)
-// lc.fact(lc.three)
-// lc.churchIntToI32( lc.theta(lc.F)(lc.two) )
+// // lc.F(lc.fix(lc.F))(lc.three)
+// // lc.y(lc.F)(lc.three)
+// // lc.fact(lc.three)
+// // lc.churchIntToI32( lc.theta(lc.F)(lc.two) )
 
-//let main = func (n) => lc.churchIntToI32( lc.y(lc.F)(lc.two) );
+// //let main = func (n) => lc.churchIntToI32( lc.y(lc.F)(lc.two) );
 
-type data { mid(data), end(i32) }
-let d = data->mid(data->mid(data->end));
-//let main = func (n) => (func (n=3+7) => n-2)(n);
+// type data { mid(data), end(i32) }
+// let d = data->mid(data->mid(data->end));
+// //let main = func (n) => (func (n=3+7) => n-2)(n);
 
-//let o = func (n) => (n == 0.0)( n*o(n-1.0), 1.0 );
+// //let o = func (n) => (n == 0.0)( n*o(n-1.0), 1.0 );
 
-//let main = func (n) => o(100.0);
+// //let main = func (n) => o(100.0);
 
-//let main = func (n) => (n==0)(n*main(n-1), 1);
+// //let main = func (n) => (n==0)(n*main(n-1), 1);
 
-//let aaa = func (y) => x-3;//error, because x is not defined
-//let aa = func (x) => aaa(x-1);
-//let main = func (n) => aa(5+n);
+// //let aaa = func (y) => x-3;//error, because x is not defined
+// //let aa = func (x) => aaa(x-1);
+// //let main = func (n) => aa(5+n);
 
-use math;
-use stack;
-let p = stack.push;
-let a = p(3, p(4, p(12, stack.newStack)));
-let main = func (n) => match (stack.get(3, a)) {
-  none => -1,
-  some(A) => A
-};
-    `,
-    lc: `
-  // booleans
-  let true = func (x) => func (y) => x;
-  let false = func (x) => func (y) => y;
+// use math;
+// use stack;
+// let p = stack.push;
+// let a = p(3, p(4, p(12, stack.newStack)));
+// let main = func (n) => match (stack.get(5, stack.concat(a, a))) {
+//   none => -1,
+//   some(A) => A
+// };
+//     `,
+//     lc: `
+//   // booleans
+//   let true = func (x) => func (y) => x;
+//   let false = func (x) => func (y) => y;
 
-  // logical operations on booleans
-  let if = func (b) => func (x) => func (y) => b(x)(y);
-  let not = func (x) => x(false)(true);
-  let and = func (x) => func (y) => x(y)(x);
-  let or = func (x) => func (y) => x(x)(y);
+//   // logical operations on booleans
+//   let if = func (b) => func (x) => func (y) => b(x)(y);
+//   let not = func (x) => x(false)(true);
+//   let and = func (x) => func (y) => x(y)(x);
+//   let or = func (x) => func (y) => x(x)(y);
 
-  // church numerals
-  let zero = func (f) => func (x) => x;
-  let one = func (f) => func (x) => f(x);
-  let two = func (f) => func (x) => f( f(x) );
-  let three = succ(two);
-  let four = succ(three);
-  let five = succ(four);
+//   // church numerals
+//   let zero = func (f) => func (x) => x;
+//   let one = func (f) => func (x) => f(x);
+//   let two = func (f) => func (x) => f( f(x) );
+//   let three = succ(two);
+//   let four = succ(three);
+//   let five = succ(four);
 
-  // successor/predecessor of church numerals
-  let succ = func (n) => func (f) => func (x) => f( n(f)(x) );
-  let pred = func (n) => func (f) => func (x) =>
-    n( func (g) => func (h) => h(g(f)) )( func (u) => x )( func (u) => u );
-  let pred2 = func (n) => // way slower
-    n( func (g) => func (k) => isZero( g(one) )( k )( succ( g(k) ) ) )( func (v) => zero )( zero );
-  let pred3 = func (n) => first( n(phi)(pair(zero)(zero)) );
+//   // successor/predecessor of church numerals
+//   let succ = func (n) => func (f) => func (x) => f( n(f)(x) );
+//   let pred = func (n) => func (f) => func (x) =>
+//     n( func (g) => func (h) => h(g(f)) )( func (u) => x )( func (u) => u );
+//   let pred2 = func (n) => // way slower
+//     n( func (g) => func (k) => isZero( g(one) )( k )( succ( g(k) ) ) )( func (v) => zero )( zero );
+//   let pred3 = func (n) => first( n(phi)(pair(zero)(zero)) );
 
-  // arithmetic on church numerals
-  let plus = func (n) => func (m) => func (f) => func (x) => m( f )( n(f)(x) );
-  let mult = func (n) => func (m) => func (f) => m( n(f) );
-  let pow = func (base) => func (exp) => exp(base);
-  let sub = func (n) => func (m) => m(pred)(n); // n - m with n > m, else 0
+//   // arithmetic on church numerals
+//   let plus = func (n) => func (m) => func (f) => func (x) => m( f )( n(f)(x) );
+//   let mult = func (n) => func (m) => func (f) => m( n(f) );
+//   let pow = func (base) => func (exp) => exp(base);
+//   let sub = func (n) => func (m) => m(pred)(n); // n - m with n > m, else 0
 
-  // arithmetic checks on church numerals
-  let isZero = func (n) => n(func (x) => false)(true);
-  // <=
-  let leq = func (n) => func (m) => isZero( sub(n)(m) );
+//   // arithmetic checks on church numerals
+//   let isZero = func (n) => n(func (x) => false)(true);
+//   // <=
+//   let leq = func (n) => func (m) => isZero( sub(n)(m) );
 
-  // tuples and linked lists
-  // (a, b)
-  let pair = func (a) => func (b) => func (extract) => extract(a)(b);
-  let first = func (p) => p(true);
-  let second = func (p) => p(false);
-  let nil = func (x) => true;
-  let null = func (p) => p( func (x) => func (y) => false ); // checks if the p is a pair or nil
-  // (m, n) -> (n, n + 1)
-  let phi = func (x) => pair( second(x) )( succ( second(x) ) );
+//   // tuples and linked lists
+//   // (a, b)
+//   let pair = func (a) => func (b) => func (extract) => extract(a)(b);
+//   let first = func (p) => p(true);
+//   let second = func (p) => p(false);
+//   let nil = func (x) => true;
+//   let null = func (p) => p( func (x) => func (y) => false ); // checks if the p is a pair or nil
+//   // (m, n) -> (n, n + 1)
+//   let phi = func (x) => pair( second(x) )( succ( second(x) ) );
 
-  // combinators
-  let id = func (x) => x;
-  let fix = func (f) => f( fix(f) );
-  let y = func (f) => (func (x) => f(x(x)))(func (x) => f(x(x)));
-  let theta = (func(x)=>func(y)=>y(x(x(y))))(func(x)=>func(y)=>y(x(x(y))));
+//   // combinators
+//   let id = func (x) => x;
+//   let fix = func (f) => f( fix(f) );
+//   let y = func (f) => (func (x) => f(x(x)))(func (x) => f(x(x)));
+//   let theta = (func(x)=>func(y)=>y(x(x(y))))(func(x)=>func(y)=>y(x(x(y))));
 
-  // SKI-combinator
-  let I = func (x) => x;
-  let K = func (x) => func (y) => x;
-  let S = func (x) => func (y) => func (z) => x(z)(y(z));
+//   // SKI-combinator
+//   let I = func (x) => x;
+//   let K = func (x) => func (y) => x;
+//   let S = func (x) => func (y) => func (z) => x(z)(y(z));
 
-  // BCKW-system
-  let B = func (x) => func (y) => func (z) => x(y(z));
-  let C = func (x) => func (y) => func (z) => x(z)(y);
-  let W = func (x) => func (y) => x(y)(y);
+//   // BCKW-system
+//   let B = func (x) => func (y) => func (z) => x(y(z));
+//   let C = func (x) => func (y) => func (z) => x(z)(y);
+//   let W = func (x) => func (y) => x(y)(y);
 
-  let U = func (x) => x(x);
-  let omega = U(U);
+//   let U = func (x) => x(x);
+//   let omega = U(U);
 
-  // factorial, but defined recursively
-  let fact = func (n) => isZero(n)( one )( mult(n)( fact( pred(n) ) ) );
-  let F = func (f) => func (n) => isZero(n)(one)(mult(n)(f(pred(n))));
+//   // factorial, but defined recursively
+//   let fact = func (n) => isZero(n)( one )( mult(n)( fact( pred(n) ) ) );
+//   let F = func (f) => func (n) => isZero(n)(one)(mult(n)(f(pred(n))));
 
-  // gaussian sum
-  let sum = func (n) => isZero(n)( n )( plus(n)( sum (pred(n)) ) );
+//   // gaussian sum
+//   let sum = func (n) => isZero(n)( n )( plus(n)( sum (pred(n)) ) );
 
-  // lc to bll and vice versa
-  let boolToI32 = func (bool) => bool(1)(0);
-  let churchIntToI32 = func (uint) => uint(func (x) => x + 1)(0);
-  let i32ToChurchInt = func (n) => (n <= 0)(succ( i32ToChurchInt(n - 1) ), zero);
-  `,
-    stack: `
-type opt[T] {
-  none,
-  some(T)
-}
+//   // lc to bll and vice versa
+//   let boolToI32 = func (bool) => bool(1)(0);
+//   let churchIntToI32 = func (uint) => uint(func (x) => x + 1)(0);
+//   let i32ToChurchInt = func (n) => (n <= 0)(succ( i32ToChurchInt(n - 1) ), zero);
+//   `,
+//     stack: `
+// type opt[T] {
+//   none,
+//   some(T)
+// }
 
-type st[T] {
-  finished,
-  value(T, st[T])
-}
+// type st[T] {
+//   finished,
+//   value(T, st[T])
+// }
 
-let newStack[T]: st[T] = st->finished;
-let push[T]: (T, st[T]) -> st[T] = func (value: T, stack: st[T]): st[T] => st->value(value, stack);
-let pop[T]: st[T] -> st[T] = func (stack: st[T]): st[T] => match (stack): st[T] {
-  finished => newStack,
-  value(val, rest) => rest
-};
-let top[T]: st[T] -> opt[T] = func (stack: st[T]): opt[T] => match (stack): opt[T] {
-  finished => opt->none,
-  value(val, rest) => opt->some(val)
-};
+// let newStack[T]: st[T] = st->finished;
+// let push[T]: (T, st[T]) -> st[T] = func (value: T, stack: st[T]): st[T] => st->value(value, stack);
+// let pop[T]: st[T] -> st[T] = func (stack: st[T]): st[T] => match (stack): st[T] {
+//   finished => newStack,
+//   value(val, rest) => rest
+// };
+// let peek[T]: st[T] -> opt[T] = func (stack: st[T]): opt[T] => match (stack): opt[T] {
+//   finished => opt->none,
+//   value(val, rest) => opt->some(val)
+// };
 
-let contains[T]: (T, st[T]) -> i32 = func (value: T, stack: st[T]): i32 => match (stack): i32 {
-  finished => 0,
-  value(val, rest) => (val == value)(contains(value, rest), 1)
-};
+// let contains[T]: (T, st[T]) -> i32 = func (value: T, stack: st[T]): i32 => match (stack): i32 {
+//   finished => 0,
+//   value(val, rest) => (val == value)(contains(value, rest), 1)
+// };
 
-// getBeforeIdx/getAfterIdx + concat
+// // getBeforeIdx/getAfterIdx + concat
 
-let length[T]: st[T] -> i32 = func (stack: st[T]): i32 => match (stack) {
-  finished => 0,
-  value(_, rest) => 1 + length(rest)
-};
+// // TODO error: ([a, b, c], [d, e, f]) => [a, b, c, f, e, d]
+// let concat[T]: (st[T], st[T]) -> st[T] =
+//   func (st1: st[T], st2: st[T]): st[T] =>
+//     (length(st2)==0)(
+//       match (st2) {
+//         value(val, rest) =>
+//           concat(push(val, st1), rest)
+//       },
+//       st1
+//     );
 
-let getFromTop[T]: (i32, st[T]) -> opt[T] =
-  func (idx: i32, stack: st[T]): opt[T] =>
-(idx >= 0)(
-    opt->none,
-    match (stack) {
-      finished => opt->none,
-      value(val, rest) => (idx == 0)(
-        getFromTop(idx-1, rest),
-        opt->some(val)
-      )
-    },
-);
+// // TODO, not working at all
+// let removeLast: st[T] -> st[T] = func (stack: st[T]): st[T] =>
+//   match (stack) {
+//     finished -> newStack,
+//     value(v, rest) => (match (rest) { finished => 1, => 0 })(removeLast(rest), 0 /*is finished*/)
+//   };
 
-let get[T]: (i32, st[T]) -> opt[T] =
-  func (idx: i32, stack: st[T]): opt[T] =>
-    getFromTop(length(stack)-1-idx, stack);
-    `,
-    linkedList: `
-    // get, set, length
-    // push, pop, shift, unshift
-    // splice
+// let length[T]: st[T] -> i32 = func (stack: st[T]): i32 => match (stack) {
+//   finished => 0,
+//   value(_, rest) => 1 + length(rest)
+// };
 
-    // map, filter, sort, reverse, concat, slice
-    // every, some, indexOf, includes/find, reduce, reduceRight
-    `,
-    binaryTrees: ``,
-    dataTypes: `
-    // array, tuple, set, (bin-) trees, linked list, hashmap/associative array
-    `,
-    set: `
-    // union, intersection, symmetricDifference, difference
-    // isDisjointFrom, isSubsetOf, isSupersetOf
-    // size, has
-    // add, remove
-    `,
-    map: `
-    // set, has, get, delete
-    // values(), keys()
-    `,
-    monads: ``,
-    math: `
+// let getFromTop[T]: (i32, st[T]) -> opt[T] =
+//   func (idx: i32, stack: st[T]): opt[T] =>
+// (idx >= 0)(
+//     opt->none,
+//     match (stack) {
+//       finished => opt->none,
+//       value(val, rest) => (idx == 0)(
+//         getFromTop(idx-1, rest),
+//         opt->some(val)
+//       )
+//     },
+// );
 
-// IEEE754 double precision floats (64 Bits: 1 sign bit, 11 exponent bits, 52 explicit mantissa bits; 1023 bias)
-let zero: f64 = 0.0;
-let one: f64 = 1.0;
-let NaN: f64 = nan;
-let infinity: f64 = inf;
-let negativeInfinity: f64 = -inf;
-let epsilon: f64 = 2.0 ** -52.0;
-let maxSafeInteger: f64 = 2.0 ** (53.0) - 1.0;
-let maxValue: f64 = 2.0 ** 1023.0 * (2.0 - 2.0 ** -52.0);
-let minValue: f64 = 2.0 ** -1074.0;
-let largestLessThanOne: f64 = 1.0 - 2.0 ** -53.0;
-let smallestMoreThanOne: f64 = 1.0 + epsilon;
-let minNormalizedNumber: f64 = 2.0 ** -1022.0;
-let maxDenormalizedNumber: f64 = 2.0 ** -1022.0 * (1.0 - 2.0 ** -52.0);
+// let get[T]: (i32, st[T]) -> opt[T] =
+//   func (idx: i32, stack: st[T]): opt[T] =>
+//     getFromTop(length(stack)-1-idx, stack);
+//     `,
+//     linkedList: `
+//     // get, set, length
+//     // push, pop, shift, unshift
+//     // splice
 
-// constants
-let PI: f64 = 3.141592653589793;
-let SQRT2: f64 = 1.4142135623730951; // sqrt(2)
-let SQRT1_2: f64 = 0.7071067811865476; // sqrt(1/2)
-let E: f64 = 2.718281828459045;
-let LN10: f64 = 2.302585092994046; // log_E(10)
-let LN2: f64 = 0.6931471805599453; // log_E(2)
-let LOGE: f64 = 0.4342944819032518; // log_10(E)
-let LBE: f64 = 1.4426950408889634; // log_2(E)
+//     // map, filter, sort, reverse, concat, slice
+//     // every, some, indexOf, includes/find, reduce, reduceRight
+//     `,
+//     binaryTrees: ``,
+//     dataTypes: `
+//     // array, tuple, set, (bin-) trees, linked list, hashmap/associative array
+//     `,
+//     set: `
+//     // union, intersection, symmetricDifference, difference
+//     // isDisjointFrom, isSubsetOf, isSupersetOf
+//     // size, has
+//     // add, remove
+//     `,
+//     map: `
+//     // set, has, get, delete
+//     // values(), keys()
+//     `,
+//     monads: ``,
+//     math: `
+
+// // IEEE754 double precision floats (64 Bits: 1 sign bit, 11 exponent bits, 52 explicit mantissa bits; 1023 bias)
+// let zero: f64 = 0.0;
+// let one: f64 = 1.0;
+// let NaN: f64 = nan;
+// let infinity: f64 = inf;
+// let negativeInfinity: f64 = -inf;
+// let epsilon: f64 = 2.0 ** -52.0;
+// let maxSafeInteger: f64 = 2.0 ** (53.0) - 1.0;
+// let maxValue: f64 = 2.0 ** 1023.0 * (2.0 - 2.0 ** -52.0);
+// let minValue: f64 = 2.0 ** -1074.0;
+// let largestLessThanOne: f64 = 1.0 - 2.0 ** -53.0;
+// let smallestMoreThanOne: f64 = 1.0 + epsilon;
+// let minNormalizedNumber: f64 = 2.0 ** -1022.0;
+// let maxDenormalizedNumber: f64 = 2.0 ** -1022.0 * (1.0 - 2.0 ** -52.0);
+
+// // constants
+// let PI: f64 = 3.141592653589793;
+// let SQRT2: f64 = 1.4142135623730951; // sqrt(2)
+// let SQRT1_2: f64 = 0.7071067811865476; // sqrt(1/2)
+// let E: f64 = 2.718281828459045;
+// let LN10: f64 = 2.302585092994046; // log_E(10)
+// let LN2: f64 = 0.6931471805599453; // log_E(2)
+// let LOGE: f64 = 0.4342944819032518; // log_10(E)
+// let LBE: f64 = 1.4426950408889634; // log_2(E)
 
 
-//
-let false: i32 = 0;
-let true: i32 = 1;
+// //
+// let false: i32 = 0;
+// let true: i32 = 1;
 
-//
-let isFalse: i32 -> i32 = func (n: i32): i32 => n == 0;
-let isTrue: i32 -> i32 = func (n: i32): i32 => n != 0;
+// //
+// let isFalse: i32 -> i32 = func (n: i32): i32 => n == 0;
+// let isTrue: i32 -> i32 = func (n: i32): i32 => n != 0;
 
-//
-let add[T]: (T, T) -> T = func (a: T, b: T): T => a + b;
-let sub[T]: (T, T) -> T = func (a, T, b: T): T => a - b;
-let mul[T]: (T, T) -> T = func (a, T, b: T): T => a * b;
-let div[T]: (T, T) -> T = func (a, T, b: T): T => a / b;
-let exp[T]: (T, T) -> T = func (a, T, b: T): T => a ** b;
+// //
+// let add[T]: (T, T) -> T = func (a: T, b: T): T => a + b;
+// let sub[T]: (T, T) -> T = func (a, T, b: T): T => a - b;
+// let mul[T]: (T, T) -> T = func (a, T, b: T): T => a * b;
+// let div[T]: (T, T) -> T = func (a, T, b: T): T => a / b;
+// let exp[T]: (T, T) -> T = func (a, T, b: T): T => a ** b;
 
-let rem: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a % b;
-let negate[T]: T -> T = func (n: T): T => -n;
-let not: i32 -> i32 = func (n: i32): i32 => !n;
-let binNot: i32 -> i32 = func (n: i32): i32 => ~n;
-let and: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a & b;
-let or: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a | b;
-let xor: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a ^ b;
-let lshift: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a << b;
-let rshift: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a >> b;
+// let rem: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a % b;
+// let negate[T]: T -> T = func (n: T): T => -n;
+// let not: i32 -> i32 = func (n: i32): i32 => !n;
+// let binNot: i32 -> i32 = func (n: i32): i32 => ~n;
+// let and: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a & b;
+// let or: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a | b;
+// let xor: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a ^ b;
+// let lshift: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a << b;
+// let rshift: (i32, i32) -> i32 = func (a: i32, b: i32): i32 => a >> b;
 
-let eq[T]: (T, T) -> T = func (a: T, b: T): i32 => a == b;
-let neq[T]: (T, T) -> T = func (a: T, b: T): i32 => a != b;
-let le[T]: (T, T) -> T = func (a: T, b: T): i32 => a <= b;
-let lt[T]: (T, T) -> T = func (a: T, b: T): i32 => a < b;
-let ge[T]: (T, T) -> T = func (a: T, b: T): i32 => a >= b;
-let gt[T]: (T, T) -> T = func (a: T, b: T): i32 => a > b;
+// let eq[T]: (T, T) -> T = func (a: T, b: T): i32 => a == b;
+// let neq[T]: (T, T) -> T = func (a: T, b: T): i32 => a != b;
+// let le[T]: (T, T) -> T = func (a: T, b: T): i32 => a <= b;
+// let lt[T]: (T, T) -> T = func (a: T, b: T): i32 => a < b;
+// let ge[T]: (T, T) -> T = func (a: T, b: T): i32 => a >= b;
+// let gt[T]: (T, T) -> T = func (a: T, b: T): i32 => a > b;
 
-//
-let sign: f64 -> f64 = func (n: f64): f64 => (n < 0.0)((n==0.0)(1.0, n), -1.0);
-let abs: f64 -> f64 = func (n: f64): f64 => (n==0.0)(sign(n) * n, 0.0);
-let isFinite: f64 -> i32 = func (n: f64): i32 => isNaN(n)((n==inf|n==-inf)(1, 0), 0);
-let isInteger: f64 -> i32 = func (n: f64): i32 => 0; // TODO
-let isNaN: f64 -> i32 = func (n: f64): i32 => n != n;
-let toInt: f64 -> i32 = func (n: f64): i32 => 0; // TODO
-let toFloat: i32 -> f64 = func (n: i32): f64 => 0.0; // TODO
-let sin: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
-let asin: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
-let sinh: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
-let sqrt: f64 -> f64 = func (n: f64): f64 => n ** 0.5;
-let cbrt: f64 -> f64 = func (n: f64): f64 => n ** (1.0/3.0);
-let floor: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
-let ceil: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
-let round: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
-let ln: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
-    `,
-    test2: `
-  type tuple[A, B] {
-    t(A, B)
-  }
+// //
+// let sign: f64 -> f64 = func (n: f64): f64 => (n < 0.0)((n==0.0)(1.0, n), -1.0);
+// let abs: f64 -> f64 = func (n: f64): f64 => (n==0.0)(sign(n) * n, 0.0);
+// let isFinite: f64 -> i32 = func (n: f64): i32 => isNaN(n)((n==inf|n==-inf)(1, 0), 0);
+// let isInteger: f64 -> i32 = func (n: f64): i32 => 0; // TODO
+// let isNaN: f64 -> i32 = func (n: f64): i32 => n != n;
+// let toInt: f64 -> i32 = func (n: f64): i32 => 0; // TODO
+// let toFloat: i32 -> f64 = func (n: i32): f64 => 0.0; // TODO
+// let sin: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
+// let asin: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
+// let sinh: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
+// let sqrt: f64 -> f64 = func (n: f64): f64 => n ** 0.5;
+// let cbrt: f64 -> f64 = func (n: f64): f64 => n ** (1.0/3.0);
+// let floor: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
+// let ceil: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
+// let round: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
+// let ln: f64 -> f64 = func (n: f64): f64 => 0.0; // TODO
+//     `,
+//     test2: `
+//   type tuple[A, B] {
+//     t(A, B)
+//   }
 
-  type array[T] {
-    null,
-    value(T, array[T])
-  }
+//   type array[T] {
+//     null,
+//     value(T, array[T])
+//   }
 
-  let first[A, B] = func (tup: tuple[A, B]): A => match (tup) {
-    t(A, B) => A
-  };
-  let second[A, B] = func (tup: tuple[A, B]): B => match (tup) {
-    t(A, B) => B
-  };
+//   let first[A, B] = func (tup: tuple[A, B]): A => match (tup) {
+//     t(A, B) => A
+//   };
+//   let second[A, B] = func (tup: tuple[A, B]): B => match (tup) {
+//     t(A, B) => B
+//   };
 
-  let new_stack = func () => array->null;
-  let push[T] = func (arr: array[T], value: T): array[T] => array->value(value, arr);
-  let pop[T] = func (arr: array[T]): tuple[array[T], T] => match (arr) {
-    null => arr, // error
-    value(v, a) => tuple->t(v, a)
-  };
-  let pop_value[T] = func (arr: array[T]): T => first(pop(arr));
-  let pop_array[T] = func (arr: array[T]): array[T] => second(pop(arr));
-  let top[T] = func (arr: array[T]): T => match (arr) {
-    null => arr, // error
-    value(v, a) => v
-  };
-  let is_empty[T] = func (arr: array[T]): i32 => match (arr) {
-    null => 1,
-    => 0
-  };
+//   let new_stack = func () => array->null;
+//   let push[T] = func (arr: array[T], value: T): array[T] => array->value(value, arr);
+//   let pop[T] = func (arr: array[T]): tuple[array[T], T] => match (arr) {
+//     null => arr, // error
+//     value(v, a) => tuple->t(v, a)
+//   };
+//   let pop_value[T] = func (arr: array[T]): T => first(pop(arr));
+//   let pop_array[T] = func (arr: array[T]): array[T] => second(pop(arr));
+//   let top[T] = func (arr: array[T]): T => match (arr) {
+//     null => arr, // error
+//     value(v, a) => v
+//   };
+//   let is_empty[T] = func (arr: array[T]): i32 => match (arr) {
+//     null => 1,
+//     => 0
+//   };
 
-  let example = push(push(new_stack(), 5), 2);
+//   let example = push(push(new_stack(), 5), 2);
 
-  // TODO
-  let insert_inbetween[T] = func (val: T, before: array[T], after: array[T]): array[T] =>
-    array->value(val, before);
+//   // TODO
+//   let insert_inbetween[T] = func (val: T, before: array[T], after: array[T]): array[T] =>
+//     array->value(val, before);
 
-  let main = func (n) => is_empty(example);
-  `
-  },
-  'test',
-  3
-);
+//   let main = func (n) => is_empty(example);
+//   `
+//   },
+//   't',
+//   7
+// );
 
-log(test);
+//log(test);

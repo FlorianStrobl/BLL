@@ -1,39 +1,12 @@
 import { Lexer } from './LCLexer';
 
-// TODO, make a larser: if found one error, stop parsing immediatly and finish the lexing, then print the errors
-
-// type = and type {} for special purpose enums/union
-
-/**
- * type test {
-  t1,
-  t2(a.x)
-}
-
-type a {
-  x(i32, f64, i32)
-}
-
-type optional[t] {
-  None,
-  Some(t)
-}
-
-let f = func (x: test): optional[a] ->
-  match(x): optional[a] {
-    test.t1 -> optional.Nonel;
-    test.t2(aa, bb, cc) -> optional.Some(a.x(aa, bb, cc));
-  };
-
-  // func[t] (x: t) -> t;
- */
+// old code: missing larser, index in code and comments
 
 // Recursive Descent Parsing
 export namespace Parser {
   // #region types
   type token = Lexer.token;
 
-  // TODO, need all idxs
   type importBodyT = { path: token[]; semicolon: token };
 
   type funcExpressionT = {
@@ -129,8 +102,8 @@ export namespace Parser {
     | ({ type: 'import'; typeLex: token } & importBodyT);
   // #endregion
 
-  let idx: number = 0; // larser
-  let _lexemes: Lexer.token[] = []; // TODO, real time adding of lexems (larser)
+  let idx: number = 0;
+  let _lexemes: Lexer.token[] = [];
   let _code: string = '';
   let _fileName: string = '';
   const tokenTypes = Lexer.tokenType;
@@ -325,7 +298,6 @@ export namespace Parser {
 
   function parseExprLvl9(): expressionT {
     // unary:
-    // TODO, "!"
     if (match('!', '-', '+', '~')) {
       return {
         type: 'unary',
@@ -338,7 +310,6 @@ export namespace Parser {
     return parseExprLvl10();
   }
 
-  // TODO just to debug
   function parseExprLvl10() {
     let left: any = primary();
     while (match('(', '.')) {
@@ -359,17 +330,16 @@ export namespace Parser {
     return left;
   }
 
-  // TODO, parse literals, highest precedence level
+  // highest precedence level
   function primary(): expressionT {
     if (match('(')) {
-      // TODO
       const expression: expressionT = {
         type: 'grouping',
         openingBracket: previous(),
         value: parseExpression(),
         endBracket: undefined as unknown as token
       };
-      if (!match(')')) throw Error('Expression wasnt closed'); // TODO
+      if (!match(')')) throw Error('Expression wasnt closed');
       expression.endBracket = previous();
       return expression;
     } else if (peek()!.t === tokenTypes.literal) {
@@ -384,7 +354,7 @@ export namespace Parser {
       if (peek()!.l !== '.') {
         // let openBrace;
         // if ((openBrace = match('('))) {
-        //   let callArguments = [parseExpression()]; // TODO TODO because there can be "," in between!
+        //   let callArguments = [parseExpression()]; // TODO because there can be "," in between!
         //   let closingBrace = match(')');
         //   if (closingBrace === undefined) throw Error(''); // TODO
         //   return {
@@ -405,12 +375,12 @@ export namespace Parser {
       while ((dot = match('.'))) {
         path.push(dot);
         if (peek()!.t === tokenTypes.identifier) path.push(advance());
-        else throw Error('`identifier . not an identifier` is not ok'); // TODO
+        else throw Error('`identifier . not an identifier` is not ok');
       }
 
       let openBrace: Lexer.token | undefined;
       if ((openBrace = match('('))) {
-        let parseBody = parseExpression(); // TODO TODO because there can be "," in between!
+        let parseBody = parseExpression(); // TODO because there can be "," in between!
         let closingBrace = match(')');
         return {
           type: 'identifier-path',
@@ -430,13 +400,12 @@ export namespace Parser {
         ...parseFuncExpression()
       };
     } else throw new Error('could not match anything in parsing expressions!');
-    // TODO
   }
 
   function parseFuncExpression(): funcExpressionT {
     let openingBracket: Lexer.token | undefined;
     if (!(openingBracket = match('(')))
-      throw Error('functions must be opend with ('); // TODO
+      throw Error('functions must be opend with (');
 
     let params: {
       args: Lexer.token[];
@@ -445,16 +414,17 @@ export namespace Parser {
 
     let closingBracket: Lexer.token | undefined;
     if (!(closingBracket = match(')')))
-      throw Error('functions must be closed with )'); // TODO
+      throw Error('functions must be closed with )');
 
     let arrow: Lexer.token | undefined;
-    if (!(arrow = match('->'))) throw Error('functions must have a ->'); // TODO
+    if (!(arrow = match('->'))) throw Error('functions must have a ->');
 
     const body: expressionT = parseExpression();
 
     return { openingBracket, closingBracket, params, arrow, body };
   }
 
+  // TODO
   function parseFuncArgExprType(): expressionT {
     return undefined as any;
   }
@@ -468,7 +438,7 @@ export namespace Parser {
       if (args.length > 0) {
         let lastComma = match(',');
         if (lastComma === undefined)
-          throw Error('argument list must have commas in between'); // TODO
+          throw Error('argument list must have commas in between');
         commas.push(lastComma);
 
         // TODO: warning for trailing commas
@@ -477,7 +447,7 @@ export namespace Parser {
 
       let identifier: Lexer.token | undefined = advance();
       if (identifier === undefined || identifier.t !== tokenTypes.identifier)
-        throw Error('must have identifier between two commas'); // TODO
+        throw Error('must have identifier between two commas');
 
       args.push(identifier);
 
@@ -500,7 +470,7 @@ export namespace Parser {
 
     const identifier: Lexer.token | undefined = advance();
     if (identifier?.t !== tokenTypes.identifier)
-      throw Error('invalid token type in parse let statement'); // TODO
+      throw Error('invalid token type in parse let statement');
 
     let assigmentOperator: Lexer.token | undefined;
     if (!(assigmentOperator = match('=')))
@@ -517,11 +487,11 @@ export namespace Parser {
   function parseNamespaceStatement(): namespaceStatementT {
     const identifier: Lexer.token | undefined = advance();
     if (identifier?.t !== tokenTypes.identifier)
-      throw Error('namespaces must have a name'); // TODO
+      throw Error('namespaces must have a name');
 
     let openingBracket: Lexer.token | undefined;
     if (!(openingBracket = match('{')))
-      throw Error('namespaces must be opend by a bracket'); // TODO
+      throw Error('namespaces must be opend by a bracket');
 
     const body: statementT[] = [];
     let closingBracket: Lexer.token | undefined;
@@ -535,7 +505,6 @@ export namespace Parser {
     };
   }
 
-  // TODO, gotPub
   function parsePubStatement(): pubStatementT {
     if (match('let'))
       return { type: 'let', typeLex: previous(), ...parseLetStatement() };
@@ -545,7 +514,7 @@ export namespace Parser {
         typeLex: previous(),
         ...parseNamespaceStatement()
       };
-    else throw Error('Couldnt match any statement'); // TODO
+    else throw Error('Couldnt match any statement');
   }
 
   function parseImportStatement(): importBodyT {
@@ -562,7 +531,7 @@ export namespace Parser {
       if (!(slash = match('/')))
         throw Error(
           'error in import statement, starting dots must be followed by a /'
-        ); // TODO
+        );
       path.push(slash);
     }
 
@@ -613,182 +582,9 @@ export namespace Parser {
     _code = code;
     _fileName = fileName;
 
-    // TODO, ast must have comments in it, in order to print them with the formatter
     let program: statementT[] = [];
     while (!isAtEnd()) program.push(parseStatement());
-
-    // TODO, on error return undefined
 
     return program;
   }
 }
-
-// check gcc, clang, ghci, chromium v8, firefox, java, .NET w/ C#, go, rustc, py
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
-// AST generation
-// let ...
-
-// recursive descent instead of (LALR) Look-Ahead, Left-to-right, Rightmost Derivation parser
-
-/*
-TODO Larser aka lexing while parsing
-if invalid lexeme comes, just break parsing and continue lexing to the end, to get all the errors of the lexer
-*/
-
-// see: https://www.wikiwand.com/en/Extended_Backus-Naur_form
-// https://www.geeksforgeeks.org/types-of-parsers-in-compiler-design/
-
-/*
-  ?: 0 or 1
-  *: 0 or more
-  +: 1 or more
-  in () is the order of evaluation for expressions: precedence and associativity
-
-  STATEMENT:
-    ;
-    "import" IMPORT_PATH ;
-    "pub" PUB_STATEMENTS
-    PUB_STATEMENTS
-
-  IMPORT_PATH:
-    identifier (. identifier)?
-    identifier / (.)+ / IMPORT_PATH
-
-  PUB_STATEMENTS:
-    "namespace" identifier { (STATEMENT)* }
-    "let" identifier = EXPRESSION ;
-    "let" identifier: TYPE = EXPRESSION ;
-    "type" identifier = TYPE_EXPRESSION ;
-
-  TYPE:
-    ( TYPE )
-    "f64"
-    "i32"
-    "undetermined"
-    TYPE -> TYPE
-
-  TYPE_EXPRESSION:
-    TYPE
-
-  TYPE_INFER:
-    identifier : TYPE
-    TYPE_INFER , TYPE_INFER
-
-  EXPRESSION:
-    ( EXPRESSION )                   (10, n/a)
-    identifier                       (10, n/a)
-    identifier.identifier??? TODO    (10, n/a)
-    NUMERIC_EXPRESSION               (10, n/a)
-    identifier(ARG_LIST)             (10, n/a)
-    identifier[TYPE_INFER](ARG_LIST) (10, n/a)
-    "func" identifier(PARAM_LIST) -> EXPRESSION
-    "func" identifier[GENERIC_TYPE_LIST](PARAM_LIST) -> EXPRESSION
-    UNARY_EXPRESSION
-    BINARY_EXPRESSION
-
-  ARG_LIST:
-
-    EXPRESSION
-    ARG_LIST, ARG_LIST
-
-  PARAM_LIST:
-
-    identifier
-    identifier: TYPE
-    PARAM_LIST, PARAM_LIST
-
-  GENERIC_TYPE_LIST:
-    identifier
-    GENERIC_TYPE_LIST, GENERIC_TYPE_LIST
-
-  UNARY_EXPRESSION:
-    ~ EXPRESSION  (9, right to left TODO)
-    - EXPRESSION  (9, right to left)
-    + EXPRESSION  (9, right to left)
-
-  BINARY_EXPRESSION:
-    EXPRESSION *** EXPRESSION (8, right to left)
-    EXPRESSION ** EXPRESSION (8, right to left)
-    EXPRESSION * EXPRESSION (7, left to right)
-    EXPRESSION / EXPRESSION (7, left to right)
-    EXPRESSION % EXPRESSION (7, left to right)
-    EXPRESSION + EXPRESSION (6, left to right)
-    EXPRESSION - EXPRESSION (6, left to right)
-    EXPRESSION << EXPRESSION (5, left to right)
-    EXPRESSION >> EXPRESSION (5, left to right)
-    EXPRESSION < EXPRESSION (4, left to right)
-    EXPRESSION > EXPRESSION (4, left to right)
-    EXPRESSION <= EXPRESSION (4, left to right)
-    EXPRESSION >= EXPRESSION (4, left to right)
-    EXPRESSION != EXPRESSION (3, left to right)
-    EXPRESSION == EXPRESSION (3, left to right)
-    EXPRESSION & EXPRESSION (2, left to right)
-    EXPRESSION ^ EXPRESSION (1, left to right)
-    EXPRESSION | EXPRESSION (0, left to right)
-
-  NUMERIC_EXPRESSION:
-    "nan"
-    "infinity"
-    numeric_literal
-*/
-
-/*
-numeric_literal to binary_float/binary_int:
-
-if numeric_literal is bin|hex|oct:
-  // no decimal places nor e+5/e-2
-  convert_literal_to_decimal_literal()
-
-0. remove all the "_"
-1. resolve "e" by shifting the string to the side by the amount specified (while paying attention to the potential ".")
-2. int part before "." resolve
-3. decimal part before "." resolve (maybe by starting as an int, and then dividing by 10**i)
-4. add int part and decimal part while rounding
-
-for_sure_float: true|false
-*/
-
-// const code = `
-// //let x = ((5 + 3) * y ** 3 * 3 + 3 * 2 + 7 *** 4 + 4 ** 4 *** 3 * 1);
-// /*
-// import SameFolderButDiffFile;
-// import ./SameFolderButDiffFile;
-// import ../HigherFolderFile;
-// import folder/file;
-// import folder2/../../pastFile;
-// */
-// //let f = func (x,y,) -> x + y;
-// //let rightToLeft = a ** b ** c;
-// //let leftToRight = a + b + c;
-
-// //let f = func (x) -> 2 * x;
-
-// //let f = func (x) -> func (y) -> x + y;
-// //let g = func (x) -> func (y) -> std.h(x + y);
-
-// let a = func (x, y) -> x + y * x - (x / x);
-// `;
-// const lexedCode = Lexer.lexe(code, 'code');
-// console.log(inspect(Parser.parse(lexedCode, code, 'src'), { depth: 9999 }));
-
-// function consume(
-//   token: string | Lexer.lexemeType
-// ): { worked: true; token: Lexer.lexeme } | { worked: false } {
-//   if (token in Lexer.lexemeType) {
-//     if (_lexemes[idx].type === token)
-//       return { worked: true, token: _lexemes[idx++] };
-//   } else if (_lexemes[idx].value === token)
-//     return { worked: true, token: _lexemes[idx++] };
-
-//   return { worked: false };
-// }
-
-// function peek(): Lexer.lexeme;
-// function peek(token: string): { token: Lexer.lexeme; matches: boolean };
-// function peek(
-//   token?: string
-// ): Lexer.lexeme | { token: Lexer.lexeme; matches: boolean } {
-//   if (token === undefined) return _lexemes[idx];
-//   else return { token: _lexemes[idx], matches: _lexemes[idx].value === token };
-// }

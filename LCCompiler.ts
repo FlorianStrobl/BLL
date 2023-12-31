@@ -1,6 +1,4 @@
-// ASM (LLVM IR) generation from the AST, can be in an ascii format or in a binary object file
-
-// TODO, if intermediate results are stored in "%Z[id]", then pad all identifier with not "Z"
+// ASM (LLVM IR) generation from the AST
 
 import { Parser } from './LCParser';
 
@@ -410,7 +408,6 @@ export namespace Compiler {
         const idxBefore: number = varCounter.c;
         // TODO even wrong, because of lazy evaluation... (do not exec all the expr beforhand)
         for (const arg of exp.arguments) {
-          // TODO
           _str += `%Z${varCounter.c++} = i32 ${todoCompileSimpleExpression(
             arg.argument,
             varCounter

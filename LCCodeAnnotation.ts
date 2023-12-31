@@ -168,19 +168,3 @@ export namespace Annotate {
     return msg;
   }
 }
-
-// console.log(
-//   Annotate.annotate({
-//     type: 'error',
-//     value: {
-//       filename: 'name',
-//       code: `ab
-// cdefgh
-// ijk`,
-
-//       errorId: Annotate.ErrorId.lInvalidChars,
-//       startIndex: 1,
-//       endIndex: 3
-//     }
-//   })
-// );
