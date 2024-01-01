@@ -437,7 +437,7 @@ export namespace Formatter {
     colorActive = settings.withColor ?? true;
     htmlActive = settings.forHTML ?? false;
 
-    const ast = Parser.parse(code, { noComments: !settings.withComments });
+    const ast = Parser.parse(code, { ignoreComments: !settings.withComments });
     if (!ast.valid)
       throw new Error(
         `Could not format code because code cannot be parsed. Errors: ${JSON.stringify(

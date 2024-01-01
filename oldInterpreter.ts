@@ -1,5 +1,4 @@
 import { Parser } from './LCParser';
-import { Lexer } from './LCLexer';
 
 export namespace Interpreter {
   const globalLetIdentifiers: {
@@ -108,7 +107,7 @@ export namespace Interpreter {
               literalType: 'i32',
               literalToken: {
                 l: argument.toString(),
-                t: Lexer.tokenType.literal,
+                t: Parser.tokenType.literal,
                 i: -1
               },
               comments: []
@@ -239,7 +238,7 @@ export namespace Interpreter {
               argument: {
                 identifierToken: {
                   l: '$',
-                  t: Lexer.tokenType.identifier,
+                  t: Parser.tokenType.identifier,
                   i: -1
                 },
                 hasExplicitType: false,
@@ -251,7 +250,7 @@ export namespace Interpreter {
               argument: {
                 identifierToken: {
                   l: '$$',
-                  t: Lexer.tokenType.identifier,
+                  t: Parser.tokenType.identifier,
                   i: -1
                 },
                 hasExplicitType: false,
@@ -267,7 +266,7 @@ export namespace Interpreter {
                   identifier: '$',
                   identifierToken: {
                     l: '$',
-                    t: Lexer.tokenType.identifier,
+                    t: Parser.tokenType.identifier,
                     i: -1
                   },
                   comments: []
@@ -277,7 +276,7 @@ export namespace Interpreter {
                   identifier: '$$',
                   identifierToken: {
                     l: '$$',
-                    t: Lexer.tokenType.identifier,
+                    t: Parser.tokenType.identifier,
                     i: -1
                   },
                   comments: []

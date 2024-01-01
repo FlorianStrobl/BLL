@@ -6,9 +6,9 @@ import * as errs from './LCCodeAnnotation';
 import * as fs from 'fs';
 
 // @ts-ignore
-import { inspect } from 'util';
-const log = (args: any) =>
-  console.log(inspect(args, { depth: 999, colors: true }));
+//import { inspect } from 'util';
+//const log = (args: any) =>
+//  console.log(inspect(args, { depth: 999, colors: true }));
 
 // const ans = fs.readFileSync('./std.bll').toString();
 

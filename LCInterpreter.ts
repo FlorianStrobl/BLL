@@ -1,13 +1,13 @@
 import { Parser } from './LCParser';
 import { ProcessAST } from './LCIdentifierCheck';
-import { Annotate } from './LCCodeAnnotation';
+// import { Annotate } from './LCCodeAnnotation';
 // @ts-ignore
-import { inspect } from 'util';
+//import { inspect } from 'util';
 
 // TODO types
 
-const log = (args: any) =>
-  console.log(inspect(args, { depth: 999, colors: true }));
+//const log = (args: any) =>
+//  console.log(inspect(args, { depth: 999, colors: true }));
 
 export namespace Interpreter {
   function deepCpy<T>(value: T): T {
@@ -353,27 +353,27 @@ export namespace Interpreter {
           );
         else if (left.type !== right.type) {
           // TODO
-          console.log(
-            'Annotation test',
-            Annotate.annotate({
-              type: 'error',
-              value: {
-                errorId: Annotate.ErrorId.eInvalidBinaryOpType,
-                filename: 'TODO',
-                code: 'TODO',
+          // console.log(
+          //   'Annotation test',
+          //   Annotate.annotate({
+          //     type: 'error',
+          //     value: {
+          //       errorId: Annotate.ErrorId.eInvalidBinaryOpType,
+          //       filename: 'TODO',
+          //       code: 'TODO',
 
-                startIndex: parseExpr.operatorToken.i,
-                endIndex:
-                  parseExpr.operatorToken.i + parseExpr.operatorToken.l.length,
+          //       startIndex: parseExpr.operatorToken.i,
+          //       endIndex:
+          //         parseExpr.operatorToken.i + parseExpr.operatorToken.l.length,
 
-                binOpLex: parseExpr.operatorToken,
-                rightOperant: parseExpr.rightSide,
-                leftOperant: parseExpr.leftSide,
-                rightType: right.type,
-                leftType: left.type
-              }
-            })
-          );
+          //       binOpLex: parseExpr.operatorToken,
+          //       rightOperant: parseExpr.rightSide,
+          //       leftOperant: parseExpr.leftSide,
+          //       rightType: right.type,
+          //       leftType: left.type
+          //     }
+          //   })
+          // );
 
           throw new Error(
             `User error: can only do the binary "${binaryOp}" operation on equally typed values`
@@ -1032,7 +1032,6 @@ export namespace Interpreter {
 // let LN2: f64 = 0.6931471805599453; // log_E(2)
 // let LOGE: f64 = 0.4342944819032518; // log_10(E)
 // let LBE: f64 = 1.4426950408889634; // log_2(E)
-
 
 // //
 // let false: i32 = 0;

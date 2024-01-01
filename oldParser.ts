@@ -339,7 +339,7 @@ export namespace Parser {
         value: parseExpression(),
         endBracket: undefined as unknown as token
       };
-      if (!match(')')) throw Error('Expression wasnt closed');
+      if (!match(')')) throw new Error('Expression wasnt closed');
       expression.endBracket = previous();
       return expression;
     } else if (peek()!.t === tokenTypes.literal) {
@@ -356,7 +356,7 @@ export namespace Parser {
         // if ((openBrace = match('('))) {
         //   let callArguments = [parseExpression()]; // TODO because there can be "," in between!
         //   let closingBrace = match(')');
-        //   if (closingBrace === undefined) throw Error(''); // TODO
+        //   if (closingBrace === undefined) throw new Error(''); // TODO
         //   return {
         //     type: 'functionCall',
         //     functionIdentifier: identifier,
@@ -375,7 +375,7 @@ export namespace Parser {
       while ((dot = match('.'))) {
         path.push(dot);
         if (peek()!.t === tokenTypes.identifier) path.push(advance());
-        else throw Error('`identifier . not an identifier` is not ok');
+        else throw new Error('`identifier . not an identifier` is not ok');
       }
 
       let openBrace: Lexer.token | undefined;
@@ -405,7 +405,7 @@ export namespace Parser {
   function parseFuncExpression(): funcExpressionT {
     let openingBracket: Lexer.token | undefined;
     if (!(openingBracket = match('(')))
-      throw Error('functions must be opend with (');
+      throw new Error('functions must be opend with (');
 
     let params: {
       args: Lexer.token[];
@@ -414,10 +414,10 @@ export namespace Parser {
 
     let closingBracket: Lexer.token | undefined;
     if (!(closingBracket = match(')')))
-      throw Error('functions must be closed with )');
+      throw new Error('functions must be closed with )');
 
     let arrow: Lexer.token | undefined;
-    if (!(arrow = match('->'))) throw Error('functions must have a ->');
+    if (!(arrow = match('->'))) throw new Error('functions must have a ->');
 
     const body: expressionT = parseExpression();
 
@@ -438,7 +438,7 @@ export namespace Parser {
       if (args.length > 0) {
         let lastComma = match(',');
         if (lastComma === undefined)
-          throw Error('argument list must have commas in between');
+          throw new Error('argument list must have commas in between');
         commas.push(lastComma);
 
         // TODO: warning for trailing commas
@@ -447,7 +447,7 @@ export namespace Parser {
 
       let identifier: Lexer.token | undefined = advance();
       if (identifier === undefined || identifier.t !== tokenTypes.identifier)
-        throw Error('must have identifier between two commas');
+        throw new Error('must have identifier between two commas');
 
       args.push(identifier);
 
@@ -470,16 +470,17 @@ export namespace Parser {
 
     const identifier: Lexer.token | undefined = advance();
     if (identifier?.t !== tokenTypes.identifier)
-      throw Error('invalid token type in parse let statement');
+      throw new Error('invalid token type in parse let statement');
 
     let assigmentOperator: Lexer.token | undefined;
     if (!(assigmentOperator = match('=')))
-      throw Error("Expected '=' in let statement");
+      throw new Error("Expected '=' in let statement");
 
     const body: expressionT = parseExpression();
 
     let semicolon: Lexer.token | undefined;
-    if (!(semicolon = match(';'))) throw Error("Expected ';' in let statement");
+    if (!(semicolon = match(';')))
+      throw new Error("Expected ';' in let statement");
 
     return { identifier, body, assigmentOperator, semicolon };
   }
@@ -487,11 +488,11 @@ export namespace Parser {
   function parseNamespaceStatement(): namespaceStatementT {
     const identifier: Lexer.token | undefined = advance();
     if (identifier?.t !== tokenTypes.identifier)
-      throw Error('namespaces must have a name');
+      throw new Error('namespaces must have a name');
 
     let openingBracket: Lexer.token | undefined;
     if (!(openingBracket = match('{')))
-      throw Error('namespaces must be opend by a bracket');
+      throw new Error('namespaces must be opend by a bracket');
 
     const body: statementT[] = [];
     let closingBracket: Lexer.token | undefined;
@@ -514,7 +515,7 @@ export namespace Parser {
         typeLex: previous(),
         ...parseNamespaceStatement()
       };
-    else throw Error('Couldnt match any statement');
+    else throw new Error('Couldnt match any statement');
   }
 
   function parseImportStatement(): importBodyT {
@@ -522,14 +523,15 @@ export namespace Parser {
       // assert, current character is a dot
       let dot: Lexer.token | undefined = match('.');
 
-      if (dot === undefined) throw Error('INTERNAL ERROR, assertion wasnt met');
+      if (dot === undefined)
+        throw new Error('INTERNAL ERROR, assertion wasnt met');
 
       path.push(dot);
       if ((dot = match('.'))) path.push(dot);
 
       let slash: Lexer.token | undefined;
       if (!(slash = match('/')))
-        throw Error(
+        throw new Error(
           'error in import statement, starting dots must be followed by a /'
         );
       path.push(slash);
@@ -552,7 +554,7 @@ export namespace Parser {
           while (peek()?.l === '.') parseDots();
           //else: its folder/value
         }
-      } else throw Error('import statement must have identifiers in it');
+      } else throw new Error('import statement must have identifiers in it');
     }
 
     return { semicolon, path };

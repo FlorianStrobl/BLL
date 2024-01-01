@@ -1,6 +1,6 @@
 import { Parser } from './LCParser';
 // @ts-ignore
-import { inspect } from 'util';
+//import { inspect } from 'util';
 
 // TODO remove brackets
 export namespace ProcessAST {
@@ -622,7 +622,7 @@ export namespace ProcessAST {
 
     // TODO HERE NOW no identifiers in groups, lets and types which are the same as in the imports or as the filename itself
 
-    const parsed = Parser.parse(code, { noComments: true });
+    const parsed = Parser.parse(code, { ignoreComments: true });
     if (!parsed.valid)
       return {
         valid: false,

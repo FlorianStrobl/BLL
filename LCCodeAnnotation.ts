@@ -1,4 +1,3 @@
-import { Lexer } from './LCLexer';
 import { Parser } from './LCParser';
 import { Formatter } from './LCFormatter';
 
@@ -63,7 +62,7 @@ export namespace Annotate {
         }
       | {
           errorId: ErrorId.eInvalidBinaryOpType;
-          binOpLex: Lexer.token;
+          binOpLex: Parser.token;
           rightOperant: Parser.expression;
           rightType: string;
           leftOperant: Parser.expression;
