@@ -10,6 +10,8 @@ import { ProcessAST } from './LCIdentifierCheck';
 //  console.log(inspect(args, { depth: 999, colors: true }));
 
 export namespace Interpreter {
+  let quickFix: boolean = false;
+
   function deepCpy<T>(value: T): T {
     if (value === null) return value;
 
@@ -59,9 +61,15 @@ export namespace Interpreter {
     files: { [filename: string]: string },
     mainFilename: string,
     input: number,
-    timeIt: boolean = false
+    settings: { timeIt?: boolean; scopeDeepCpyQuickFix?: boolean } = {
+      timeIt: false,
+      scopeDeepCpyQuickFix: false
+    }
   ): number {
-    if (timeIt) console.time('pre-execution time');
+    quickFix = settings.scopeDeepCpyQuickFix ?? false;
+    settings.timeIt = settings.timeIt ?? false;
+
+    if (settings.timeIt) console.time('pre-execution time');
 
     if (!(mainFilename in files))
       throw new Error(
@@ -147,7 +155,7 @@ export namespace Interpreter {
         `the "main" function must take exactly one parameter as input`
       );
 
-    if (timeIt) console.timeEnd('pre-execution time');
+    if (settings.timeIt) console.timeEnd('pre-execution time');
 
     // main :: T -> T, where T is either i32 or f64
     let mainFuncType: 'int' | 'float' =
@@ -165,7 +173,7 @@ export namespace Interpreter {
     if (!Number.isSafeInteger(Number(formattedInput))) mainFuncType = 'float';
     const inputSign: number = Math.sign(input);
 
-    if (timeIt) console.time('raw execution time');
+    if (settings.timeIt) console.time('raw execution time');
     const result: internalVal = executeExpr(
       {
         type: 'expr',
@@ -189,7 +197,7 @@ export namespace Interpreter {
                   comments: 0 as never
                 }
               },
-              delimiterToken: undefined
+              delimiterToken: 0 as never
             }
           ],
           function: {
@@ -207,7 +215,7 @@ export namespace Interpreter {
       processedAST.value.letDict,
       processedAST.value.typeDict
     );
-    if (timeIt) console.timeEnd('raw execution time');
+    if (settings.timeIt) console.timeEnd('raw execution time');
 
     // TODO add f64 support
     // TODO mainFuncType
@@ -247,7 +255,7 @@ export namespace Interpreter {
     const parseExpr: Parser.expression = expr.expr;
     let closure: {
       [localIdent: string]: internalVal;
-    } = deepCpy(expr.closure); // TODO is deepCpy really necessary?
+    } = quickFix ? deepCpy(expr.closure) : expr.closure; // TODO is deepCpy really necessary?
 
     switch (parseExpr.type) {
       case 'propertyAccess':
@@ -617,7 +625,8 @@ export namespace Interpreter {
                   'User error: called function with missing argument(s) which dont have default values'
                 );
 
-            // TODO, not sure if that is actually the closure, since the old values may not be accessible anymore actually
+            // TODO HERE, not sure if that is actually the closure, since the old values may not be accessible anymore actually
+            //toCall.closure = deepCpy(closure);
             Object.assign(toCall.closure, ...finalArgs);
 
             return executeExpr(
@@ -726,6 +735,7 @@ export namespace Interpreter {
             `User error: wrote a match body line with twice the same identifier: ${newCtxValueNames[doubleIdentifier]}`
           );
 
+        // TODO
         const updatedClosureValues: {
           [localIdent: string]: internalVal;
         } = {};
@@ -740,7 +750,7 @@ export namespace Interpreter {
           {
             type: 'expr',
             expr: matchLine.body,
-            // TODO
+            // TODO HERE
             closure: { ...closure, ...updatedClosureValues }
           },
           lets,
@@ -1131,3 +1141,26 @@ export namespace Interpreter {
 // );
 
 //log(test);
+
+console.log(
+  Interpreter.interpret(
+    {
+      main: `
+
+let fac: i32 -> i32 = func (n: i32) => (n<=0)(n * fac(n-1), 1);
+let sum: i32 -> i32 = func (n: i32) => (n<=0)(n + sum(n-1), 0);
+let fac2: i32 -> i32 = func (n: i32): i32 => n(1, n*fac2(n-1));
+let fac3: i32 -> i32 = func (n: i32, res: i32 = 1): i32 => n(res, fac3(n-1, res*n));
+
+let sum_check: i32 -> i32 = func (n: i32) => (n*(n+1)/2) == sum(n);
+
+let a = func (x) => (x-1)*(b(x+1));
+let b = func (x) => x+2;
+
+let main = func (n) => fac3(n);`
+    },
+    'main',
+    100,
+    { timeIt: true }
+  )
+);
