@@ -430,7 +430,7 @@ export namespace ProcessAST {
           (param) => param.argument.identifierToken.l
         );
 
-        // TODO test this out
+        // TODO, wrong! (let a = (func (x) => x)(func (y) => x);) gets acceppted
         // merge the local identifiers for this case
         if (newLocalIdentifiers.length !== 0)
           info.localExprIdentifiers = [
