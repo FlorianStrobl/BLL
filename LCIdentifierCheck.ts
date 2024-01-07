@@ -430,13 +430,15 @@ export namespace ProcessAST {
           (param) => param.argument.identifierToken.l
         );
 
-        // TODO, wrong! (let a = (func (x) => x)(func (y) => x);) gets acceppted
         // merge the local identifiers for this case
         if (newLocalIdentifiers.length !== 0)
-          info.localExprIdentifiers = [
-            ...newLocalIdentifiers,
-            ...info.localExprIdentifiers
-          ];
+          info = {
+            ...info,
+            localExprIdentifiers: [
+              ...newLocalIdentifiers,
+              ...info.localExprIdentifiers
+            ]
+          };
 
         expr.body = processExprIdent(expr.body, info);
 
@@ -461,10 +463,13 @@ export namespace ProcessAST {
 
           // merge local identifiers
           if (newLocalIdentifiers.length !== 0)
-            info.localExprIdentifiers = [
-              ...newLocalIdentifiers,
-              ...info.localExprIdentifiers
-            ];
+            info = {
+              ...info,
+              localExprIdentifiers: [
+                ...newLocalIdentifiers,
+                ...info.localExprIdentifiers
+              ]
+            };
 
           matchLine.argument.body = processExprIdent(
             matchLine.argument.body,

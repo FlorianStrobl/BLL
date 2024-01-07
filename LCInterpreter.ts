@@ -1,5 +1,6 @@
 import { Parser } from './LCParser';
 import { ProcessAST } from './LCIdentifierCheck';
+import { Formatter } from './LCFormatter';
 // import { Annotate } from './LCCodeAnnotation';
 // @ts-ignore
 //import { inspect } from 'util';
@@ -1142,26 +1143,3 @@ export namespace Interpreter {
 // );
 
 //log(test);
-
-console.log(
-  Interpreter.interpret(
-    {
-      main: `
-
-let fac: i32 -> i32 = func (n: i32) => (n<=0)(n * fac(n-1), 1);
-let sum: i32 -> i32 = func (n: i32) => (n<=0)(n + sum(n-1), 0);
-let fac2: i32 -> i32 = func (n: i32): i32 => n(1, n*fac2(n-1));
-let fac3: i32 -> i32 = func (n: i32, res: i32 = 1): i32 => n(res, fac3(n-1, res*n));
-
-let sum_check: i32 -> i32 = func (n: i32) => (n*(n+1)/2) == sum(n);
-
-let a = func (x) => (x-1)*(b(x+1));
-let b = func (x) => x+2;
-
-let main = func (n) => fac3(n);`
-    },
-    'main',
-    100,
-    { timeIt: true }
-  )
-);

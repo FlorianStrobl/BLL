@@ -2487,13 +2487,15 @@ class Larser {
         const newLocalIdentifiers = expr.parameters.map(
           (param) => param.argument.identifierToken.l
         );
-        // TODO test this out
         // merge the local identifiers for this case
         if (newLocalIdentifiers.length !== 0)
-          info.localExprIdentifiers = [
-            ...newLocalIdentifiers,
-            ...info.localExprIdentifiers
-          ];
+          info = {
+            ...info,
+            localExprIdentifiers: [
+              ...newLocalIdentifiers,
+              ...info.localExprIdentifiers
+            ]
+          };
         expr.body = processExprIdent(expr.body, info);
         return expr;
       case 'match':
@@ -2513,10 +2515,13 @@ class Larser {
               : [];
           // merge local identifiers
           if (newLocalIdentifiers.length !== 0)
-            info.localExprIdentifiers = [
-              ...newLocalIdentifiers,
-              ...info.localExprIdentifiers
-            ];
+            info = {
+              ...info,
+              localExprIdentifiers: [
+                ...newLocalIdentifiers,
+                ...info.localExprIdentifiers
+              ]
+            };
           matchLine.argument.body = processExprIdent(
             matchLine.argument.body,
             info
@@ -3350,6 +3355,7 @@ class Larser {
   }
 })((Interpreter = {}));
 
+// TODO fix comments, add line breaks on more than 80 chars per line, code folding, bracket matching, (imports at very top)
 (function (Formatter) {
   Formatter.Colors = {
     symbol: `${0xab};${0xb2};${0xbf}`,
