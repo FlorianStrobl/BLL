@@ -229,7 +229,7 @@
 
       const tabCodeMap = {
         test: 'let double: i32 -> i32 = func (n: i32): i32 => n * 2;',
-        main: 'use test;\nlet main: i32 -> i32 = func (n: i32): i32 => test.double(n);'
+        main: 'use test;\nlet main: i32 -> i32 = func (n: i32): i32 => 3 + test.double(n);'
       }; // Map to store code for each tab
       let printWithComments = false; // print the formatted code with comments
 
