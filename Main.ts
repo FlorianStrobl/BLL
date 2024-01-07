@@ -111,9 +111,9 @@ let f1 = func (arg2: f64 = 22.5): f64 => f(arg2);
 `;
 
 const parsedCode = Parser.parse(code);
-if (!parsedCode.valid)
+if (parsedCode.valid === false)
   throw new Error(
-    'could not parse the code! ' + parsedCode.parseErrors?.toString()
+    'could not parse the code! ' + parsedCode.parseErrors.toString()
   ); // TODO formatted error
 
 const formattedCode: string = Formatter.beautify(code);

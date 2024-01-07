@@ -202,19 +202,23 @@ export namespace Formatter {
               ? ''
               : (() => {
                   const arg: Parser.matchBodyLine = expression.body[0].argument;
-                  const pattern: string = arg.isDefaultVal
-                    ? ''
-                    : addColor(arg.identifierToken.l, Colors.identifier) +
-                      (arg.parameters.length === 0
-                        ? ''
-                        : addColor('(', Colors.symbol) +
-                          arg.parameters
-                            .map((parameter) =>
-                              addColor(parameter.argument.l, Colors.identifier)
-                            )
-                            .join(addColor(', ', Colors.symbol)) +
-                          addColor(')', Colors.symbol)) +
-                      ' ';
+                  const pattern: string =
+                    arg.isDefaultVal === true
+                      ? ''
+                      : addColor(arg.identifierToken.l, Colors.identifier) +
+                        (arg.parameters.length === 0
+                          ? ''
+                          : addColor('(', Colors.symbol) +
+                            arg.parameters
+                              .map((parameter) =>
+                                addColor(
+                                  parameter.argument.l,
+                                  Colors.identifier
+                                )
+                              )
+                              .join(addColor(', ', Colors.symbol)) +
+                            addColor(')', Colors.symbol)) +
+                        ' ';
                   return (
                     printComments(arg.comments, '') +
                     pattern +
@@ -243,7 +247,7 @@ export namespace Formatter {
                   (bodyLine.argument.comments.length === 0
                     ? ''
                     : indentation + indentSize) +
-                  ((bodyLine.argument.isDefaultVal
+                  ((bodyLine.argument.isDefaultVal === true
                     ? ''
                     : addColor(
                         bodyLine.argument.identifierToken.l,
@@ -438,7 +442,7 @@ export namespace Formatter {
     htmlActive = settings.forHTML ?? false;
 
     const ast = Parser.parse(code, { ignoreComments: !settings.withComments });
-    if (!ast.valid)
+    if (ast.valid === false)
       throw new Error(
         `Could not format code because code cannot be parsed. Errors: ${JSON.stringify(
           ast.parseErrors

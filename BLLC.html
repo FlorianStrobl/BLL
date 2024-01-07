@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+  <style>
+    body {
+      background-color: #1e1e1e;
+      color: grey;
+    }
+
+    #editor-tabs {
+      display: flex;
+      list-style: none;
+      padding: 0;
+    }
+
+    #code-input {
+      width: 1000px;
+      height: 600px;
+    }
+
+    #main-num-input {
+      width: 90px;
+      height: 13px;
+    }
+
+    #output {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      white-space: pre-wrap;
+    }
+
+    #result {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      white-space: pre-wrap;
+    }
+
+    #timer {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      white-space: pre-wrap;
+    }
+
+    .editor-tab {
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    .editor-tab.active-tab {
+      font-weight: bold;
+    }
+
+    /* button code from https://www.w3schools.com/howto/howto_css_switch.asp */
+    /* The switch - the box around the slider */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+
+    /* Hide default HTML checkbox */
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    /* The slider */
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      -webkit-transition: 0.4s;
+      transition: 0.4s;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: '';
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      -webkit-transition: 0.4s;
+      transition: 0.4s;
+    }
+
+    input:checked + .slider {
+      background-color: #2196f3;
+    }
+
+    input:focus + .slider {
+      box-shadow: 0 0 1px #2196f3;
+    }
+
+    input:checked + .slider:before {
+      -webkit-transform: translateX(26px);
+      -ms-transform: translateX(26px);
+      transform: translateX(26px);
+    }
+
+    /* Rounded sliders */
+    .slider.round {
+      border-radius: 34px;
+    }
+
+    .slider.round:before {
+      border-radius: 50%;
+    }
+  </style>
+  <title>BLL</title>
+  <body>
+    <button
+      class="c"
+      onclick="loadExampleCode('let main[T] = func (n: T): T => n;')"
+    >
+      Default Code
+    </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('// comments do not get executed\n/*\nmultiline comment\n*/\n\n; // empty statements get ignored aswell\n\n// import code from the tab/file named test:\nuse test; \n\n// create a namespace to group together identifiers: \ngroup my_group {\n  \n  // type alias\n  type signed_integer = i32;\n\n  // complex type which is generic for the datatype T\n  type optional_value[T] {\n    no_value,\n    some_value(T /*value has to be of type T*/ )\n  }\n\n  // 5 saved with the identifier five \n  let five: signed_integer = 5;\n\n  // complex type instantiation\n  // * has a higher precedence than +\n  let twelve: optional_value[i32] = optional_value->some_value( 2 + five * 2 );\n\n}\n\n// function take arguments and return something\nlet identity_function[T]: T -> T = func (x: T): T => x;\n\n// add two floats together \nlet add: (f64, f64) -> f64 = func (a: f64, b: f64): f64 => a + b;\n\n// integers of type i32 can be called like functions\n// if they are equal to 0, the second argument is called, else the first one\nlet is_infinity: f64 -> i32 = func (float: f64): i32 => (float == inf)( 1 /*true*/, 0 /*false*/ );\nlet is_nan: f64 -> i32 = func (float: f64): i32 => float != float;\n\n// match a complex type by its different values\nlet unwrap_optional_value_zero: i32 = func (optional_val: my_group.optional_value[i32]): i32 =>\n  match (optional_val): i32 {\n    no_value => 0,\n    some_value(value) => value,\n    => 0 // default branch if no other branch matches\n  };\n\nlet main = func (n): i32 => unwrap_optional_value_zero( my_group.twelve );\n// let main = func (x): i32 => add(6.3, 4.2);')"
+    >
+      language example
+    </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('let f: i32 -> i32 = func (x: i32): i32 => 3 * x + 1;\nlet main: i32 -> i32 = func (n: i32): i32 => f(n-1);')"
+    >
+      f(x) = 3x+1
+    </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('type boolean[T] = T -> T -> T;\n\nlet false[T]: boolean[T] = func (a: T): T -> T => func (b: T): T => b;\nlet true[T]: boolean[T] = func (a) => func (b) => a;\n\nlet not[T] = func (b: boolean[T]) => b(false)(true);\nlet and[T] = func (a: boolean[T]) => func (b: boolean[T]) => a(b)(a);\nlet or[T] = func (a: boolean[T]) => func (b: boolean[T]) => a(a)(b);\nlet xor[T] = func (a: boolean[T]) => func (b: boolean[T]) => a(not(b))(b);\n\nlet boolToInt[T]: boolean[T] -> i32 = func (bool) => bool(1)(0);\nlet intToBool[T]: i32 -> boolean[T] = func (n) => (n==0)(true, false);\n\nlet main = func (n): i32 => boolToInt( xor(false)(true) );')"
+    >
+      boolean
+    </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('type numeral[T, U] = (T -> U) -> (T) -> U;\n\nlet zero[T, U]: numeral[T, U] = func (f: T -> U): (T -> T) => func (x: T): T => x;\nlet one[T, U]: numeral[T, U] = func (f: T -> U): (T -> U) => func (x: T): U => f(x);\nlet two[T, U]: numeral[T, U] = func (f) => func (x) => f(f(x));\nlet three[T, U]: numeral[T, U] = succ(two);\nlet four[T, U]: numeral[T, U] = add(two)(two);\nlet five[T, U]: numeral[T, U] = add(two)(three);\nlet six[T, U]: numeral[T, U] = mult(two)(three);\nlet seven[T, U]: numeral[T, U] = add(two)(five);\nlet eight[T, U]: numeral[T, U] = exp(two)(three); \n\ntype succ[T, U] = numeral[T, U] -> (T -> U) -> (T) -> numeral[T, U];\nlet succ[T, U]: succ[T, U] = func (n) => func (f) => func (x) => f(n(f)(x));\ntype add[T, U] = numeral[T, U] -> numeral[T, U] -> (T -> U) -> T -> numeral[T, U];\nlet add[T, U]: add[T, U] = func (m) => func (n) => func (f) => func (x) => m(f)(n(f)(x));\ntype mult[T, U] = numeral[T, U] -> numeral[T, U] -> (T -> U) -> numeral[T, U];\nlet mult[T, U]: mult[T, U] = func (m) => func (n) => func (f) => m(n(f));\ntype exp[T, U] = numeral[T, U] -> numeral[T, U] -> numeral[T, U];\nlet exp[T, U]: exp[T, U] = func (b) => func (e) => e(b);\n\nlet isZero = func (n) => n(func (x) => (func (a) => func (b) => b))( func (a) => func (b) => a );\n\nlet numeralToInt[T, U]: numeral[T, U] -> i32 = func (n) => n(func (a) => a + 1)(0);\nlet intToNumeral[T, U]: i32 -> numeral[T, U] = func (n) => (n<=0)(succ(intToNumeral(n-1)), zero);\n\nlet main = func (n): i32 => numeralToInt( add(eight)(two) );')"
+    >
+      church numerals
+    </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('type tuple[T] = T -> T -> (T -> T -> T) -> T;\n\ntype stack[T] = tuple[(T -> T) -> T -> T];\nlet NULL[T]: stack[T] = tuple(func (f) => func (x) => f(x))(func (f) => func (x) => f(x));\n\nlet tuple[T]: tuple[T] = func (a) => func (b) => func (t) => t(a)(b);\nlet first[T]: tuple[T] -> T = func (t) => t(func (a) => func (b) => a);\nlet second[T]: tuple[T] -> T = func (t) => t(func (a) => func (b) => b);\n\nlet new_stack[T]: stack[T] = NULL;\nlet push[T]: T -> stack[T] -> stack[T] = func (x) => func (st = new_stack) => tuple(x)(st);\nlet pop[T]: stack[T] -> stack[T] = func (st) => second(st);\nlet peek[T]: stack[T] -> T = func (st) => first(st);\n\nlet main = func (n): i32 => peek(  pop( push(2)(push(3)(push(1)())) )  );')"
+    >
+      stack
+    </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('type opt[T] {\n  none,\n  some(T)\n}\nlet unwrap[T] = func (val: opt[T]): T => match (val): T {\n  none => -1, /* error*/\n  some(x) => x\n};\n\ntype binTree[T] {\n  empty,\n  full(T, binTree[T], binTree[T])\n}\nlet null = binTree->empty;\n\nlet root_value[T] = func (tree: binTree[T]): opt[T] => match (tree): opt[T] {\n  empty => opt->none,\n  full(val, left, right) => opt->some(val)\n};\nlet total_sum = func (tree: binTree[i32]): i32 => match (tree): i32 {\n  empty => 0,\n  full(value, left, right) => value + total_sum(left) + total_sum(right)\n};\nlet total_node_count = func (tree: binTree): i32 => match (tree): i32 {\n  empty => 0,\n  full(_, left, right) => 1 + total_node_count(left) + total_node_count(right)\n};\n\nlet exampleTree: binTree[i32] = binTree->full(5, binTree->full(4, binTree->full(7, null, null), null), binTree->full(1, null, null));\n\nlet main = func (n) => total_sum( exampleTree );')"
+    >
+      binary tree
+    </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('let fac: i32 -> i32 = func (n: i32): i32 => (n<=0)(n * fac(n-1), 1);\nlet fac2: i32 -> i32 = func (n: i32, res: i32 = 1): i32 => (n>0)(res, fac2(n-1, res*n));\nlet sum: i32 -> i32 = func (n: i32): i32 => (n<=0)(n + sum(n-1), 0);\n\nlet sum_check: i32 -> i32 = func (n: i32): i32 => (n*(n+1)/2) == sum(n);\n\nlet main = func (n) => sum_check(n);')"
+    >
+      recursion
+    </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('type never { }\ntype unit { u }\ntype bool { t, f }\n\ntype add[T1, T2] {\n  a(T1),\n  b(T2)\n}\n\ntype mult[T1, T2] {\n  m(T1, T2)\n}\n\nlet mult_types[T1, T2] = func (t1: T1, t2: T2): mult[T1, T2] => mult->m(t1, t2);\n\nlet main = func (n) => match ( mult_types(15 /*i32*/, 9.5 /*f64*/) ) {\n  m(a, b) => a\n};')"
+    >
+      algebraic datatypes
+    </button>
+
+    <ul id="editor-tabs"></ul>
+    <div id="editor-container">
+      <textarea id="code-input"></textarea>
+    </div>
+    <button onclick="createTab();renameTab();">create new tab</button>
+    <button onclick="renameTab()">rename current tab</button>
+    <button onclick="removeTab()">delete current tab</button>
+    <button onclick="runTab()">run main tab</button>
+    <label class="switch">
+      <input type="checkbox" id="button" onclick="onButtonClick()" />
+      <span class="slider round"></span>
+    </label>
+    <textarea id="main-num-input">0</textarea>
+    <div id="result"></div>
+    <div id="timer"></div>
+    <div id="output"></div>
+
+    <script src="./BLLCode.js"></script>
+
+    <script>
+      // TODO add text field besides input value and toggle
+
+      // sources, this website was not written by me:
+      /*
+      ChatGPT 3.5 querys für den HTML und CSS Code dieser Website:
+      `Mache eine Website die:
+      - Mehrere Tabs für Programmiercodes zulässt und diese auch Umbennbar sind
+      - Man Buttons hat, um Beispielcodes zu laden
+      - Man einen "Ausführen" Button hat
+      - Man ein Formattierten Code Output Fenster hat
+      - Man ein Result Fenster hat in dem eine Zahl drinnen stehen kann`
+
+      `die Tabs funktionieren noch nicht so wie sie sollen`
+
+      `Es sollen mehrere example code buttons sein, und der User soll mehr tabs hinzufügen dürfen, die man alle auch umbennen darf`
+
+      `Man soll die Tabs noch löschen können, und auch im Nachhinein umbennenen. Darüberhinaus, müssen die Codes der Tabs beim hin und her wechseln der Tabs gespeichert werden`
+
+      `die Tabs sollen ihren jeweiligen Code speichern`
+
+      `Die Codes werden nicht beim wechseln der Tabs mit gespeichert und geladen`
+
+      + Ich danke Elias Cuin für Hilfe bei dieser Website.
+      */
+
+      const tabs = document.getElementById('editor-tabs');
+      const editorContainer = document.getElementById('editor-container');
+      const codeInput = document.getElementById('code-input');
+      const outputDiv = document.getElementById('output');
+      const resultDiv = document.getElementById('result');
+      const timerDiv = document.getElementById('timer');
+      const inputNumberDiv = document.getElementById('main-num-input');
+      const toggleDiv = document.getElementById('button');
+
+      const tabCodeMap = {
+        test: 'let double: i32 -> i32 = func (n: i32): i32 => n * 2;',
+        main: 'use test;\nlet main: i32 -> i32 = func (n: i32): i32 => test.double(n);'
+      }; // Map to store code for each tab
+      let printWithComments = false; // print the formatted code with comments
+
+      // #region helper functions
+      const getAllTabs = () => document.querySelectorAll('.editor-tab');
+      const getActiveTab = () =>
+        document.querySelector('.editor-tab.active-tab');
+      const getActiveTabName = () => getTabName(getActiveTab());
+      const getTabName = (tab) => tab?.textContent;
+      const getCodeForTab = (tabName) => tabCodeMap[tabName] ?? '';
+      const getToggleValue = () => toggleDiv.checked;
+      const getMainTab = () =>
+        new Array(...getAllTabs()).filter((tab) => {
+          return tab.innerHTML === 'main';
+        })[0];
+      // #endregion
+
+      init();
+      setActiveTab(getMainTab());
+
+      function init() {
+        createTab('main');
+        createTab('test');
+      }
+
+      function onButtonClick() {
+        printWithComments = getToggleValue();
+      }
+
+      function createTab(name = undefined) {
+        const newTab = document.createElement('li');
+        newTab.className = 'editor-tab';
+
+        const tabName =
+          name !== undefined ? name : 'Tab' + (tabs.children.length + 1);
+        newTab.textContent = tabName;
+
+        // init saved code
+        if (!(tabName in tabCodeMap)) {
+          console.log('hey', tabName, tabCodeMap);
+          tabCodeMap[tabName] = '';
+        }
+
+        // setup the properties
+        newTab.onclick = () => setActiveTab(newTab);
+        tabs.appendChild(newTab);
+        setActiveTab(newTab);
+      }
+
+      function setActiveTab(tab) {
+        if (typeof getActiveTabName() === 'string')
+          // save current code
+          tabCodeMap[getActiveTabName()] = codeInput.value;
+
+        getAllTabs().forEach((t) => t.classList.remove('active-tab'));
+
+        tab.classList.add('active-tab');
+
+        codeInput.value = getCodeForTab(getTabName(tab));
+      }
+
+      function loadExampleCode(exampleCode) {
+        codeInput.value = exampleCode;
+      }
+
+      function renameTab() {
+        const currentTabName = getActiveTabName();
+
+        if (currentTabName === 'main') {
+          alert('you cant rename the main tab!');
+          return;
+        }
+
+        const newName = prompt(
+          'Enter a new name for the tab:',
+          currentTabName
+        )?.trim();
+
+        if (
+          newName.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/g) === null /*||
+                new Array(...getAllTabs().values()).some(
+                  (tab) => getTabName(tab) === newName
+                )*/
+        ) {
+          alert('invalid name or already used for some tab');
+          // name already in use or invalid
+          return;
+        }
+
+        tabCodeMap[newName] = tabCodeMap[currentTabName];
+        delete tabCodeMap[currentTabName];
+        getActiveTab().textContent = newName; // set the new name
+      }
+
+      function removeTab() {
+        if (getActiveTabName() === 'main') {
+          alert('you cant delete the main tab!');
+          return;
+        }
+
+        tabs.removeChild(getActiveTab());
+        delete tabCodeMap[getActiveTabName()]; // delete the code from the hashmap
+
+        setActiveTab(tabs.lastElementChild);
+      }
+
+      function runTab() {
+        try {
+          tabCodeMap[getActiveTabName()] = codeInput.value;
+
+          let inputDivVal = inputNumberDiv.value.trimStart().trimEnd();
+          const inputVal =
+            (inputDivVal.toLowerCase() === 'inf'
+              ? (inputDivVal = 'Infinity')
+              : inputDivVal.toLowerCase() === '-inf'
+              ? (inputDivVal = '-Infinity')
+              : undefined,
+            Number(inputDivVal));
+
+          const timeBefore = Date.now();
+          const res = Interpreter.interpret(tabCodeMap, 'main', inputVal, {
+            timeIt: false,
+            scopeDeepCpyQuickFix: false
+          });
+          const timeAfter = Date.now();
+
+          resultDiv.textContent = `Result: "${res}"`;
+
+          timerDiv.textContent = `Took time to interpret code with parameter "${inputVal}" in this browser: ${
+            timeAfter - timeBefore
+          }ms`;
+
+          outputDiv.innerHTML =
+            `// formated code of current file/tab:\n` +
+            Formatter.beautify(codeInput.value, {
+              forHTML: true,
+              withComments: printWithComments
+            })
+              .trimStart()
+              .trimEnd();
+        } catch (error) {
+          console.error(error);
+          outputDiv.textContent = 'Error:\n' + error;
+          resultDiv.textContent = 'Result: Error';
+        }
+      }
+    </script>
+  </body>
+</html>

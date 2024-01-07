@@ -315,6 +315,7 @@ const mustNotLexe: [string, number][] = [
 ];
 
 const mustParse: [string, number][] = [
+  ['type t = (a,h) -> (b,c,) -> (c);', 1],
   [
     `type linkedList[T] {
   null,

@@ -83,7 +83,7 @@ export namespace Interpreter {
       mainFilename
     );
 
-    if (!processedAST.valid)
+    if (processedAST.valid === false)
       throw new Error(
         `Invalid code in main file: ${mainFilename}. Errors: ${JSON.stringify(
           processedAST.processingErrors
@@ -116,7 +116,7 @@ export namespace Interpreter {
       );
 
       // TODO better error, since it could be "recursively" imported from an imported file
-      if (!processedFile.valid)
+      if (processedFile.valid === false)
         throw new Error(
           `Couldnt compile the imported file ${toImportFile} because of error: ${JSON.stringify(
             processedFile.processingErrors
@@ -692,7 +692,7 @@ export namespace Interpreter {
 
         const toExecLineIdx: number = parseExpr.body.findIndex(
           (pattern) =>
-            !pattern.argument.isDefaultVal &&
+            pattern.argument.isDefaultVal === false &&
             pattern.argument.identifierToken.l === scrutinee.discriminator
         );
         const defaultLineIdx: number = parseExpr.body.findIndex(
@@ -716,9 +716,10 @@ export namespace Interpreter {
 
         const matchLine: Parser.matchBodyLine =
           parseExpr.body[correctIdx].argument;
-        const newCtxValueNames: string[] = matchLine.isDefaultVal
-          ? []
-          : matchLine.parameters.map((param) => param.argument.l);
+        const newCtxValueNames: string[] =
+          matchLine.isDefaultVal === true
+            ? []
+            : matchLine.parameters.map((param) => param.argument.l);
 
         // allow having less values extracted than really needed
         if (newCtxValueNames.length > scrutinee.values.length)

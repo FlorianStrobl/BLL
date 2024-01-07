@@ -1,8 +1,5 @@
 import { Parser } from './LCParser';
-// @ts-ignore
-//import { inspect } from 'util';
 
-// TODO remove brackets
 export namespace ProcessAST {
   // #region constants and types
   const processingErrors: processingError[] = [];
@@ -11,7 +8,6 @@ export namespace ProcessAST {
 
   export interface processedAST {
     imports: [string, Parser.statement][]; // hold a reference to the original AST
-    // can be undef because e.g. std does not have a main func
     // e.g. "/main": { main } or "/group1/my_type": { my_type }
     letDict: { [path: string]: Parser.letStatement }; // Map<string, Parser.statement>
     typeDict: { [path: string]: Parser.typeStatement }; // Map<string, Parser.statement>
@@ -30,17 +26,10 @@ export namespace ProcessAST {
   // #region processors
   function newProcessingError(
     processingError: processingError
-  ): processingError | never {
+  ): processingError & never {
     processingErrors.push(processingError);
-    return processingError;
+    return processingError as never;
   }
-
-  // processExprLevel2 and processTypeExprLevel2:
-  // go inside the exprs and replace the identifiers by their respective path
-
-  // use std; let x = std.hey; type t[T] = T;
-
-  // third level: type resolution for lets and type checking for types(?)
 
   // remove all the groupings and save the important statements into the datastructure
   function buildHashMap(
@@ -75,7 +64,7 @@ export namespace ProcessAST {
             )
           )
             newProcessingError(
-              `let identifier ${letName} is already in the in the file`
+              `The let-identifier ${letName} is already defined in this scope.`
             );
 
           processedAST.letDict[letName] = statement;
@@ -90,7 +79,9 @@ export namespace ProcessAST {
               ([name, stmt]) => name === typeName
             )
           )
-            newProcessingError(`type identifier ${typeName} alreay exists`);
+            newProcessingError(
+              `The type-identifier ${typeName} is already defined in this scope.`
+            );
 
           processedAST.typeDict[typeName] = statement;
           break;
@@ -107,7 +98,7 @@ export namespace ProcessAST {
             groupName in processedAST.typeDict
           )
             newProcessingError(
-              `the namespace ${groupName} already exists in this scope in form of another group, let or type statement`
+              `The namespace ${groupName} already exists in this scope in the form of another group, a let- or a type-statement.`
             );
           else processedAST.namespaceScopes.push([groupName, statement]);
 
@@ -118,7 +109,7 @@ export namespace ProcessAST {
 
           if (data.imports.length !== 0)
             throw new Error(
-              'Internal processing error: imports in namespaces are not allowed and should be prohibited by the parser.'
+              'Internal processing error: imports in namespaces are not allowed and should have been prohibited by the parser already.'
             );
 
           processedAST.namespaceScopes.push(...data.namespaceScopes);
@@ -131,7 +122,7 @@ export namespace ProcessAST {
               )
             )
               newProcessingError(
-                `the let statement "${letName}" already existed in form of another let or group statement`
+                `The let-statement "${letName}" already existed in form of another let- or group-statement.`
               );
             else processedAST.letDict[letName] = value;
 
@@ -143,7 +134,7 @@ export namespace ProcessAST {
               )
             )
               newProcessingError(
-                `the type statement ${typeName} already exists in another type or group statement`
+                `The type statement ${typeName} already exists in another type- or group-statement`
               );
             else processedAST.typeDict[typeName] = value;
 
@@ -154,13 +145,14 @@ export namespace ProcessAST {
     return processedAST;
   }
 
-  // TODO remove groupings?
-  // replace all the identifiers by the global path or remaining local to generics
-  function processASTIdent(data: processedAST, filename: string): void {
+  // replace all the identifiers by the global path
+  // or remains unchanged because it is local to generics
+  function resolveIdentifiers(data: processedAST, filename: string): void {
     const importFilenames: string[] = data.imports.map(([name, stmt]) => name);
 
-    // TODO: "std.test => /std/test" because we assume it is there
-    // "localFilename.test => /localFilename/test" with the test if it actually is there
+    // if "use std;" then "std.test => /std/test"
+    // because we assume "test" exists in "std" is there
+    // while "thisFilename.test => /thisFilename/test" with the test if it actually is there
 
     // resolve global identifier of types
     for (const [key, value] of Object.entries(data.typeDict)) {
@@ -174,9 +166,11 @@ export namespace ProcessAST {
         filename,
         typeDict: data.typeDict
       };
+
       if (value.type === 'type-alias')
         data.typeDict[key].body = processTypeExprIdent(value.body, infos);
       else if (value.type === 'complex-type') {
+        // resolve type annotations correctly aswell
         data.typeDict[key].body = value.body.map((e) => {
           e.argument.arguments = e.argument.arguments.map((a) => {
             a.argument = processTypeExprIdent(a.argument, infos);
@@ -362,7 +356,7 @@ export namespace ProcessAST {
     }
   }
 
-  // resolve identifiers
+  // resolve identifiers of expressions
   function processExprIdent(
     expr: Parser.expression,
     info: {
@@ -384,7 +378,7 @@ export namespace ProcessAST {
         return expr;
       case 'grouping':
         expr.body = processExprIdent(expr.body, info);
-        return expr;
+        return expr.body; // remove groups for efficiency
       case 'unary':
         expr.body = processExprIdent(expr.body, info);
         return expr;
@@ -460,9 +454,10 @@ export namespace ProcessAST {
           });
 
         expr.body = expr.body.map((matchLine) => {
-          const newLocalIdentifiers: string[] = !matchLine.argument.isDefaultVal
-            ? matchLine.argument.parameters.map((param) => param.argument.l)
-            : [];
+          const newLocalIdentifiers: string[] =
+            matchLine.argument.isDefaultVal === false
+              ? matchLine.argument.parameters.map((param) => param.argument.l)
+              : [];
 
           // merge local identifiers
           if (newLocalIdentifiers.length !== 0)
@@ -610,7 +605,7 @@ export namespace ProcessAST {
         processingErrors: processingError[];
         value?: processedAST;
       } {
-    if (!filename.match(/^[a-zA-Z0-9_]+$/g))
+    if (!filename.match(/^[a-zA-Z_][a-zA-Z0-9_]+$/g))
       throw new Error(
         'Internal processing error: tried to process the code with an invalid filename.'
       );
@@ -618,16 +613,17 @@ export namespace ProcessAST {
     processingErrors.splice(0, processingErrors.length); // remove all the old errors
     const path: string = `/${filename}/`; // a path needs "/"
 
-    // TODO der name der datei is valide bei propertyAccess statements damit es auch reibungslos bei anderen Dateien klappt
-
-    // TODO HERE NOW no identifiers in groups, lets and types which are the same as in the imports or as the filename itself
-
-    const parsed = Parser.parse(code, { ignoreComments: true });
-    if (!parsed.valid)
+    const parsed = Parser.parse(code, {
+      ignoreComments: true /*not needed for execution*/
+    });
+    if (parsed.valid === false)
       return {
         valid: false,
         processingErrors: [
-          { type: 'could not parse code', parserErrors: parsed.parseErrors }
+          {
+            type: 'Was not able to parse the code.',
+            parserErrors: parsed.parseErrors
+          }
         ]
       };
 
@@ -640,17 +636,17 @@ export namespace ProcessAST {
     for (const [name, stmt] of value.namespaceScopes)
       if (name === filename || value.imports.some(([n, s]) => n === name))
         newProcessingError(
-          `a group cannot be named as the filename or one of its imports: ${name}`
+          `The name of a group cannot be the same as the filename "${name}" or the name of one of the imports '${JSON.stringify(
+            value.imports.map(([n, s]) => n)
+          )}'.`
         );
 
-    // cant proceed to step 2 when already had errors
+    // Can't proceed to step 2 if already had errors
     if (processingErrors.length !== 0)
       return { valid: false, processingErrors };
 
     // step 2, resolve all outer scope identifiers to their respective outer scope
-    processASTIdent(value, filename);
-
-    // TODO HERE NOW
+    resolveIdentifiers(value, filename);
 
     if (processingErrors.length !== 0)
       return { valid: false, processingErrors, value };
@@ -658,268 +654,3 @@ export namespace ProcessAST {
     return { valid: true, value };
   }
 }
-
-/*
-const str = `
-//let main = func () => 5;
-
-//let x = 5 + hey; // should error because no hey is in scope
-//let f = func (x) => func (x) => x+0; // x is of type i32
-//let g = f(4)(5) == 5;
-
-use std;
-
-type l = std.h;
-
-type a = i32;
-type b = ((filename).a);
-type c[a] = a -> b;
-
-//type y = ((((i32)) -> ((f64)))).test.hey;
-
-type lol[k] {
-  a(i32),
-  b(b, k, lol)
-}
-
-let xo[T] = T->hey(5);
-
-group hey {
-  type x = ((((filename))).hey).inner.hasAccess;
-  type x2 = hey.inner.hasAccess;
-  type x3 = inner.hasAccess;
-  // type x4 = hasAccess; // error
-  type b = x[((i32)) -> i32];
-  // type c = f; // cant find it
-
-  group inner {
-    type hasAccess = b[b, i32, x]; // should be /filename/hey/b
-  }
-}
-
-group other {
-  group inner {
-    group inner {}
-  }
-  group val {}
-}
-
-group h {
-  type f {
-    g(i32, i32, i32, i32)
-  }
-}
-
-let a = h.f->g(34,62,5,73);
-`;*/
-const testCode = `
-group ns {
-  type BinTree[T] {
-    empty,
-    full(BinTree[T], T, BinTree[T])
-  }
-
-  let const = 3;
-}
-
-group inners {
-let test: ns.BinTree[i32] = func (x: ns.BinTree = ns.BinTree->empty) => x | multSwap + ns.const + y;
-}
-
-// 0
-type Never { }
-// 1
-type Unit { u }
-// 2
-type Bool { true, false }
-
-// *
-type Tuple[A, B] { tup(A, B) }
-// +
-type Or[A, B] { either(A), or(B) }
-
-type add[A, B] = Or[A, B];
-type mult[A, B] = Tuple[A, B];
-
-// commutativity of mult
-let multSwap[A, B] = func (x: mult[A, B]): mult[B, A] =>
-  match (x) {
-    tup(a, b) => Tuple->tup(b, a)
-  };
-// associativity of mult 1
-let multReorder1[A, B, C] = func (x: mult[A, mult[B, C]]): mult[mult[A, B], C] =>
-  match (x) {
-    tup(a, y) => match (y) {
-      tup(b, c) => Tuple->tup(Tuple->tup(a, b), c)
-    }
-  };
-// associativity of mult 2
-let multReorder2[A, B, C] = func (x: mult[mult[A, B], C]): mult[A, mult[B, C]] =>
-  match (x) {
-    tup(y, c) => match (y) {
-      tup(a, b) => Tuple->tup(a, Tuple->tup(b, c))
-    }
-  };
-// identity of mult
-let multIdentity[A] = func (x: mult[A, Unit]): A =>
-  match (x) {
-    tup(a, unit) => a
-  };
-// absorbtion of mult
-let multAbsorb[A] = func (x: mult[A, Never]): Never => match (x) { => x /*TODO, empty match is ok for "Never" types*/ };
-
-// identity of add
-let addIdentity[A] = func (x: add[A, Never]): A =>
-  match (x) {
-    either(a) => a,
-    or(b) => b // TODO is a "Never" type, so it is assignable to A
-  };
-
-let distributivity1[A, B, C] = func (x: mult[A, add[B, C]]): add[mult[A, B], mult[A, C]] =>
-  match (x) {
-    tup(a, y) => match (y) {
-      either(b) => Or->either(Tuple->tup(a, b)),
-      or(c) => Or->or(Tuple->tup(a, c))
-    }
-  };`;
-
-/*
-const result = Interpreter.interpret(
-  {
-    main: `
-    use std;
-
-    let c = 4;
-    let a = (std).b + 3;
-
-    // TODO, does not work
-    let rec = func (n: i32) => (n < 0)(n(0, rec(n - 1) + n), -1);
-    let rec2 = func (n: i32) => n(0, rec2(n - 1) + n);
-
-    let factorial = func (n: i32): i32 => n(1, factorial(n - 1) * n);
-
-
-    //let main = func (data: i32): i32 => data + a + 4;
-    //let main = func (a) => factorial(5);
-
-    type Optional[T] {
-      Some(T),
-      None
-    }
-
-    type Tuple[A, B] {
-      tup(A, B)
-    }
-
-    type BinaryTree[T] {
-      Empty,
-      Full(T, BinaryTree[T], BinaryTree[T])
-    }
-
-    // TODO BinaryTree[i32]->Full
-    let testTree =
-      BinaryTree->Full(
-        5,
-        BinaryTree->Full(2, BinaryTree->Empty, BinaryTree->Empty),
-        BinaryTree->Empty
-      );
-
-    let sumValues = func (tree) =>
-      match (tree) {
-        Empty => 0,
-        Full(value, left, right) => value + sumValues(left) + sumValues(right)
-      };
-
-    // let main = func (a) =>
-    //   match (Tuple->tup(testTree, a)) {
-    //     tup(tree, v) =>
-    //       match (tree) {
-    //         Empty => -v,
-    //         Full(val, left, right) =>
-    //           sumValues(tree) + v
-    //       }
-    //   };
-
-    use lc;
-    //let main = func (arg) => lc.true(4);
-    let ha = func (x) => x + 1;
-    let hb = func (x) => x + 2;
-
-    let main = func (arg) => lc.if(lc.true)(3)(6);
-    `,
-    std: `
-    use main;
-    use other;
-
-    let b = c + 2;
-    let c = main.c + other.a;
-    `,
-    other: `
-    let a = 1;
-
-    use main;
-    group useless {}
-    type notNeeded = i32;
-    `,
-    lc: `
-    let true = func (x) => func (y) => x;
-    let false = func (x) => func (y) => y;
-
-    let not = func (x) => x(false)(true);
-    let and = func (x) => func (y) => x(y)(x);
-    let or = func (x) => func (y) => x(x)(y);
-    let if = func (b) => func (x) => func (y) => b(x)(y);
-
-    let zero = func (f) => func (x) => x;
-    let one = func (f) => func (x) => f(x);
-    let two = func (f) => func (x) => f(f(x));
-
-    let tuple = 0;
-    let first = 0;
-    let second = 0;
-    let linkedList = 0;
-    let successor = 0;
-    let plus = 0;
-    let mult = 0;
-    let pow = 0;
-
-    let boolToI32 = func (bool) => bool(1)(0);
-    let uintToI32 = func (uint) => uint(func (x) => x + 1)(0);
-    `
-  },
-  'main',
-  5
-);
-//log(result);
-*/
-
-// TODO propertyToken on a funcType does not make sense and should error
-
-/*
-group test {}
-let test = 5; // error because already group with the same name
-type test = i32; // error, but not because of let, but because of group
-group test {} // error because of type, let and group
-*/
-
-/**
- * remove all groups by doing groupName/identifierName
- * remove all comments from the tree by replacing them with "[]"
- * remove all empty or comment statements
- * group all filenames from imports
- * (expr) -> expr since it makes no difference
- * check if vars are accessible in current context and not double
- *
- * check types later
- */
-
-// check if type alias, complex type, groups and lets are not double defined in statements
-// then check if no identifier was used, which is not defined somewhere
-
-// THEN do type checking and check if identifier was used with correct scope!
-
-// TODO check if identifiers are used multiple times:
-// use a hashmap where we store the amount of times an identifier was used, and if
-// we get more than one for a field, we store that index (strs) in a seperate array, and at the end, we report all the indexes in the seperate array
-
-// after building the hashmap with all its values and know each and every value only comes once: check if implicit identifier use happens (also checks local params from funcs for this one!)
