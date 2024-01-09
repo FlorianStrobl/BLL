@@ -57,8 +57,8 @@
     .switch {
       position: relative;
       display: inline-block;
-      width: 60px;
-      height: 34px;
+      width: 50px;
+      height: 22px;
     }
 
     /* Hide default HTML checkbox */
@@ -84,8 +84,8 @@
     .slider:before {
       position: absolute;
       content: '';
-      height: 26px;
-      width: 26px;
+      height: 14px;
+      width: 14px;
       left: 4px;
       bottom: 4px;
       background-color: white;
@@ -183,16 +183,18 @@
     <div id="editor-container">
       <textarea id="code-input"></textarea>
     </div>
+    <a>main function input: </a>
+    <textarea id="main-num-input">0</textarea>
     <button onclick="runTab()">run main tab</button>
     <button onclick="exportCode()">export all tabs into clipboard</button>
     <button onclick="createTab();renameTab();">create new tab</button>
     <button onclick="renameTab()">rename current tab</button>
     <button onclick="removeTab()">delete current tab</button>
+    <a>prettify with comments: </a>
     <label class="switch">
       <input type="checkbox" id="button" onclick="onButtonClick()" />
       <span class="slider round"></span>
     </label>
-    <textarea id="main-num-input">0</textarea>
     <div id="result"></div>
     <div id="timer"></div>
     <div id="output"></div>
