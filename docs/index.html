@@ -187,6 +187,7 @@
     <button onclick="renameTab()">rename current tab</button>
     <button onclick="removeTab()">delete current tab</button>
     <button onclick="runTab()">run main tab</button>
+    <button onclick="exportCode()">export all tabs into clipboard</button>
     <label class="switch">
       <input type="checkbox" id="button" onclick="onButtonClick()" />
       <span class="slider round"></span>
@@ -225,6 +226,9 @@
       + Ich danke Elias Cuin für Hilfe bei dieser Website.
       */
 
+      // get default code if user wants
+      let urlCode = document.URL.split('?code=')[1];
+
       const tabs = document.getElementById('editor-tabs');
       const editorContainer = document.getElementById('editor-container');
       const codeInput = document.getElementById('code-input');
@@ -234,7 +238,7 @@
       const inputNumberDiv = document.getElementById('main-num-input');
       const toggleDiv = document.getElementById('button');
 
-      const tabCodeMap = {
+      let tabCodeMap = {
         test: 'let double: i32 -> i32 = func (n: i32): i32 => n * 2;',
         main: 'use test;\nlet main: i32 -> i32 = func (n: i32): i32 => 3 + test.double(n);'
       }; // Map to store code for each tab
@@ -255,11 +259,30 @@
       // #endregion
 
       init();
-      setActiveTab(getMainTab());
 
       function init() {
-        createTab('main');
-        createTab('test');
+        if (typeof urlCode === 'string') {
+          // try loading the code from the URL
+          try {
+            const currentCode = JSON.parse(atob(urlCode));
+            if (typeof currentCode === 'object' && 'main' in currentCode) {
+              tabCodeMap = currentCode;
+
+              for (const [key, value] of Object.entries(currentCode))
+                createTab(key);
+
+              setActiveTab(getMainTab());
+            } else throw new Error('');
+          } catch (e) {
+            createTab('main');
+            createTab('test');
+            setActiveTab(getMainTab());
+          }
+        } else {
+          createTab('main');
+          createTab('test');
+          setActiveTab(getMainTab());
+        }
       }
 
       function onButtonClick() {
@@ -276,7 +299,6 @@
 
         // init saved code
         if (!(tabName in tabCodeMap)) {
-          console.log('hey', tabName, tabCodeMap);
           tabCodeMap[tabName] = '';
         }
 
@@ -384,6 +406,19 @@
           else outputDiv.textContent = 'Error:\n' + error;
           resultDiv.textContent = 'Result: Error';
         }
+      }
+
+      function exportCode() {
+        // save current code
+        tabCodeMap[getActiveTabName()] = codeInput.value;
+
+        const codes =
+          'florianstrobl.github.io/BLL?code=' +
+          btoa(JSON.stringify(tabCodeMap));
+
+        navigator.clipboard.writeText(codes);
+
+        alert('Copied the code: ' + codes);
       }
     </script>
   </body>
