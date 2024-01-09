@@ -492,7 +492,7 @@ export namespace Parser {
             );
         } else
           throw new Error(
-            'Internal parser error: unexpected type of argument while parsing an argument list'
+            'Internal parser error: unexpected type of argument while parsing an argument list.'
           );
 
         outerComments = [];
@@ -982,7 +982,7 @@ export namespace Parser {
         associativity !== 'right-to-left'
       )
         throw new Error(
-          'Internal parser error: invalid use of TypeScripts type system'
+          'Internal parser error: invalid use of TypeScripts type system.'
         );
 
       let leftSide: expression = nextLevel();
@@ -1044,7 +1044,7 @@ export namespace Parser {
     }
 
     throw new Error(
-      'Internal parser error: invalid use of typescripts type system'
+      'Internal parser error: invalid use of TypeScripts type system.'
     );
   }
 
@@ -1133,7 +1133,7 @@ export namespace Parser {
         };
       } else
         throw new Error(
-          `Internal parser error: expected the tokens "(" or "." in this expression.`
+          `Internal parser error: expected the tokens "(", "." or "->" in expression.`
         );
     }
 
@@ -2106,9 +2106,9 @@ export namespace Parser {
         if (error === 'eof') return { valid: false, parseErrors, statements };
         else
           throw new Error(
-            `Error while parsing the code "${code}"\nInternal parsing error: ${JSON.stringify(
-              error
-            )}`
+            `Error while parsing.\nInternal parsing error: ${
+              error instanceof Error ? error.message : JSON.stringify(error)
+            }`
           );
       }
     }

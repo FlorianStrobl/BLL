@@ -63,9 +63,9 @@ export namespace Interpreter {
 
     if (!(mainFilename in files))
       throw new Error(
-        `The main file ${mainFilename} does not exist in the current files: $${JSON.stringify(
-          Object.keys(files)
-        )}`
+        `The main file ${mainFilename} does not exist in the current files: [${Object.keys(
+          files
+        ).join(', ')}]`
       );
 
     const processedAST = ProcessAST.processCode(
@@ -75,9 +75,9 @@ export namespace Interpreter {
 
     if (processedAST.valid === false)
       throw new Error(
-        `Invalid code in main file: ${mainFilename}. Errors: ${JSON.stringify(
-          processedAST.processingErrors
-        )}`
+        `Invalid code in the main file named "${mainFilename}".\nErrors:\n${processedAST.processingErrors
+          .map((err) => JSON.stringify(err))
+          .join('\n')}`
       );
 
     // #region recursively import and preprocess files
@@ -95,9 +95,9 @@ export namespace Interpreter {
 
       if (!(toImportFile in files))
         throw new Error(
-          `The imported file ${toImportFile} is missing from the files ${JSON.stringify(
-            Object.keys(files)
-          )}`
+          `Cannot import file named "${toImportFile}". Available files are: [${Object.keys(
+            files
+          ).join(', ')}]`
         );
 
       const processedFile = ProcessAST.processCode(
@@ -107,9 +107,9 @@ export namespace Interpreter {
 
       if (processedFile.valid === false)
         throw new Error(
-          `Couldnt compile the imported file ${toImportFile} because of error: ${JSON.stringify(
-            processedFile.processingErrors
-          )}`
+          `Couldnt compile the imported file "${toImportFile}" because of errors:\n${processedFile.processingErrors
+            .map((err) => JSON.stringify(err))
+            .join('\n')}`
         );
 
       // imported files, must be imported at the outer scope aswell
@@ -490,9 +490,7 @@ export namespace Interpreter {
           );
 
         throw new Error(
-          `Internal error: identifier "${JSON.stringify(
-            parseExpr
-          )}" must be in current scope (either in the current closure or from lets in general) but couldnt be found.`
+          `Internal error: identifier "${parseExpr.identifier}" must be in current scope (either in the current closure or from lets in general) but couldnt be found.`
         );
       case 'call':
         // typeInstantiation, i32/f64, on Function, on Identifier (could all be on the return of a internal complicated thing from e.g. a match expr)
@@ -687,15 +685,6 @@ export namespace Interpreter {
         if (newCtxValueNames.length > scrutinee.values.length)
           throw new Error(
             `User error: too many values in scrutinee with the needed match body line. expected ${scrutinee.values.length}, but got ${newCtxValueNames.length}.`
-          );
-
-        // TODO: remove that, should be done in preprocessing
-        const doubleIdentifier: number = newCtxValueNames.findIndex(
-          (val, i) => i !== newCtxValueNames.lastIndexOf(val)
-        );
-        if (doubleIdentifier !== -1)
-          throw new Error(
-            `User error: wrote a match body line with twice the same identifier: ${newCtxValueNames[doubleIdentifier]}.`
           );
 
         const updatedClosureValues: {

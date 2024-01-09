@@ -853,7 +853,7 @@ class Larser {
             );
         } else
           throw new Error(
-            'Internal parser error: unexpected type of argument while parsing an argument list'
+            'Internal parser error: unexpected type of argument while parsing an argument list.'
           );
         outerComments = [];
         // this could be before the next delimiter token, so must get all the comments now
@@ -1237,7 +1237,7 @@ class Larser {
         associativity !== 'right-to-left'
       )
         throw new Error(
-          'Internal parser error: invalid use of TypeScripts type system'
+          'Internal parser error: invalid use of TypeScripts type system.'
         );
       let leftSide = nextLevel();
       consComments(comments);
@@ -1286,7 +1286,7 @@ class Larser {
       return leftSide;
     }
     throw new Error(
-      'Internal parser error: invalid use of typescripts type system'
+      'Internal parser error: invalid use of TypeScripts type system.'
     );
   }
   function parseExprLv10() {
@@ -1360,7 +1360,7 @@ class Larser {
         };
       } else
         throw new Error(
-          `Internal parser error: expected the tokens "(" or "." in this expression.`
+          `Internal parser error: expected the tokens "(", "." or "->" in expression.`
         );
     }
     return left;
@@ -2143,9 +2143,9 @@ class Larser {
         if (error === 'eof') return { valid: false, parseErrors, statements };
         else
           throw new Error(
-            `Error while parsing the code "${code}"\nInternal parsing error: ${JSON.stringify(
-              error
-            )}`
+            `Error while parsing.\nInternal parsing error: ${
+              error instanceof Error ? error.message : JSON.stringify(error)
+            }`
           );
       }
     }
@@ -2401,8 +2401,8 @@ class Larser {
               comments: []
             };
         } else
-          throw new Error(
-            'Internal processing error: a type property access should only be possible by having the property being a propertyAccess itself or an identifier.'
+          newProcessingError(
+            'A property access should only be possible by having the property being a propertyAccess itself or an identifier.'
           );
         // got now the given path by the user in propertyAccessPath
         for (let i = get_outer_groups_len(info.scope); i >= 0; --i) {
@@ -2460,7 +2460,6 @@ class Larser {
             typeDict: info.typeDict
           });
         expr.parameters = expr.parameters.map((param) => {
-          // TODO, what if some parameter name is double => error
           if (param.argument.hasDefaultValue)
             param.argument.defaultValue = processExprIdent(
               param.argument.defaultValue,
@@ -2482,6 +2481,14 @@ class Larser {
         const newLocalIdentifiers = expr.parameters.map(
           (param) => param.argument.identifierToken.l
         );
+        if (
+          newLocalIdentifiers.some(
+            (ident, i) => newLocalIdentifiers.indexOf(ident) !== i
+          )
+        )
+          newProcessingError(
+            'Cannot have a function with multiple parameters with the same name.'
+          );
         // merge the local identifiers for this case
         if (newLocalIdentifiers.length !== 0)
           info = {
@@ -2504,11 +2511,18 @@ class Larser {
             typeDict: info.typeDict
           });
         expr.body = expr.body.map((matchLine) => {
-          // TODO: what if some local identifier is double => error
           const newLocalIdentifiers =
             matchLine.argument.isDefaultVal === false
               ? matchLine.argument.parameters.map((param) => param.argument.l)
               : [];
+          if (
+            newLocalIdentifiers.some(
+              (ident, i) => newLocalIdentifiers.indexOf(ident) !== i
+            )
+          )
+            newProcessingError(
+              'Cannot have a match body line with two identifiers in the same line.'
+            );
           // merge local identifiers
           if (newLocalIdentifiers.length !== 0)
             info = {
@@ -2578,8 +2592,8 @@ class Larser {
               comments: []
             };
         } else
-          throw new Error(
-            'Internal processing error: an expr property access should only be possible by having the property being a propertyAccess itself or an identifier.'
+          newProcessingError(
+            'An property access should only be possible by having the property being a propertyAccess itself or an identifier.'
           );
         // got now the given path by the user in propertyAccessPath
         for (let i = get_outer_groups_len(info.scope); i >= 0; --i) {
@@ -2619,10 +2633,11 @@ class Larser {
     code,
     filename /*should include the filename at the beginning!*/
   ) {
-    if (!filename.match(/^[a-zA-Z_][a-zA-Z0-9_]+$/g))
-      throw new Error(
-        'Internal processing error: tried to process the code with an invalid filename.'
-      );
+    if (!filename.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/g))
+      return {
+        valid: false,
+        processingErrors: ['tried to process the code with an invalid filename']
+      };
     processingErrors.splice(0, processingErrors.length); // remove all the old errors
     const path = `/${filename}/`; // a path needs "/"
     const parsed = Parser.parse(code, {
@@ -2645,9 +2660,9 @@ class Larser {
     for (const [name, stmt] of value.namespaceScopes)
       if (name === filename || value.imports.some(([n, s]) => n === name))
         newProcessingError(
-          `The name of a group cannot be the same as the filename "${name}" or the name of one of the imports '${JSON.stringify(
-            value.imports.map(([n, s]) => n)
-          )}'.`
+          `The name of a group cannot be the same as the filename "${name}" or the name of one of the imports '[${value.imports
+            .map(([n, s]) => n)
+            .join(', ')}]'.`
         );
     // Can't proceed to step 2 if already had errors
     if (processingErrors.length !== 0)
@@ -2699,9 +2714,9 @@ class Larser {
     if (settings.timeIt) console.time('pre-execution time');
     if (!(mainFilename in files))
       throw new Error(
-        `The main file ${mainFilename} does not exist in the current files: $${JSON.stringify(
-          Object.keys(files)
-        )}`
+        `The main file ${mainFilename} does not exist in the current files: [${Object.keys(
+          files
+        ).join(', ')}]`
       );
     const processedAST = ProcessAST.processCode(
       files[mainFilename],
@@ -2709,9 +2724,9 @@ class Larser {
     );
     if (processedAST.valid === false)
       throw new Error(
-        `Invalid code in main file: ${mainFilename}. Errors: ${JSON.stringify(
-          processedAST.processingErrors
-        )}`
+        `Invalid code in the main file named "${mainFilename}".\nErrors:\n${processedAST.processingErrors
+          .map((err) => JSON.stringify(err))
+          .join('\n')}`
       );
     // #region recursively import and preprocess files
     const importedFiles = [mainFilename];
@@ -2725,9 +2740,9 @@ class Larser {
       importedFiles.push(toImportFile);
       if (!(toImportFile in files))
         throw new Error(
-          `The imported file ${toImportFile} is missing from the files ${JSON.stringify(
-            Object.keys(files)
-          )}`
+          `Cannot import file named "${toImportFile}". Available files are: [${Object.keys(
+            files
+          ).join(', ')}]`
         );
       const processedFile = ProcessAST.processCode(
         files[toImportFile],
@@ -2735,9 +2750,9 @@ class Larser {
       );
       if (processedFile.valid === false)
         throw new Error(
-          `Couldnt compile the imported file ${toImportFile} because of error: ${JSON.stringify(
-            processedFile.processingErrors
-          )}`
+          `Couldnt compile the imported file "${toImportFile}" because of errors:\n${processedFile.processingErrors
+            .map((err) => JSON.stringify(err))
+            .join('\n')}`
         );
       // imported files, must be imported at the outer scope aswell
       toImportFiles.push(
@@ -3085,9 +3100,7 @@ class Larser {
             types
           );
         throw new Error(
-          `Internal error: identifier "${JSON.stringify(
-            parseExpr
-          )}" must be in current scope (either in the current closure or from lets in general) but couldnt be found.`
+          `Internal error: identifier "${parseExpr.identifier}" must be in current scope (either in the current closure or from lets in general) but couldnt be found.`
         );
       case 'call':
         // typeInstantiation, i32/f64, on Function, on Identifier (could all be on the return of a internal complicated thing from e.g. a match expr)
@@ -3255,14 +3268,6 @@ class Larser {
         if (newCtxValueNames.length > scrutinee.values.length)
           throw new Error(
             `User error: too many values in scrutinee with the needed match body line. expected ${scrutinee.values.length}, but got ${newCtxValueNames.length}.`
-          );
-        // TODO: remove that, should be done in preprocessing
-        const doubleIdentifier = newCtxValueNames.findIndex(
-          (val, i) => i !== newCtxValueNames.lastIndexOf(val)
-        );
-        if (doubleIdentifier !== -1)
-          throw new Error(
-            `User error: wrote a match body line with twice the same identifier: ${newCtxValueNames[doubleIdentifier]}.`
           );
         const updatedClosureValues = {};
         for (let i = 0; i < scrutinee.values.length; ++i)
@@ -3758,9 +3763,9 @@ class Larser {
     const ast = Parser.parse(code, { ignoreComments: !settings.withComments });
     if (ast.valid === false)
       throw new Error(
-        `Could not format code because code cannot be parsed. Errors: ${JSON.stringify(
-          ast.parseErrors
-        )}`
+        `Could not format code because code cannot be parsed.\nErrors: ${ast.parseErrors
+          .map((err) => JSON.stringify(err))
+          .join('\n')}.`
       );
     return beautifyAST(ast.statements);
   }

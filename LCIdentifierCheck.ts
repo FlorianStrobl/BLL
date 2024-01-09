@@ -313,8 +313,8 @@ export namespace ProcessAST {
               comments: []
             };
         } else
-          throw new Error(
-            'Internal processing error: a type property access should only be possible by having the property being a propertyAccess itself or an identifier.'
+          newProcessingError(
+            'A property access should only be possible by having the property being a propertyAccess itself or an identifier.'
           );
 
         // got now the given path by the user in propertyAccessPath
@@ -399,7 +399,6 @@ export namespace ProcessAST {
           });
 
         expr.parameters = expr.parameters.map((param) => {
-          // TODO, what if some parameter name is double => error
           if (param.argument.hasDefaultValue)
             param.argument.defaultValue = processExprIdent(
               param.argument.defaultValue,
@@ -423,6 +422,15 @@ export namespace ProcessAST {
         const newLocalIdentifiers: string[] = expr.parameters.map(
           (param) => param.argument.identifierToken.l
         );
+
+        if (
+          newLocalIdentifiers.some(
+            (ident, i) => newLocalIdentifiers.indexOf(ident) !== i
+          )
+        )
+          newProcessingError(
+            'Cannot have a function with multiple parameters with the same name.'
+          );
 
         // merge the local identifiers for this case
         if (newLocalIdentifiers.length !== 0)
@@ -450,12 +458,19 @@ export namespace ProcessAST {
           });
 
         expr.body = expr.body.map((matchLine) => {
-          // TODO: what if some local identifier is double => error
-
           const newLocalIdentifiers: string[] =
             matchLine.argument.isDefaultVal === false
               ? matchLine.argument.parameters.map((param) => param.argument.l)
               : [];
+
+          if (
+            newLocalIdentifiers.some(
+              (ident, i) => newLocalIdentifiers.indexOf(ident) !== i
+            )
+          )
+            newProcessingError(
+              'Cannot have a match body line with two identifiers in the same line.'
+            );
 
           // merge local identifiers
           if (newLocalIdentifiers.length !== 0)
@@ -539,8 +554,8 @@ export namespace ProcessAST {
               comments: []
             };
         } else
-          throw new Error(
-            'Internal processing error: an expr property access should only be possible by having the property being a propertyAccess itself or an identifier.'
+          newProcessingError(
+            'An property access should only be possible by having the property being a propertyAccess itself or an identifier.'
           );
 
         // got now the given path by the user in propertyAccessPath
@@ -600,10 +615,11 @@ export namespace ProcessAST {
         processingErrors: processingError[];
         value?: processedAST;
       } {
-    if (!filename.match(/^[a-zA-Z_][a-zA-Z0-9_]+$/g))
-      throw new Error(
-        'Internal processing error: tried to process the code with an invalid filename.'
-      );
+    if (!filename.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/g))
+      return {
+        valid: false,
+        processingErrors: ['tried to process the code with an invalid filename']
+      };
 
     processingErrors.splice(0, processingErrors.length); // remove all the old errors
     const path: string = `/${filename}/`; // a path needs "/"
@@ -631,9 +647,9 @@ export namespace ProcessAST {
     for (const [name, stmt] of value.namespaceScopes)
       if (name === filename || value.imports.some(([n, s]) => n === name))
         newProcessingError(
-          `The name of a group cannot be the same as the filename "${name}" or the name of one of the imports '${JSON.stringify(
-            value.imports.map(([n, s]) => n)
-          )}'.`
+          `The name of a group cannot be the same as the filename "${name}" or the name of one of the imports '[${value.imports
+            .map(([n, s]) => n)
+            .join(', ')}]'.`
         );
 
     // Can't proceed to step 2 if already had errors

@@ -444,9 +444,9 @@ export namespace Formatter {
     const ast = Parser.parse(code, { ignoreComments: !settings.withComments });
     if (ast.valid === false)
       throw new Error(
-        `Could not format code because code cannot be parsed. Errors: ${JSON.stringify(
-          ast.parseErrors
-        )}`
+        `Could not format code because code cannot be parsed.\nErrors: ${ast.parseErrors
+          .map((err) => JSON.stringify(err))
+          .join('\n')}.`
       );
     return beautifyAST(ast.statements);
   }

@@ -172,6 +172,12 @@
     >
       algebraic datatypes
     </button>
+    <button
+      class="c"
+      onclick="loadExampleCode('let I[T] = func (x: T): T => x;\nlet I2[T] = S(K)(I)(K(I)(S));\nlet I3[T] = W(K);\n\nlet S[T, U, V] = func (x: T) => func (y: U) => func (z: V) => x(z)(y(z));\nlet K[T, U] = func (x: T) => func (y: U) => x;\n\nlet B[T, U, V] = func (x: T) => func (y: U) => func (z: V) => x(z(y));\nlet C[T, U, V] = func (x: T) => func (y: U) => func (z: V) => x(z)(y);\n/*K*/\nlet W[T, U] = func (x: T) => func (y: U) => x(y)(y);\n\nlet U[T] = func (x: T) => x(x);\nlet Y[T, U] = func (f: T) => (func(x: U) => f(x(x)))(func (x: U) => f(x(x)));\n\nlet main = func (n) => n;')"
+    >
+      combinators
+    </button>
 
     <ul id="editor-tabs"></ul>
     <div id="editor-container">
@@ -190,6 +196,7 @@
     <div id="timer"></div>
     <div id="output"></div>
 
+    <!-- compiled code with: "tsc --target esnext --allowJs --strict false .\LCInterpreter.ts" with "tsc 5.2.2" -->
     <script src="./BLLCode.js"></script>
 
     <script>
