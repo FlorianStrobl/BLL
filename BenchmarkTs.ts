@@ -6,11 +6,11 @@ function hb(x: number) {
   return x + 2;
 }
 
-function main(arg: number) {
-  return ha(hb(3));
-}
+//function main(arg: number) {
+//  return ha(hb(3));
+//}
 
-const result = main(5);
+//const result = main(5);
 console.timeEnd();
 
 const iterCount: number = 0;

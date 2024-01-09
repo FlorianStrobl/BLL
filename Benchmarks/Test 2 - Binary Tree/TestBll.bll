@@ -3,7 +3,7 @@ type tree {
   node(i32, tree, tree)
 }
 
-let new_node = func (val: i32, left: tree = tree.none, right: tree = tree.none): tree => tree.node(val, left, right);
+let new_node = func (val: i32, left: tree = tree->none, right: tree = tree->none): tree => tree->node(val, left, right);
 
 let build_test_tree = func (): tree => new_node(5, new_node(4, new_node(7)), new_node(1));
 
@@ -12,3 +12,7 @@ let tree_sum = func (t: tree) => match (t) {
     node(value, left, right) =>
       value + tree_sum(left) + tree_sum(right)
   };
+
+let for = func (count, tmp, fun, param) => (count!=0)(tmp, for(count-1, tmp + fun(param), fun, param));
+
+let main = func (n) => for(827, 0, tree_sum, build_test_tree());

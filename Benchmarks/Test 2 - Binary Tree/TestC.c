@@ -46,14 +46,14 @@ int main(int argc, char **argv)
   Tree *tree = build_test_tree();
 
   long long iteration_count = 1000 * 1000 * 10;
-  int volatile answer = -1;
+  int volatile answer = 0;
 
   // timer start
   long timestamp_before = get_nanosecond_timestamp();
 
   for (long long i = 0; i < iteration_count; ++i)
   {
-    answer = tree_sum(tree);
+    answer += tree_sum(tree);
   }
 
   // timer end
@@ -61,7 +61,7 @@ int main(int argc, char **argv)
 
   printf("[C]  Code with %ld iterations took: %lfs\n", iteration_count, ((double)(timestamp_after - timestamp_before)) * 1.0e-9);
 
-  printf("tree_sum(tree) == %d\n", answer);
+  printf("tree_sum(tree) == %d\n", answer/iteration_count);
 
   return 0;
 }

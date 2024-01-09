@@ -206,8 +206,6 @@ export namespace ProcessAST {
       [path: string]: Parser.letStatement;
     }
   ): Parser.letStatement {
-    // TODO test this code
-
     if (stmt.hasExplicitType)
       stmt.typeExpression = processTypeExprIdent(stmt.typeExpression, {
         scope,
@@ -244,7 +242,7 @@ export namespace ProcessAST {
         return typeExpr;
       case 'grouping':
         typeExpr.body = processTypeExprIdent(typeExpr.body, info);
-        return typeExpr;
+        return typeExpr.body;
       case 'func-type':
         typeExpr.returnType = processTypeExprIdent(typeExpr.returnType, info);
 
@@ -283,7 +281,7 @@ export namespace ProcessAST {
         // out of scope or just erroneous
 
         newProcessingError(
-          `cant find the source of the identifier: ${typeExpr.identifier} in scope ${info.scope}`
+          `Can not find the identifier "${typeExpr.identifier}" in scope "${info.scope}".`
         );
 
         return typeExpr;
@@ -293,16 +291,13 @@ export namespace ProcessAST {
         // get the given propertyAccessPath
         let tmp: Parser.typeExpression = typeExpr.source;
         let depthCounter: number = 1;
-        for (
-          ;
-          tmp.type === 'propertyAccess' || tmp.type === 'grouping';
-          ++depthCounter
-        ) {
+        while (tmp.type === 'propertyAccess' || tmp.type === 'grouping') {
           if (tmp.type === 'grouping') tmp = tmp.body;
           else if (tmp.type === 'propertyAccess') {
             propertyAccessPath = tmp.propertyToken.l + '/' + propertyAccessPath;
             tmp = tmp.source;
           }
+          ++depthCounter;
         }
 
         if (tmp.type === 'identifier') {
@@ -311,7 +306,6 @@ export namespace ProcessAST {
           // it could be, that this property access, accesses a different file
           // then the deepest identifier must be the other file name, which must be imported at the beginning
           if (info.importFilenames.includes(tmp.identifier))
-            // TODO
             return {
               type: 'identifier',
               identifier: propertyAccessPath,
@@ -325,7 +319,6 @@ export namespace ProcessAST {
 
         // got now the given path by the user in propertyAccessPath
 
-        // TODO really works in the right order?
         for (let i = get_outer_groups_len(info.scope); i >= 0; --i) {
           // remove the i times the outer scope, to start at the beginning from 0
           const possibleOuterScope: string = get_outer_groups(
@@ -349,7 +342,7 @@ export namespace ProcessAST {
         }
 
         newProcessingError(
-          `Could not find the following identifier in type propertyAccess: "${propertyAccessPath}"`
+          `Could not find the identifier "${propertyAccessPath}" in type propertyAccess.`
         );
 
         return typeExpr;
@@ -406,6 +399,7 @@ export namespace ProcessAST {
           });
 
         expr.parameters = expr.parameters.map((param) => {
+          // TODO, what if some parameter name is double => error
           if (param.argument.hasDefaultValue)
             param.argument.defaultValue = processExprIdent(
               param.argument.defaultValue,
@@ -456,6 +450,8 @@ export namespace ProcessAST {
           });
 
         expr.body = expr.body.map((matchLine) => {
+          // TODO: what if some local identifier is double => error
+
           const newLocalIdentifiers: string[] =
             matchLine.argument.isDefaultVal === false
               ? matchLine.argument.parameters.map((param) => param.argument.l)
@@ -489,7 +485,7 @@ export namespace ProcessAST {
           info.typeDict[expr.source.identifier].type !== 'complex-type'
         )
           newProcessingError(
-            'type instantiation must be done with a property of type complex-type'
+            'Type instantiation must be done with a property of type complex-type.'
           );
 
         return expr;
@@ -498,7 +494,6 @@ export namespace ProcessAST {
 
         // not a local identifier
 
-        // TODO info.scope really the actual thing!??
         for (let i = 0; i < get_outer_groups_len(info.scope); ++i) {
           const possiblePath: string = `/${get_outer_groups(info.scope, i).join(
             '/'
@@ -512,7 +507,7 @@ export namespace ProcessAST {
         }
 
         newProcessingError(
-          `could not find the current identifier "${expr.identifier}" in the scope of this expression`
+          `Could not find the identifier "${expr.identifier}" in the scope of an expression.`
         );
 
         return expr;
@@ -522,16 +517,13 @@ export namespace ProcessAST {
         // get the given propertyAccessPath
         let tmp: Parser.expression = expr.source;
         let depthCounter: number = 1;
-        for (
-          ;
-          tmp.type === 'propertyAccess' || tmp.type === 'grouping';
-          ++depthCounter
-        ) {
+        while (tmp.type === 'propertyAccess' || tmp.type === 'grouping') {
           if (tmp.type === 'grouping') tmp = tmp.body;
           else if (tmp.type === 'propertyAccess') {
             propertyAccessPath = tmp.propertyToken.l + '/' + propertyAccessPath;
             tmp = tmp.source;
           }
+          ++depthCounter;
         }
 
         if (tmp.type === 'identifier') {
@@ -540,7 +532,6 @@ export namespace ProcessAST {
           // it could be, that this property access, accesses a different file
           // then the deepest identifier must be the other file name, which must be imported at the beginning
           if (info.importFilenames.includes(tmp.identifier))
-            // TODO
             return {
               type: 'identifier',
               identifier: propertyAccessPath,
@@ -554,7 +545,6 @@ export namespace ProcessAST {
 
         // got now the given path by the user in propertyAccessPath
 
-        // TODO really works in the right order?
         for (let i = get_outer_groups_len(info.scope); i >= 0; --i) {
           // remove the i times the outer scope, to start at the beginning from 0
           const possibleOuterScope: string = get_outer_groups(
@@ -577,7 +567,7 @@ export namespace ProcessAST {
         }
 
         newProcessingError(
-          `Could not find the following identifier in expr propertyAccess: "${propertyAccessPath}"`
+          `Could not find the identifier "${propertyAccessPath}" in propertyAccess expression.`
         );
 
         return expr;

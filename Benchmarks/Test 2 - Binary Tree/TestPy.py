@@ -27,18 +27,18 @@ def main():
   tree = build_test_tree()
 
   iteration_count = 1000 * 1000 * 10
-  answer = -1
+  answer = 0
 
   # start timer
   timestamp_before = time.time()
 
   for _ in range(iteration_count):
-    answer = tree_sum(tree)
+    answer += tree_sum(tree)
 
   # end timer
   timestamp_after = time.time()
 
   print("[Py] Code with " + str(iteration_count) + " iterations took: " + str(round(timestamp_after - timestamp_before, 3)) + "s")
-  print("tree_sum(tree) == " + str(answer))
+  print("tree_sum(tree) == " + str(int(answer/iteration_count)))
 
 main()

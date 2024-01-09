@@ -2311,7 +2311,6 @@ class Larser {
     typeDict,
     letDict
   ) {
-    // TODO test this code
     if (stmt.hasExplicitType)
       stmt.typeExpression = processTypeExprIdent(stmt.typeExpression, {
         scope,
@@ -2342,7 +2341,7 @@ class Larser {
         return typeExpr;
       case 'grouping':
         typeExpr.body = processTypeExprIdent(typeExpr.body, info);
-        return typeExpr;
+        return typeExpr.body;
       case 'func-type':
         typeExpr.returnType = processTypeExprIdent(typeExpr.returnType, info);
         typeExpr.parameters = typeExpr.parameters.map((param) => {
@@ -2374,7 +2373,7 @@ class Larser {
         }
         // out of scope or just erroneous
         newProcessingError(
-          `cant find the source of the identifier: ${typeExpr.identifier} in scope ${info.scope}`
+          `Can not find the identifier "${typeExpr.identifier}" in scope "${info.scope}".`
         );
         return typeExpr;
       case 'propertyAccess':
@@ -2382,23 +2381,19 @@ class Larser {
         // get the given propertyAccessPath
         let tmp = typeExpr.source;
         let depthCounter = 1;
-        for (
-          ;
-          tmp.type === 'propertyAccess' || tmp.type === 'grouping';
-          ++depthCounter
-        ) {
+        while (tmp.type === 'propertyAccess' || tmp.type === 'grouping') {
           if (tmp.type === 'grouping') tmp = tmp.body;
           else if (tmp.type === 'propertyAccess') {
             propertyAccessPath = tmp.propertyToken.l + '/' + propertyAccessPath;
             tmp = tmp.source;
           }
+          ++depthCounter;
         }
         if (tmp.type === 'identifier') {
           propertyAccessPath = '/' + tmp.identifier + '/' + propertyAccessPath;
           // it could be, that this property access, accesses a different file
           // then the deepest identifier must be the other file name, which must be imported at the beginning
           if (info.importFilenames.includes(tmp.identifier))
-            // TODO
             return {
               type: 'identifier',
               identifier: propertyAccessPath,
@@ -2410,7 +2405,6 @@ class Larser {
             'Internal processing error: a type property access should only be possible by having the property being a propertyAccess itself or an identifier.'
           );
         // got now the given path by the user in propertyAccessPath
-        // TODO really works in the right order?
         for (let i = get_outer_groups_len(info.scope); i >= 0; --i) {
           // remove the i times the outer scope, to start at the beginning from 0
           const possibleOuterScope = get_outer_groups(info.scope, i).join('/');
@@ -2429,7 +2423,7 @@ class Larser {
           }
         }
         newProcessingError(
-          `Could not find the following identifier in type propertyAccess: "${propertyAccessPath}"`
+          `Could not find the identifier "${propertyAccessPath}" in type propertyAccess.`
         );
         return typeExpr;
     }
@@ -2466,6 +2460,7 @@ class Larser {
             typeDict: info.typeDict
           });
         expr.parameters = expr.parameters.map((param) => {
+          // TODO, what if some parameter name is double => error
           if (param.argument.hasDefaultValue)
             param.argument.defaultValue = processExprIdent(
               param.argument.defaultValue,
@@ -2509,6 +2504,7 @@ class Larser {
             typeDict: info.typeDict
           });
         expr.body = expr.body.map((matchLine) => {
+          // TODO: what if some local identifier is double => error
           const newLocalIdentifiers =
             matchLine.argument.isDefaultVal === false
               ? matchLine.argument.parameters.map((param) => param.argument.l)
@@ -2537,13 +2533,12 @@ class Larser {
           info.typeDict[expr.source.identifier].type !== 'complex-type'
         )
           newProcessingError(
-            'type instantiation must be done with a property of type complex-type'
+            'Type instantiation must be done with a property of type complex-type.'
           );
         return expr;
       case 'identifier':
         if (info.localExprIdentifiers.includes(expr.identifier)) return expr;
         // not a local identifier
-        // TODO info.scope really the actual thing!??
         for (let i = 0; i < get_outer_groups_len(info.scope); ++i) {
           const possiblePath = `/${get_outer_groups(info.scope, i).join('/')}/${
             expr.identifier
@@ -2555,7 +2550,7 @@ class Larser {
           }
         }
         newProcessingError(
-          `could not find the current identifier "${expr.identifier}" in the scope of this expression`
+          `Could not find the identifier "${expr.identifier}" in the scope of an expression.`
         );
         return expr;
       case 'propertyAccess':
@@ -2563,23 +2558,19 @@ class Larser {
         // get the given propertyAccessPath
         let tmp = expr.source;
         let depthCounter = 1;
-        for (
-          ;
-          tmp.type === 'propertyAccess' || tmp.type === 'grouping';
-          ++depthCounter
-        ) {
+        while (tmp.type === 'propertyAccess' || tmp.type === 'grouping') {
           if (tmp.type === 'grouping') tmp = tmp.body;
           else if (tmp.type === 'propertyAccess') {
             propertyAccessPath = tmp.propertyToken.l + '/' + propertyAccessPath;
             tmp = tmp.source;
           }
+          ++depthCounter;
         }
         if (tmp.type === 'identifier') {
           propertyAccessPath = '/' + tmp.identifier + '/' + propertyAccessPath;
           // it could be, that this property access, accesses a different file
           // then the deepest identifier must be the other file name, which must be imported at the beginning
           if (info.importFilenames.includes(tmp.identifier))
-            // TODO
             return {
               type: 'identifier',
               identifier: propertyAccessPath,
@@ -2591,7 +2582,6 @@ class Larser {
             'Internal processing error: an expr property access should only be possible by having the property being a propertyAccess itself or an identifier.'
           );
         // got now the given path by the user in propertyAccessPath
-        // TODO really works in the right order?
         for (let i = get_outer_groups_len(info.scope); i >= 0; --i) {
           // remove the i times the outer scope, to start at the beginning from 0
           const possibleOuterScope = get_outer_groups(info.scope, i).join('/');
@@ -2609,7 +2599,7 @@ class Larser {
             };
         }
         newProcessingError(
-          `Could not find the following identifier in expr propertyAccess: "${propertyAccessPath}"`
+          `Could not find the identifier "${propertyAccessPath}" in propertyAccess expression.`
         );
         return expr;
     }
@@ -2672,7 +2662,7 @@ class Larser {
 })((ProcessAST = {}));
 
 (function (Interpreter) {
-  let quickFix = false;
+  let quickFixDeepCpy = false;
   function deepCpy(value) {
     if (value === null) return value;
     switch (typeof value) {
@@ -2693,12 +2683,7 @@ class Larser {
         return value;
     }
   }
-  // TODO:
-  // interpreting preprocessing aka. remove all the type annotations, since they are useless for actual execution
-  // have a data type wrapper for `i32`, `f64` and complex types and save the structure of complex types
-  // (like its discriminator, to know what path to take in match exprs)
-  // replace all the identifiers by their value if possible (check for recursive things even between two different idents)
-  // replace all the const exprs by their value
+  // TODO: replace all the const exprs by their value
   function interpret(
     files,
     mainFilename,
@@ -2708,8 +2693,9 @@ class Larser {
       scopeDeepCpyQuickFix: false
     }
   ) {
-    quickFix = settings.scopeDeepCpyQuickFix ?? false;
+    quickFixDeepCpy = settings.scopeDeepCpyQuickFix ?? false;
     settings.timeIt = settings.timeIt ?? false;
+    if (typeof files === 'string') files = { [mainFilename]: files };
     if (settings.timeIt) console.time('pre-execution time');
     if (!(mainFilename in files))
       throw new Error(
@@ -2727,7 +2713,7 @@ class Larser {
           processedAST.processingErrors
         )}`
       );
-    // #region recursively import files
+    // #region recursively import and preprocess files
     const importedFiles = [mainFilename];
     const toImportFiles = processedAST.value.imports.map(
       ([filename, _]) => filename
@@ -2747,7 +2733,6 @@ class Larser {
         files[toImportFile],
         toImportFile
       );
-      // TODO better error, since it could be "recursively" imported from an imported file
       if (processedFile.valid === false)
         throw new Error(
           `Couldnt compile the imported file ${toImportFile} because of error: ${JSON.stringify(
@@ -2763,24 +2748,24 @@ class Larser {
       processedAST.value.namespaceScopes.push(
         ...processedFile.value.namespaceScopes
       );
+      // TODO same names in different files like "thisFilename.thisObj" could overwrite it
       Object.assign(processedAST.value.letDict, processedFile.value.letDict);
       Object.assign(processedAST.value.typeDict, processedFile.value.typeDict);
     }
     // #endregion
-    // now process all the imports, and import their imports if needed
     const mainFilePath = `/${mainFilename}/main`;
     if (!(mainFilePath in processedAST.value.letDict))
       throw new Error(
-        `Missing "main" function in the main file ${mainFilename}.`
+        `Missing "main" function in the main file "${mainFilename}".`
       );
     const mainFunc = processedAST.value.letDict[mainFilePath];
     if (mainFunc.body.type !== 'func')
       throw new Error(
-        `the "main" function in the main file must be a let statement with a body of type function.`
+        `The "main" function in the main file must be a let-statement with a body of type function.`
       );
     else if (mainFunc.body.parameters.length !== 1)
       throw new Error(
-        `the "main" function must take exactly one parameter as input`
+        `The "main" function must take exactly one parameter as input.`
       );
     if (settings.timeIt) console.timeEnd('pre-execution time');
     // main :: T -> T, where T is either i32 or f64
@@ -2793,11 +2778,11 @@ class Larser {
           ? 'int'
           : 'float'
         : 'int';
+    const inputSign = Math.sign(input);
     let formattedInput = Math.abs(input).toString().toLowerCase();
     if (formattedInput === Infinity.toString().toLowerCase())
       formattedInput = 'inf';
     if (!Number.isSafeInteger(Number(formattedInput))) mainFuncType = 'float';
-    const inputSign = Math.sign(input);
     if (settings.timeIt) console.time('raw execution time');
     const result = executeExpr(
       {
@@ -2841,13 +2826,12 @@ class Larser {
       processedAST.value.typeDict
     );
     if (settings.timeIt) console.timeEnd('raw execution time');
-    // TODO add f64 support
-    // TODO mainFuncType
+    // TODO: check with func type
     if (result.type !== 'int' && result.type !== 'float')
       throw new Error(
         `User error: "main()" should return an ${mainFuncType} but got the result: ${JSON.stringify(
           result
-        )}`
+        )}.`
       );
     return result.value;
   }
@@ -2863,14 +2847,14 @@ class Larser {
       throw new Error(
         `Internal interpreting error: the expression type ${JSON.stringify(
           expr
-        )} is unknown`
+        )} is unknown.`
       );
     const parseExpr = expr.expr;
-    let closure = quickFix ? deepCpy(expr.closure) : expr.closure; // TODO is deepCpy really necessary?
+    let closure = quickFixDeepCpy ? deepCpy(expr.closure) : expr.closure;
     switch (parseExpr.type) {
       case 'propertyAccess':
         throw new Error(
-          `Internal interpreting error: should not have a property access when interpreting`
+          `Internal interpreting error: should not have a property access when interpreting because preprocessor handles this.`
         );
       case 'func':
         return expr;
@@ -2898,7 +2882,7 @@ class Larser {
             value: literalVal
           };
         throw new Error(
-          'Internal interpreting error: literal type must be `i32` or `f64`'
+          'Internal interpreting error: literal type must be `i32` or `f64`.'
         );
       case 'unary':
         const unaryOp = parseExpr.operator;
@@ -2920,20 +2904,20 @@ class Larser {
           case '~':
             if (bodyVal.type !== 'int')
               throw new Error(
-                `User error: can only do the unary "~" operation on i32 values`
+                `Unary operator "~" has signature i32 -> i32, but used value ${bodyVal.type}.`
               );
             bodyVal.value = ~bodyVal.value;
             return bodyVal;
           case '!':
             if (bodyVal.type !== 'int')
               throw new Error(
-                `User error: can only do the unary "!" operation on i32 values`
+                `Unary operator "!" has signature i32 -> i32, but used value ${bodyVal.type}.`
               );
             bodyVal.value = Number(!bodyVal.value);
             return bodyVal;
           default:
             throw new Error(
-              `Internal error: unknown unary operato ${unaryOp} used in interpreting step`
+              `Internal error: unknown unary operato ${unaryOp} used in interpreting step.`
             );
         }
       case 'binary':
@@ -2963,7 +2947,7 @@ class Larser {
           right.type === 'complexType'
         )
           throw new Error(
-            `User error: can only do the binary "${binaryOp}" operation on numeric values`
+            `User error: can only do the binary "${binaryOp}" operation on numeric values.`
           );
         else if (left.type !== right.type) {
           // TODO
@@ -2987,7 +2971,7 @@ class Larser {
           //   })
           // );
           throw new Error(
-            `User error: can only do the binary "${binaryOp}" operation on equally typed values`
+            `User error: can only do the binary "${binaryOp}" operation on equally typed values.`
           );
         }
         switch (binaryOp) {
@@ -3011,34 +2995,44 @@ class Larser {
             return left;
           case '%':
             if (left.type !== 'int')
-              throw new Error(`User error: can only use "%" with i32 values`);
+              throw new Error(
+                `Binary operator "%" has signature i32 -> i32 -> i32, but used it with types ${left.type}.`
+              );
             left.value = left.value % right.value;
             return left;
           case '&':
             if (left.type !== 'int')
-              throw new Error(`User error: can only use "&" with i32 values`);
+              throw new Error(
+                `Binary operator "&" has signature i32 -> i32 -> i32, but used it with type ${left.type}.`
+              );
             left.value = left.value & right.value;
             return left;
           case '|':
             if (left.type !== 'int')
-              throw new Error(`User error: can only use "|" with i32 values`);
+              throw new Error(
+                `Binary operator "|" has signature i32 -> i32 -> i32, but used it with type ${left.type}.`
+              );
             left.value = left.value | right.value;
             return left;
           case '^':
             if (left.type !== 'int')
-              throw new Error(`User error: can only use "^" with i32 values`);
+              throw new Error(
+                `Binary operator "^" has signature i32 -> i32 -> i32, but used it with type ${left.type}.`
+              );
             left.value = left.value ^ right.value;
             return left;
           case '<<':
-            // TODO limits for size
             if (left.type !== 'int')
-              throw new Error(`User error: can only use "<<" with i32 values`);
+              throw new Error(
+                `Binary operator "<<" has signature i32 -> i32 -> i32, but used it with type ${left.type}.`
+              );
             left.value = left.value << right.value;
             return left;
           case '>>':
-            // TODO limits for size
             if (left.type !== 'int')
-              throw new Error(`User error: can only use ">>" with i32 values`);
+              throw new Error(
+                `Binary operator ">>" has signature i32 -> i32 -> i32, but used it with type ${left.type}.`
+              );
             left.value = left.value >> right.value;
             return left;
           case '==':
@@ -3073,37 +3067,30 @@ class Larser {
             };
           default:
             throw new Error(
-              `Internal error: unknown unary operator "${binaryOp}" used in interpreting step`
+              `Internal error: unknown unary operator "${binaryOp}" used in interpreting step.`
             );
         }
       case 'identifier':
-        // TODO working with closures
-        if (parseExpr.identifier in closure)
-          return executeExpr(closure[parseExpr.identifier], lets, types);
-        // TODO actually execute and not just suspend for later??
-        // TODO, really? and why first lets and then types?
-        else if (parseExpr.identifier in lets)
+        const ident = parseExpr.identifier;
+        if (ident[0] !== '/' && ident in closure)
+          return executeExpr(closure[ident], lets, types);
+        else if (ident in lets)
           return executeExpr(
             {
               type: 'expr',
               expr: lets[parseExpr.identifier].body,
-              closure: {} // TODO other closure?
+              closure: {}
             },
             lets,
             types
           );
-        // TODO user error or internal error, or no error?
-        else return expr;
-        // yeah?
         throw new Error(
-          `User error: identifier ${JSON.stringify(
+          `Internal error: identifier "${JSON.stringify(
             parseExpr
-          )} must be in current scope (either in the current closure or from lets in general)`
+          )}" must be in current scope (either in the current closure or from lets in general) but couldnt be found.`
         );
       case 'call':
-        // TODO fix closure stuff
-        // typeInstantiation, on i32/f64, on Function, on Identifier (could all be on the return of a internal complicated thing from e.g. a match expr)
-        // TODO yeah??
+        // typeInstantiation, i32/f64, on Function, on Identifier (could all be on the return of a internal complicated thing from e.g. a match expr)
         let toCall = executeExpr(
           {
             type: 'expr',
@@ -3113,40 +3100,31 @@ class Larser {
           lets,
           types
         );
-        // TODO
-        // while (toCall.type === 'expr' && toCall.expr.type === 'identifier')
-        //   toCall = executeExpr(
-        //     { type: 'expr', expr: toCall.expr, closure: closure },
-        //     lets,
-        //     types,
-        //     closure
-        //   );
-        // TODO
         switch (toCall.type) {
           case 'complexType':
-            // TODO, check if amount is right
             if (!(toCall.tyName in types))
               throw new Error(
-                `User/Internal error: the types ${toCall.tyName} does not exists as a complex type in the current scope`
+                `User/Internal error: the types ${toCall.tyName} does not exists as a complex type in the current scope.`
               );
             const ty = types[toCall.tyName];
+            const discriminator = toCall.discriminator;
             if (ty.type !== 'complex-type')
               throw new Error(
-                `User error: the type ${toCall.tyName} is not a complex type in the current scope`
+                `User error: the type ${toCall.tyName} is not a complex type in the current scope.`
               );
             const internalComplexTypeIdx = ty.body.findIndex(
-              (val) => val.argument.identifierToken.l === toCall.discriminator
+              (val) => val.argument.identifierToken.l === discriminator
             );
             if (internalComplexTypeIdx === -1)
               throw new Error(
-                `User error: the complex type pattern ${toCall.discriminator} is not part of the complex type ${ty.name}`
+                `User error: the complex type pattern ${toCall.discriminator} is not part of the complex type ${ty.name}.`
               );
             const expectedArgCount =
               ty.body[internalComplexTypeIdx].argument.arguments.length;
             const givenArgCount = parseExpr.arguments.length;
             if (expectedArgCount !== givenArgCount)
               throw new Error(
-                `User error: tried to instantiate type with too many arguments. Expected ${expectedArgCount} arguments, but got ${givenArgCount}`
+                `User error: tried to instantiate type with too many arguments. Expected ${expectedArgCount} arguments, but got ${givenArgCount}.`
               );
             toCall.values.push(
               ...parseExpr.arguments.map((arg) =>
@@ -3163,14 +3141,10 @@ class Larser {
             );
             return toCall;
           case 'expr':
-            // TODO: what about executing ints??
             if (toCall.expr.type !== 'func')
               throw new Error(
-                `User error: can only call functions, but got: ${toCall.expr.type}`
+                `User error: can only call functions, but got "${toCall.expr.type}".`
               );
-            //closure = deepCpy(closure) as never;
-            // TODO, deep copy needed
-            // TODO, if toCall is from different scope, then just remove the entire closure
             const givenArgs = parseExpr.arguments.map((arg) => ({
               type: 'expr',
               expr: arg.argument,
@@ -3188,15 +3162,13 @@ class Larser {
             ]);
             if (givenArgs.length > neededArgs.length)
               throw new Error(
-                'User error: called a function with too many arguments'
+                'User error: called a function with too many arguments.'
               );
-            // TODO still working??
-            // TODO DO NOT execute them, but let it be done in the lazy evaluation part!
+            // DO NOT execute them, but let it be done in the lazy evaluation part!
             const finalArgs = [];
             for (let i = 0; i < neededArgs.length; ++i)
               if (i < givenArgs.length)
                 finalArgs.push({
-                  // TODO NOT like this because of lazy evaluation and performance reasons!
                   [neededArgs[i][0]]: givenArgs[i]
                 });
               else if (neededArgs[i][1] !== undefined)
@@ -3205,55 +3177,43 @@ class Larser {
                 });
               else
                 throw new Error(
-                  'User error: called function with missing argument(s) which dont have default values'
+                  'User error: called function with missing argument(s) which dont have default values.'
                 );
-            // TODO HERE, not sure if that is actually the closure, since the old values may not be accessible anymore actually
-            //toCall.closure = deepCpy(closure);
-            Object.assign(toCall.closure, ...finalArgs);
+            const newArgs = {};
+            Object.assign(newArgs, ...finalArgs);
             return executeExpr(
               {
                 type: 'expr',
                 expr: toCall.expr.body,
-                // TODO too hacky, does it need to be deep copied?
-                closure: toCall.closure
+                closure: { ...toCall.closure, ...newArgs }
               },
               lets,
               types
             );
           case 'float':
           case 'int':
-            // TODO: if equal to 0, return the first element, else return the second element
             if (parseExpr.arguments.length !== 2)
               throw new Error(
-                `User error: calling i32/f64 requires to have two expr but got: ${parseExpr.arguments.length}`
+                `User error: calling i32/f64 requires to have two expressions but got ${parseExpr.arguments.length} arguments.`
               );
-            if (toCall.value === 0)
-              return executeExpr(
-                {
-                  type: 'expr',
-                  expr: parseExpr.arguments[0].argument,
-                  closure
-                },
-                lets,
-                types
-              );
-            else
-              return executeExpr(
-                {
-                  type: 'expr',
-                  expr: parseExpr.arguments[1].argument,
-                  closure
-                },
-                lets,
-                types
-              );
+            // if equal to 0, return the first element, else return the second element
+            const toCallExpr =
+              parseExpr.arguments[Number(toCall.value !== 0)].argument;
+            return executeExpr(
+              {
+                type: 'expr',
+                expr: toCallExpr,
+                closure
+              },
+              lets,
+              types
+            );
           default:
             throw new Error(
-              'Internal error: tried calling something with a wrong type'
+              'Internal error: tried calling something with a wrong type.'
             );
         }
       case 'match':
-        // TODO fix closure
         const scrutinee = executeExpr(
           {
             type: 'expr',
@@ -3265,7 +3225,7 @@ class Larser {
         );
         if (scrutinee.type !== 'complexType')
           throw new Error(
-            `User error: can only match complex types but got: ${scrutinee.type}`
+            `User error: can only match complex types but got "${scrutinee.type}".`
           );
         const toExecLineIdx = parseExpr.body.findIndex(
           (pattern) =>
@@ -3279,43 +3239,38 @@ class Larser {
           toExecLineIdx !== -1
             ? toExecLineIdx
             : // fall back to the default case if no pattern matches rn
-            defaultLineIdx !== -1
-            ? defaultLineIdx
-            : -1;
+              defaultLineIdx;
         if (correctIdx === -1)
           throw new Error(
             `User error: the pattern "${scrutinee.discriminator}" is missing in the current match expression!`
           );
-        // TODO new local closure/scope, just like when calling functions
+        // add local closure/scope vars
         const matchLine = parseExpr.body[correctIdx].argument;
         const newCtxValueNames =
           matchLine.isDefaultVal === true
             ? []
             : matchLine.parameters.map((param) => param.argument.l);
         // allow having less values extracted than really needed
+        // because in expr "(a->t)(params)", the first expr has no value given
         if (newCtxValueNames.length > scrutinee.values.length)
           throw new Error(
-            `User error: invalid amount of values in scrutinee with the needed match body line. expected ${scrutinee.values.length}, but got ${newCtxValueNames.length}`
+            `User error: too many values in scrutinee with the needed match body line. expected ${scrutinee.values.length}, but got ${newCtxValueNames.length}.`
           );
+        // TODO: remove that, should be done in preprocessing
         const doubleIdentifier = newCtxValueNames.findIndex(
           (val, i) => i !== newCtxValueNames.lastIndexOf(val)
         );
         if (doubleIdentifier !== -1)
           throw new Error(
-            `User error: wrote a match body line with twice the same identifier: ${newCtxValueNames[doubleIdentifier]}`
+            `User error: wrote a match body line with twice the same identifier: ${newCtxValueNames[doubleIdentifier]}.`
           );
-        // TODO
         const updatedClosureValues = {};
         for (let i = 0; i < scrutinee.values.length; ++i)
           updatedClosureValues[newCtxValueNames[i]] = scrutinee.values[i];
-        // TODO
-        // Object.assign({}, updatedClosureValues);
-        // TODO
         return executeExpr(
           {
             type: 'expr',
             expr: matchLine.body,
-            // TODO HERE
             closure: { ...closure, ...updatedClosureValues }
           },
           lets,
@@ -3329,10 +3284,9 @@ class Larser {
         const complexType = types[parseExpr.source.identifier];
         if (complexType === undefined)
           throw new Error(
-            'Internal interpreting error: identifier should be accessible in current scope, but isnt'
+            'Internal interpreting error: identifier is not accessible in current scope.'
           );
         else if (complexType.type !== 'complex-type')
-          // TODO, was that checked before? then it must be an internal error!
           throw new Error(
             'User error: tried type instantiation with a simple type.'
           );
@@ -3342,9 +3296,8 @@ class Larser {
           )
         )
           throw new Error(
-            `User error: tried to do type instatiation with property ${parseExpr.typeLineToken.l} which doesnt exist on current complex type: ${complexType.name}`
+            `User error: tried to do type instatiation with property ${parseExpr.typeLineToken.l} which doesnt exist on current complex type: ${complexType.name}.`
           );
-        // TODO, is parseExpr.source.identifier === complexType.name??
         return {
           type: 'complexType',
           tyName: parseExpr.source.identifier,
