@@ -413,7 +413,7 @@
         tabCodeMap[getActiveTabName()] = codeInput.value;
 
         const codes =
-          'florianstrobl.github.io/BLL?code=' +
+          'https://florianstrobl.github.io/BLL?code=' +
           btoa(JSON.stringify(tabCodeMap));
 
         navigator.clipboard.writeText(codes);
