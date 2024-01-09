@@ -372,7 +372,9 @@
               .trimEnd();
         } catch (error) {
           console.error(error);
-          outputDiv.textContent = 'Error:\n' + error;
+          if (error instanceof Error)
+            outputDiv.textContent = 'Error:\n' + error.message;
+          else outputDiv.textContent = 'Error:\n' + error;
           resultDiv.textContent = 'Result: Error';
         }
       }
