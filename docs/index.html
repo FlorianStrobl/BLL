@@ -359,8 +359,8 @@
           return;
         }
 
-        tabs.removeChild(getActiveTab());
         delete tabCodeMap[getActiveTabName()]; // delete the code from the hashmap
+        tabs.removeChild(getActiveTab());
 
         setActiveTab(tabs.lastElementChild);
       }
