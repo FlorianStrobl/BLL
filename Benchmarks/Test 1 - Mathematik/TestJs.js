@@ -5,7 +5,7 @@ function fac (n) {
 
 
 function main() {
-  const iteration_count = 1;
+  const iteration_count = 1000;
   let answer = 0;
 
   const timerMsg = `[JS] Code with ${iteration_count} iterations took`;

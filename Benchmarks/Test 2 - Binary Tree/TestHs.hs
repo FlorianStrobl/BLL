@@ -1,4 +1,4 @@
-import System.CPUTime
+import Data.Time
 
 data Tree t = Empty | Full (Tree t) t (Tree t)
 
@@ -20,13 +20,14 @@ for c func param = do
 
 main :: IO ()
 main = do
-  let iteration_count = toInteger (1000 * 1000 * 10)
+  let iteration_count = toInteger 1000
 
-  timestamp_before <- getCPUTime
+  timestamp_before <- getCurrentTime
 
   s <- for iteration_count tree_sum build_test_tree
 
-  timestamp_after <- getCPUTime
+  timestamp_after <- getCurrentTime
 
   print $ "tree_sum(tree) == " ++ show (s `div` iteration_count)
-  print $ "[Hs] Code with " ++ show iteration_count  ++ " iterations took: " ++ show (fromIntegral (timestamp_after - timestamp_before) / 10^12)
+  let diff = diffUTCTime timestamp_after timestamp_before
+  print $ "[Hs] Code with " ++ show iteration_count  ++ " iterations took: " ++ show (diff)

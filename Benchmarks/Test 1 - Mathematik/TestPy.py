@@ -5,7 +5,7 @@ def fac(n):
   return n * fac(n-1)
 
 def main():
-  iteration_count = 1
+  iteration_count = 1000
   answer = 0
 
   # start timer
@@ -17,7 +17,7 @@ def main():
   # end timer
   timestamp_after = time.time()
 
-  print("[Py] Code with " + str(iteration_count) + " iterations took: " + str(round(timestamp_after - timestamp_before, 3)) + "s")
+  print("[Py] Code with " + str(iteration_count) + " iterations took: " + str(round((timestamp_after - timestamp_before)*1000, 3)) + "ms")
   print("fac(100) == " + str(answer))
 
 main()
