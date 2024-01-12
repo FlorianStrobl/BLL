@@ -12,7 +12,7 @@ def main():
   timestamp_before = time.time()
 
   for _ in range(iteration_count):
-    answer += fac(100)
+    answer = fac(100)
 
   # end timer
   timestamp_after = time.time()

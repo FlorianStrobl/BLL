@@ -3,7 +3,7 @@ class node {
   left;
   right;
 
-  constructor (val) {
+  constructor(val) {
     this.value = val;
   }
 }
@@ -30,18 +30,18 @@ function tree_sum(tree) {
 function main() {
   const tree = build_test_tree();
 
-  const iteration_count = 1000 * 1000 * 10;
+  const iteration_count = 1000;
   let answer = 0;
 
   const timerMsg = `[JS] Code with ${iteration_count} iterations took`;
 
   console.time(timerMsg);
   for (let i = 0; i < iteration_count; ++i) {
-    answer += tree_sum(tree);
+    answer = tree_sum(tree);
   }
   console.timeEnd(timerMsg);
 
-  console.log(`tree_sum(tree) == ${answer/iteration_count}`);
+  console.log(`tree_sum(tree) == ${answer / iteration_count}`);
 }
 
 main();

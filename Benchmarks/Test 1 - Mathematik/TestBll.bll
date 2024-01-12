@@ -1,1 +1,5 @@
-// Fibonacci, Pythagoras
+let fac: i32 -> i32 = func (n: i32, res: i32 = 1): i32 => (n>0)(res, fac(n-1, res*n));
+
+let for = func (count, f, n) => (count<=1)(f(n) + for(count-1, f, n), f(n));
+
+let main = func (n) => for(1000, fac, 100);
