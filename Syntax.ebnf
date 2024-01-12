@@ -1,0 +1,87 @@
+<program> ::= <statement>*
+
+<wsc> ::= (<whitespace> | <comment>)*
+<wscp> ::= (<whitespace> | <comment>)+
+
+<statement> ::= <wsc> (
+    <comment> |
+    <emptyStatement> |
+    <useStatement> |
+    <groupStatement> |
+    <letStatement> |
+    <typeStatement>
+    ) <wsc>
+<emptyStatement> ::= ";"
+<useStatement> ::= "use" <wscp> <identifier> <wsc> ";"
+<groupStatement> ::= "group" <wscp> <identifier> <wsc> "{" <wsc> <statement>* <wsc> "}"
+<letStatement> ::= "let" <wscp> <identifier> <wsc>
+    ("[" <wsc> (<wsc> <identifier> <wsc> ",")* <wsc> <identifier> <wsc> ","? <wsc> "]")? <wsc>
+    (":" <wsc> <typeExpression>)? <wsc>
+    "=" <wsc> <expression> <wsc> ";"
+<typeStatement> ::= "type" <wscp> <identifier> <wsc>
+    ("[" <wsc> (<wsc> <identifier> <wsc> ",")* <wsc> <identifier> <wsc> ","? <wsc> "]")? <wsc>
+    (
+        ("=" <wsc> <typeExpression> <wsc> ";") |
+        ("{" <wsc> (<wsc> <complexTypeLine> <wsc> ",")* <wsc> <complexTypeLine>? <wsc> "}")
+    )
+
+<complexTypeLine> ::= <wsc> <identifier> <wsc> ("(" <wsc> (<wsc> <typeExpression> <wsc> ",")* <wsc> <typeExpression>? <wsc> ")")? <wsc>
+
+/*TODO*/
+<expression> ::= <wsc> (
+    <numericLiteral> |
+    <identifier> |
+    "(" <wsc> <expression> <wsc> ")" |
+    <unaryOperator> <wsc> <expression> |
+    <binaryExpression> |
+    <matchExpression> |
+    <functionExpression> |
+    <expression> <wsc> "->" <wsc> <identifier> |
+    <expression> <wsc> "." <wsc> <identifier> |
+    <expression> <wsc> "(" <wsc> (<wsc> <expression> <wsc> ",")* <wsc> <expression>? <wsc> ")"
+    ) <wsc>
+
+<binaryExpression> ::= <expression> <wsc> <binaryOperator> <wsc> <expression>
+
+<unaryOperator> ::= "-" | "+" | "~" | "!"
+/*TODO: precedence-order*/
+<binaryOperator> ::= "+" | "-" | "*" | "/" | "**" | "<<" | ">>" | "&" | "|" | "^" | "<" | ">" | "<=" | ">=" | "==" | "!="
+<matchExpression> ::= "match" <wsc>
+    "(" <wsc> <expression> <wsc> ")" <wsc>
+    (":" <wsc> <typeExpression>)? <wsc>
+    "{" <wsc> (<wsc> <matchExpressionLine> <wsc> ",")* <wsc> (<matchExpressionLine> | ("=>" <wsc> <expression> <wsc> ","?))? <wsc> "}"
+<matchExpressionLine> ::= <identifier> <wsc> ("(" <wsc> (<wsc> <identifier> <wsc> ",")* <wsc> <identifier>? <wsc> ")")? <wsc> "=>" <wsc> <expression>
+<functionExpression> ::= "func" <wsc>
+    "(" <wsc> (<wsc> <functionArgument> <wsc> ",")* <wsc> <functionArgument>? <wsc> ")" <wsc>
+    (":" <wsc> <typeExpression>)? <wsc>
+    "=>" <wsc> <expression>
+
+<functionArgument> ::= <identifier> <wsc>
+    (":" <wsc> <typeExpression>)?
+    ("=" <wsc> <expression>)?
+
+<typeExpression> ::= <wsc> (
+    "i32" |
+    "f64" |
+    <identifier> |
+    <typeExpression> <wsc> "." <wsc> <identifier> |
+    <typeExpression> <wsc> "[" <wsc> (<wsc> <typeExpression> <wsc> ",")* <wsc> <typeExpression> <wsc> ","? <wsc> "]" |
+    ("(" <wsc> (<wsc> <typeExpression> <wsc> ",")* <wsc> <typeExpression>? <wsc> ")" | <typeExpression>) <wsc> "->" <wsc> <typeExpression> |
+    "(" <wsc> <typeExpression> <wsc> ")"
+    ) <wsc>
+
+<numericLiteral> ::= <decimalLiteral> | <binLiteral> | <octLiteral> | <hexLiteral> | "nan" | "inf"
+<identifier> ::= <letter> <alphanumeric>*
+<comment> ::= ("//" (" " | "\t" | <alphanumeric> | <symbol>)* "\n") | ("/*" (<whitespace> | <alphanumeric> | <symbol>)* "*/")
+<symbol> ::= "+" | "-" | "*" | "/" | "**" | "!" | "%" | "~" | "&" | "|" | "^" | "<<" | ">>" | "==" | "!=" | "<=" | ">=" | "<" | ">" | "=" | "->" | "=>" | ":" | ";" | "," | "." | "(" | ")" | "{" | "}" | "[" | "]"
+<keywords> ::= "use" | "group" | "let" | "type" | "func" | "match" | "i32" | "f64" | "nan" | "inf"
+<whitespace> ::= " " | "\t" | "\n" | "\r"
+
+<decimalLiteral> ::= <digits> ("." <digits>)? (("e" | "E") ("+" | "-")? <digits>)?
+<binLiteral> ::= "0b" [0-1]+
+<octLiteral> ::= "0o" [0-7]+
+<hexLiteral> ::= "0x" ([0-9] | [a-f] | [A-F])+
+
+<digits> ::= [0-9]+
+<letter> ::= "_" | [a-z] | [A-Z]
+<alphanumeric> ::= <digits> | <letter>
