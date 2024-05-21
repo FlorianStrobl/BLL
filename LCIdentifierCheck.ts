@@ -290,14 +290,12 @@ export namespace ProcessAST {
 
         // get the given propertyAccessPath
         let tmp: Parser.typeExpression = typeExpr.source;
-        let depthCounter: number = 1;
         while (tmp.type === 'propertyAccess' || tmp.type === 'grouping') {
           if (tmp.type === 'grouping') tmp = tmp.body;
           else if (tmp.type === 'propertyAccess') {
             propertyAccessPath = tmp.propertyToken.l + '/' + propertyAccessPath;
             tmp = tmp.source;
           }
-          ++depthCounter;
         }
 
         if (tmp.type === 'identifier') {
@@ -348,6 +346,57 @@ export namespace ProcessAST {
         return typeExpr;
     }
   }
+
+  // #region helper functions
+  // TODO copy pasted from LCInterpreter
+  function deepCpy<T>(value: T): T {
+    if (value === null) return value;
+
+    switch (typeof value) {
+      case 'object':
+        if (Array.isArray(value)) return value.map((val) => deepCpy(val)) as T;
+
+        const newObj: any = {};
+        for (const [key, val] of Object.entries(value))
+          newObj[key] = deepCpy(val);
+        return newObj as T;
+      case 'undefined':
+      case 'symbol':
+      case 'boolean':
+      case 'number':
+      case 'bigint':
+      case 'string':
+      case 'function':
+      default:
+        return value;
+    }
+  }
+
+  function resolveAliasOfComplexType(
+    alias: Parser.typeStatement,
+    dict: {
+      [path: string]: Parser.typeStatement;
+    }
+  ): Parser.typeStatement | undefined {
+    let maxDepth: number = 2000; // fix `type alias = alias2; type alias2 = alias;`
+
+    while (true) {
+      alias = deepCpy(alias);
+
+      --maxDepth;
+
+      if (maxDepth <= 0 || alias === undefined) break;
+      if (alias.type === 'complex-type') break;
+
+      // propertyAccess and grouping are already resolved
+      if (alias.body.type === 'identifier') alias = dict[alias.body.identifier];
+      else if (alias.body.type === 'genericSubstitution')
+        alias.body = alias.body.expr; // no problem, since working on a deepCpy
+    }
+
+    return alias;
+  }
+  // #endregion
 
   // resolve identifiers of expressions
   function processExprIdent(
@@ -496,12 +545,30 @@ export namespace ProcessAST {
 
         if (
           expr.source.type !== 'identifier' ||
-          !(expr.source.identifier in info.typeDict) ||
-          info.typeDict[expr.source.identifier].type !== 'complex-type'
+          !(expr.source.identifier in info.typeDict)
         )
           newProcessingError(
             'Type instantiation must be done with a property of type complex-type.'
           );
+        else if (
+          info.typeDict[expr.source.identifier].type !== 'complex-type'
+        ) {
+          // resolve problem:
+
+          // type alias = alias2;
+          // type alias2 = complexType;
+          // alias->PropertyOfComplexType;
+
+          let alias = resolveAliasOfComplexType(
+            info.typeDict[expr.source.identifier],
+            info.typeDict
+          );
+
+          if (alias?.type !== 'complex-type')
+            newProcessingError(
+              'Type instantiation must be done with a property of type complex-type.'
+            );
+        }
 
         return expr;
       case 'identifier':
@@ -531,14 +598,12 @@ export namespace ProcessAST {
 
         // get the given propertyAccessPath
         let tmp: Parser.expression = expr.source;
-        let depthCounter: number = 1;
         while (tmp.type === 'propertyAccess' || tmp.type === 'grouping') {
           if (tmp.type === 'grouping') tmp = tmp.body;
           else if (tmp.type === 'propertyAccess') {
             propertyAccessPath = tmp.propertyToken.l + '/' + propertyAccessPath;
             tmp = tmp.source;
           }
-          ++depthCounter;
         }
 
         if (tmp.type === 'identifier') {

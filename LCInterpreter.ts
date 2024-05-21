@@ -6,29 +6,6 @@ import { Formatter } from './LCFormatter';
 export namespace Interpreter {
   let quickFixDeepCpy: boolean = false;
 
-  function deepCpy<T>(value: T): T {
-    if (value === null) return value;
-
-    switch (typeof value) {
-      case 'object':
-        if (Array.isArray(value)) return value.map((val) => deepCpy(val)) as T;
-
-        const newObj: any = {};
-        for (const [key, val] of Object.entries(value))
-          newObj[key] = deepCpy(val);
-        return newObj as T;
-      case 'undefined':
-      case 'symbol':
-      case 'boolean':
-      case 'number':
-      case 'bigint':
-      case 'string':
-      case 'function':
-      default:
-        return value;
-    }
-  }
-
   type internalVal =
     | { type: 'int'; value: number }
     | { type: 'float'; value: number }
@@ -217,6 +194,57 @@ export namespace Interpreter {
 
     return result.value;
   }
+
+  // #region helper functions
+  // TODO copy pasted from LCIdentifierCheck
+  function deepCpy<T>(value: T): T {
+    if (value === null) return value;
+
+    switch (typeof value) {
+      case 'object':
+        if (Array.isArray(value)) return value.map((val) => deepCpy(val)) as T;
+
+        const newObj: any = {};
+        for (const [key, val] of Object.entries(value))
+          newObj[key] = deepCpy(val);
+        return newObj as T;
+      case 'undefined':
+      case 'symbol':
+      case 'boolean':
+      case 'number':
+      case 'bigint':
+      case 'string':
+      case 'function':
+      default:
+        return value;
+    }
+  }
+
+  function resolveAliasOfComplexType(
+    alias: Parser.typeStatement,
+    dict: {
+      [path: string]: Parser.typeStatement;
+    }
+  ): Parser.typeStatement | undefined {
+    let maxDepth: number = 2000; // fix `type alias = alias2; type alias2 = alias;`
+
+    while (true) {
+      alias = deepCpy(alias);
+
+      --maxDepth;
+
+      if (maxDepth <= 0 || alias === undefined) break;
+      if (alias.type === 'complex-type') break;
+
+      // propertyAccess and grouping are already resolved
+      if (alias.body.type === 'identifier') alias = dict[alias.body.identifier];
+      else if (alias.body.type === 'genericSubstitution')
+        alias.body = alias.body.expr; // no problem, since working on a deepCpy
+    }
+
+    return alias;
+  }
+  // #endregion
 
   function executeExpr(
     expr: internalVal,
@@ -511,13 +539,20 @@ export namespace Interpreter {
                 `User/Internal error: the types ${toCall.tyName} does not exists as a complex type in the current scope.`
               );
 
-            const ty: Parser.typeStatement = types[toCall.tyName];
+            // mutable to fix aliases
+            let ty: Parser.typeStatement = types[toCall.tyName];
             const discriminator: string = toCall.discriminator;
 
-            if (ty.type !== 'complex-type')
-              throw new Error(
-                `User error: the type ${toCall.tyName} is not a complex type in the current scope.`
-              );
+            if (ty.type !== 'complex-type') {
+              const fixAliases = resolveAliasOfComplexType(ty, types);
+
+              if (fixAliases?.type !== 'complex-type')
+                throw new Error(
+                  `User error: the type ${toCall.tyName} is not a complex type in the current scope.`
+                );
+
+              ty = fixAliases;
+            }
 
             const internalComplexTypeIdx: number = ty.body.findIndex(
               (val) => val.argument.identifierToken.l === discriminator
@@ -708,16 +743,25 @@ export namespace Interpreter {
             'Internal error: type instantiations should always be from an (internal) identifier to an identifier.'
           );
 
-        const complexType: Parser.typeStatement =
+        // could be an alias at first, which gets resolved immediatly
+        let complexType: Parser.typeStatement =
           types[parseExpr.source.identifier];
+
         if (complexType === undefined)
           throw new Error(
             'Internal interpreting error: identifier is not accessible in current scope.'
           );
-        else if (complexType.type !== 'complex-type')
-          throw new Error(
-            'User error: tried type instantiation with a simple type.'
-          );
+        else if (complexType.type !== 'complex-type') {
+          // try resolving the alias to a complex-type:
+          const fixAliases = resolveAliasOfComplexType(complexType, types);
+
+          if (fixAliases?.type !== 'complex-type')
+            throw new Error(
+              'User error: tried type instantiation with a simple type.'
+            );
+
+          complexType = fixAliases;
+        }
 
         if (
           !complexType.body.some(

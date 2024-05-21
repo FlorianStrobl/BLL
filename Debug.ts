@@ -315,6 +315,27 @@ const mustNotLexe: [string, number][] = [
 ];
 
 const mustParse: [string, number][] = [
+  [
+    /*must execute aswell*/ `
+group M {
+  type MyType[T] { A(i32), B }
+}
+type alias = (((M)).MyType)[i32];
+let MyTypeA = alias->A(4);
+
+let sum = func (a) => (a <= 0)( sum(a - 1) + a, 0 );
+let fac = func (a) => (a <= 0)( fac(a - 1) * a, 1 );
+let fib = func (a) => (a <= 2)( fib(a - 1) + fib(a - 2), 1 );
+
+let unwrap = func (a) => match (a) {
+  A(b) => b,
+  B => 0
+};
+
+let main = func (n) => unwrap(MyTypeA);
+`,
+    8
+  ],
   ['type t = (a,h) -> (b,c,) -> (c);', 1],
   [
     `type linkedList[T] {
